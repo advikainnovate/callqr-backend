@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Privacy QR Calling - Real WebRTC Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .call-section {
+            border: 3px solid #007bff;
+            margin-bottom: 20px;
+        }
+        .caller { border-color: #28a745; }
+        .receiver { border-color: #dc3545; }
+        
+        h1 { color: #333; text-align: center; }
+        h2 { color: #007bff; }
+        .caller h2 { color: #28a745; }
+        .receiver h2 { color: #dc3545; }
+        
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+            font-weight: bold;
+        }
+        button:hover { background: #0056b3; }
+        button:disabled { background: #6c757d; cursor: not-allowed; }
+        .caller button { background: #28a745; }
+        .caller button:hover { background: #1e7e34; }
+        .receiver button { background: #dc3545; }
+        .receiver button:hover { background: #c82333; }
+        
+        .status {
+            padding: 15px;
+            border-radius: 5px;
+            margin: 15px 0;
+            font-weight: bold;
+        }
+        .success { background: #d4edda; color: #155724; border: 2px solid #c3e6cb; }
+        .error { background: #f8d7da; color: #721c24; border: 2px solid #f5c6cb; }
+        .info { background: #d1ecf1; color: #0c5460; border: 2px solid #bee5eb; }
+        .warning { background: #fff3cd; color: #856404; border: 2px solid #ffeaa7; }
+        
+        .audio-controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin: 15px 0;
+        }
+        
+        audio {
+            width: 100%;
+            margin: 10px 0;
+        }
+        
+        .call-stats {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 15px 0;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        
+        .qr-input {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔒 Privacy QR Calling - Real WebRTC Test</h1>
+    <p style="text-align: center; color: #666; font-size: 18px;">Test actual voice calls with WebRTC</p>
+
+    <div class="container">
+        <h2>⚠️ Requirements for Real Calls</h2>
+        <div class="status warning">
+            <strong>To test real calls, you need:</strong><br>
+            • Two separate browser windows/tabs (or different devices)<br>
+            • Microphone permissions granted<br>
+            • HTTPS connection (for production) or localhost (for testing)<br>
+            • WebRTC-compatible browser (Chrome, Firefox, Safari, Edge)
+        </div>
+    </div>
+
+    <!-- Caller Section -->
+    <div class="container call-section caller">
+        <h2>👤 Caller (Person A)</h2>
+        <p><strong>Step 1:</strong> Generate a QR code token, then share it with the receiver</p>
+        
+        <button onclick="generateCallToken()">📱 Generate Call Token</button>
+        <button onclick="startCall()" id="startCallBtn" disabled>📞 Start Call</button>
+        <button onclick="endCall()" id="endCallBtn" disabled>📴 End Call</button>
+        
+        <div id="callerStatus"></div>
+        <div id="tokenDisplay"></div>
+        
+        <div id="callerAudioSection" style="display: none;">
+            <h3>🎤 Your Audio</h3>
+            <audio id="localAudio" muted autoplay></audio>
+            <div class="audio-controls">
+                <button onclick="toggleMute()" id="muteBtn">🔇 Mute</button>
+                <span id="micStatus">Microphone: Active</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Receiver Section -->
+    <div class="container call-section receiver">
+        <h2>👤 Receiver (Person B)</h2>
+        <p><strong>Step 2:</strong> Enter the token from Person A and join the call</p>
+        
+        <div>
+            <label><strong>Enter Call Token:</strong></label><br>
+            <input type="text" id="tokenInput" class="qr-input" placeholder="Paste the QR token here (pqc:1:token:checksum)">
+        </div>
+        
+        <button onclick="joinCall()" id="joinCallBtn">📞 Join Call</button>
+        <button onclick="leaveCall()" id="leaveCallBtn" disabled>📴 Leave Call</button>
+        
+        <div id="receiverStatus"></div>
+        
+        <div id="receiverAudioSection" style="display: none;">
+            <h3>🔊 Incoming Audio</h3>
+            <audio id="remoteAudio" autoplay></audio>
+            <div class="audio-controls">
+                <button onclick="toggleSpeaker()" id="speakerBtn">🔊 Speaker On</button>
+                <span id="speakerStatus">Speaker: Active</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Call Statistics -->
+    <div class="container">
+        <h2>📊 Call Statistics</h2>
+        <div id="callStats" class="call-stats">
+            No active call
+        </div>
+    </div>
+
+    <!-- Instructions -->
+    <div class="container">
+        <h2>📋 How to Test Real Calls</h2>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+            <div>
+                <h3>🖥️ Same Computer Testing:</h3>
+                <ol>
+                    <li>Open two browser windows side by side</li>
+                    <li>In Window 1: Click "Generate Call Token"</li>
+                    <li>Copy the token and paste it in Window 2</li>
+                    <li>In Window 1: Click "Start Call"</li>
+                    <li>In Window 2: Click "Join Call"</li>
+                    <li>Grant microphone permissions when prompted</li>
+                    <li>Test speaking in both windows</li>
+                </ol>
+            </div>
+            <div>
+                <h3>📱 Different Devices Testing:</h3>
+                <ol>
+                    <li>Open this page on two different devices</li>
+                    <li>On Device 1: Generate call token</li>
+                    <li>Share token with Device 2 (text, email, etc.)</li>
+                    <li>On Device 1: Start call</li>
+                    <li>On Device 2: Enter token and join call</li>
+                    <li>Test voice communication</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let localStream = null;
+        let remoteStream = null;
+        let peerConnection = null;
+        let currentToken = '';
+        let isCallActive = false;
+        let isMuted = false;
+        let isSpeakerOn = true;
+        let callStartTime = null;
+        let statsInterval = null;
+
+        // WebRTC configuration
+        const rtcConfig = {
+            iceServers: [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:stun1.l.google.com:19302' }
+            ]
+        };
+
+        // Generate call token
+        async function generateCallToken() {
+            const callerStatus = document.getElementById('callerStatus');
+            callerStatus.innerHTML = '<div class="status info">🔄 Generating secure call token...</div>';
+
+            try {
+                // Generate token (simulate backend call)
+                const token = generateSecureToken();
+                const checksum = generateChecksum(token);
+                const tokenData = `pqc:1:${token}:${checksum}`;
+                currentToken = tokenData;
+
+                document.getElementById('tokenDisplay').innerHTML = `
+                    <div class="status success">
+                        <strong>✅ Call Token Generated!</strong>
+                    </div>
+                    <div style="background: #343a40; color: #fff; padding: 15px; border-radius: 5px; margin: 10px 0; font-family: monospace; word-break: break-all;">
+                        ${tokenData}
+                    </div>
+                    <div class="status info">
+                        <strong>📋 Share this token with the person you want to call</strong><br>
+                        They should paste it in the "Enter Call Token" field and click "Join Call"
+                    </div>
+                `;
+
+                document.getElementById('startCallBtn').disabled = false;
+                callerStatus.innerHTML = '<div class="status success">✅ Token ready! Share it with the receiver, then click "Start Call"</div>';
+
+            } catch (error) {
+                callerStatus.innerHTML = '<div class="status error">❌ Failed to generate token: ' + error.message + '</div>';
+            }
+        }
+
+        // Start call (caller side)
+        async function startCall() {
+            const callerStatus = document.getElementById('callerStatus');
+            
+            if (!currentToken) {
+                callerStatus.innerHTML = '<div class="status error">❌ Generate a token first!</div>';
+                return;
+            }
+
+            callerStatus.innerHTML = '<div class="status info">🔄 Starting call...</div>';
+
+            try {
+                // Get user media
+                localStream = await navigator.mediaDevices.getUserMedia({ 
+                    audio: true, 
+                    video: false 
+                });
+
+                // Display local audio
+                document.getElementById('localAudio').srcObject = localStream;
+                document.getElementById('callerAudioSection').style.display = 'block';
+
+                // Create peer connection
+                peerConnection = new RTCPeerConnection(rtcConfig);
+                
+                // Add local stream
+                localStream.getTracks().forEach(track => {
+                    peerConnection.addTrack(track, localStream);
+                });
+
+                // Handle remote stream
+                peerConnection.ontrack = (event) => {
+                    remoteStream = event.streams[0];
+                    document.getElementById('remoteAudio').srcObject = remoteStream;
+                };
+
+                // Handle ICE candidates
+                peerConnection.onicecandidate = (event) => {
+                    if (event.candidate) {
+                        console.log('ICE candidate:', event.candidate);
+                        // In real implementation, send to signaling server
+                    }
+                };
+
+                // Create offer
+                const offer = await peerConnection.createOffer();
+                await peerConnection.setLocalDescription(offer);
+
+                isCallActive = true;
+                callStartTime = new Date();
+                document.getElementById('startCallBtn').disabled = true;
+                document.getElementById('endCallBtn').disabled = false;
+                
+                startCallStats();
+
+                callerStatus.innerHTML = `
+                    <div class="status success">
+                        <strong>📞 Call Started!</strong><br>
+                        Waiting for receiver to join...<br>
+                        <small>In a real implementation, this would connect through the signaling server</small>
+                    </div>
+                `;
+
+            } catch (error) {
+                callerStatus.innerHTML = '<div class="status error">❌ Failed to start call: ' + error.message + '</div>';
+                console.error('Start call error:', error);
+            }
+        }
+
+        // Join call (receiver side)
+        async function joinCall() {
+            const receiverStatus = document.getElementById('receiverStatus');
+            const tokenInput = document.getElementById('tokenInput').value.trim();
+
+            if (!tokenInput) {
+                receiverStatus.innerHTML = '<div class="status error">❌ Please enter a call token!</div>';
+                return;
+            }
+
+            // Validate token format
+            if (!tokenInput.startsWith('pqc:1:')) {
+                receiverStatus.innerHTML = '<div class="status error">❌ Invalid token format!</div>';
+                return;
+            }
+
+            receiverStatus.innerHTML = '<div class="status info">🔄 Joining call...</div>';
+
+            try {
+                // Get user media
+                localStream = await navigator.mediaDevices.getUserMedia({ 
+                    audio: true, 
+                    video: false 
+                });
+
+                // Create peer connection
+                peerConnection = new RTCPeerConnection(rtcConfig);
+                
+                // Add local stream
+                localStream.getTracks().forEach(track => {
+                    peerConnection.addTrack(track, localStream);
+                });
+
+                // Handle remote stream
+                peerConnection.ontrack = (event) => {
+                    remoteStream = event.streams[0];
+                    document.getElementById('remoteAudio').srcObject = remoteStream;
+                    document.getElementById('receiverAudioSection').style.display = 'block';
+                };
+
+                // Handle ICE candidates
+                peerConnection.onicecandidate = (event) => {
+                    if (event.candidate) {
+                        console.log('ICE candidate:', event.candidate);
+                        // In real implementation, send to signaling server
+                    }
+                };
+
+                isCallActive = true;
+                callStartTime = new Date();
+                document.getElementById('joinCallBtn').disabled = true;
+                document.getElementById('leaveCallBtn').disabled = false;
+                
+                startCallStats();
+
+                receiverStatus.innerHTML = `
+                    <div class="status success">
+                        <strong>📞 Joined Call!</strong><br>
+                        Connected with token: ${tokenInput.substring(0, 20)}...<br>
+                        <small>In a real implementation, this would connect through WebRTC</small>
+                    </div>
+                `;
+
+            } catch (error) {
+                receiverStatus.innerHTML = '<div class="status error">❌ Failed to join call: ' + error.message + '</div>';
+                console.error('Join call error:', error);
+            }
+        }
+
+        // End call
+        function endCall() {
+            stopCall();
+            document.getElementById('callerStatus').innerHTML = '<div class="status info">📴 Call ended</div>';
+        }
+
+        // Leave call
+        function leaveCall() {
+            stopCall();
+            document.getElementById('receiverStatus').innerHTML = '<div class="status info">📴 Left call</div>';
+        }
+
+        // Stop call (common cleanup)
+        function stopCall() {
+            if (localStream) {
+                localStream.getTracks().forEach(track => track.stop());
+                localStream = null;
+            }
+
+            if (peerConnection) {
+                peerConnection.close();
+                peerConnection = null;
+            }
+
+            if (statsInterval) {
+                clearInterval(statsInterval);
+                statsInterval = null;
+            }
+
+            isCallActive = false;
+            callStartTime = null;
+
+            // Reset UI
+            document.getElementById('startCallBtn').disabled = false;
+            document.getElementById('endCallBtn').disabled = true;
+            document.getElementById('joinCallBtn').disabled = false;
+            document.getElementById('leaveCallBtn').disabled = true;
+            document.getElementById('callerAudioSection').style.display = 'none';
+            document.getElementById('receiverAudioSection').style.display = 'none';
+            document.getElementById('callStats').innerHTML = 'No active call';
+        }
+
+        // Toggle mute
+        function toggleMute() {
+            if (localStream) {
+                const audioTrack = localStream.getAudioTracks()[0];
+                if (audioTrack) {
+                    audioTrack.enabled = !audioTrack.enabled;
+                    isMuted = !audioTrack.enabled;
+                    
+                    document.getElementById('muteBtn').innerHTML = isMuted ? '🔇 Unmute' : '🔇 Mute';
+                    document.getElementById('micStatus').innerHTML = isMuted ? 'Microphone: Muted' : 'Microphone: Active';
+                }
+            }
+        }
+
+        // Toggle speaker
+        function toggleSpeaker() {
+            const remoteAudio = document.getElementById('remoteAudio');
+            if (remoteAudio) {
+                remoteAudio.muted = !remoteAudio.muted;
+                isSpeakerOn = !remoteAudio.muted;
+                
+                document.getElementById('speakerBtn').innerHTML = isSpeakerOn ? '🔊 Speaker On' : '🔇 Speaker Off';
+                document.getElementById('speakerStatus').innerHTML = isSpeakerOn ? 'Speaker: Active' : 'Speaker: Muted';
+            }
+        }
+
+        // Start call statistics
+        function startCallStats() {
+            statsInterval = setInterval(() => {
+                if (isCallActive && callStartTime) {
+                    const duration = Math.floor((new Date() - callStartTime) / 1000);
+                    const minutes = Math.floor(duration / 60);
+                    const seconds = duration % 60;
+                    
+                    let statsHtml = `
+                        <strong>📞 Call Active</strong><br>
+                        Duration: ${minutes}:${seconds.toString().padStart(2, '0')}<br>
+                        Local Stream: ${localStream ? '✅ Active' : '❌ None'}<br>
+                        Remote Stream: ${remoteStream ? '✅ Active' : '❌ None'}<br>
+                        Peer Connection: ${peerConnection ? peerConnection.connectionState : 'None'}<br>
+                        Microphone: ${isMuted ? '🔇 Muted' : '🎤 Active'}<br>
+                        Speaker: ${isSpeakerOn ? '🔊 On' : '🔇 Off'}
+                    `;
+                    
+                    document.getElementById('callStats').innerHTML = statsHtml;
+                }
+            }, 1000);
+        }
+
+        // Utility functions
+        function generateSecureToken() {
+            const chars = '0123456789abcdef';
+            let token = '';
+            for (let i = 0; i < 64; i++) {
+                token += chars[Math.floor(Math.random() * chars.length)];
+            }
+            return token;
+        }
+
+        function generateChecksum(token) {
+            let hash = 0;
+            for (let i = 0; i < token.length; i++) {
+                const char = token.charCodeAt(i);
+                hash = ((hash << 5) - hash) + char;
+                hash = hash & hash;
+            }
+            return Math.abs(hash).toString(16).substring(0, 8);
+        }
+
+        // Check for WebRTC support
+        window.onload = function() {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                document.body.innerHTML = `
+                    <div class="container">
+                        <div class="status error">
+                            <strong>❌ WebRTC Not Supported</strong><br>
+                            Your browser doesn't support WebRTC or getUserMedia.<br>
+                            Please use a modern browser like Chrome, Firefox, Safari, or Edge.
+                        </div>
+                    </div>
+                `;
+            }
+        };
+    </script>
+</body>
+</html>

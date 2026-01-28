@@ -1,0 +1,86 @@
+version: '3.8'
+
+services:
+  # PostgreSQL database for secure token storage
+  postgres:
+    image: postgres:15-alpine
+    container_name: privacy-qr-postgres
+    environment:
+      POSTGRES_DB: privacy_qr_calling
+      POSTGRES_USER: privacy_user
+      POSTGRES_PASSWORD: secure_password_change_in_production
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./packages/backend/database/init:/docker-entrypoint-initdb.d
+    networks:
+      - privacy-qr-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U privacy_user -d privacy_qr_calling"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Redis for session management and caching
+  redis:
+    image: redis:7-alpine
+    container_name: privacy-qr-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - privacy-qr-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Backend development server
+  backend:
+    build:
+      context: .
+      dockerfile: packages/backend/Dockerfile.dev
+    container_name: privacy-qr-backend
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./packages/backend:/app/packages/backend
+      - /app/packages/backend/node_modules
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      DATABASE_URL: postgresql://privacy_user:secure_password_change_in_production@postgres:5432/privacy_qr_calling
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - privacy-qr-network
+    command: npm run dev
+
+  # STUN/TURN server for WebRTC
+  coturn:
+    image: coturn/coturn:latest
+    container_name: privacy-qr-coturn
+    ports:
+      - "3478:3478/udp"
+      - "3478:3478/tcp"
+      - "49152-65535:49152-65535/udp"
+    volumes:
+      - ./docker/coturn/turnserver.conf:/etc/coturn/turnserver.conf
+    networks:
+      - privacy-qr-network
+    command: ["-c", "/etc/coturn/turnserver.conf"]
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  privacy-qr-network:
+    driver: bridge

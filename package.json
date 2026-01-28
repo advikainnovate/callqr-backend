@@ -1,0 +1,30 @@
+{
+  "name": "privacy-qr-calling-system",
+  "version": "1.0.0",
+  "description": "Privacy-preserving QR-based calling system with anonymous communication",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces",
+    "test": "npm run test --workspaces",
+    "test:unit": "npm run test:unit --workspaces",
+    "test:property": "npm run test:property --workspaces",
+    "lint": "npm run lint --workspaces",
+    "dev": "concurrently \"npm run dev --workspace=@privacy-qr-calling/backend\" \"npm run dev --workspace=@privacy-qr-calling/mobile\"",
+    "dev:backend": "npm run dev --workspace=@privacy-qr-calling/backend",
+    "dev:mobile": "npm run dev --workspace=@privacy-qr-calling/mobile",
+    "clean": "npm run clean --workspaces"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0",
+    "ts-node": "^10.9.0",
+    "concurrently": "^8.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  }
+}

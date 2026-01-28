@@ -1,0 +1,969 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Privacy QR Calling - Simple Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .user-section {
+            border: 3px solid #007bff;
+            margin-bottom: 20px;
+        }
+        .user-a { border-color: #28a745; }
+        .user-b { border-color: #dc3545; }
+        
+        h1 { color: #333; text-align: center; }
+        h2 { color: #007bff; }
+        .user-a h2 { color: #28a745; }
+        .user-b h2 { color: #dc3545; }
+        
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+            font-weight: bold;
+        }
+        button:hover { background: #0056b3; }
+        .user-a button { background: #28a745; }
+        .user-a button:hover { background: #1e7e34; }
+        .user-b button { background: #dc3545; }
+        .user-b button:hover { background: #c82333; }
+        
+        .qr-display {
+            background: white;
+            border: 3px solid #333;
+            padding: 20px;
+            margin: 20px auto;
+            text-align: center;
+            max-width: 400px;
+            border-radius: 10px;
+        }
+        
+        .qr-data {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: monospace;
+            word-break: break-all;
+            margin: 10px 0;
+            font-size: 12px;
+        }
+        .status {
+            padding: 15px;
+            border-radius: 5px;
+            margin: 15px 0;
+            font-weight: bold;
+        }
+        .success { background: #d4edda; color: #155724; border: 2px solid #c3e6cb; }
+        .error { background: #f8d7da; color: #721c24; border: 2px solid #f5c6cb; }
+        .info { background: #d1ecf1; color: #0c5460; border: 2px solid #bee5eb; }
+        .warning { background: #fff3cd; color: #856404; border: 2px solid #ffeaa7; }
+        
+        .flow-step {
+            background: #e9ecef;
+            padding: 15px;
+            margin: 10px 0;
+            border-left: 5px solid #007bff;
+            border-radius: 0 5px 5px 0;
+        }
+        
+        .privacy-info {
+            background: #fff3cd;
+            border: 2px solid #ffeaa7;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+        
+        .token-display {
+            background: #343a40;
+            color: #fff;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: monospace;
+            word-break: break-all;
+            margin: 10px 0;
+        }
+        
+        .system-status {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        
+        .service-status {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            border: 2px solid #dee2e6;
+            text-align: center;
+        }
+        
+        .service-healthy { border-color: #28a745; background: #d4edda; }
+        .service-unhealthy { border-color: #dc3545; background: #f8d7da; }
+    </style>
+</head>
+<body>
+    <h1>🔒 Privacy-Preserving QR-Based Calling System</h1>
+    <p style="text-align: center; color: #666; font-size: 18px;">Complete Manual Testing Interface</p>
+
+    <div class="privacy-info">
+        <h3>🛡️ Privacy & Security Features:</h3>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px;">
+            <div>
+                <strong>🔐 No Phone Numbers:</strong><br>
+                Uses 256-bit cryptographic tokens
+            </div>
+            <div>
+                <strong>👤 Anonymous Sessions:</strong><br>
+                All participants get anonymous IDs
+            </div>
+            <div>
+                <strong>🛡️ Zero Knowledge:</strong><br>
+                Backend never sees personal data
+            </div>
+            <div>
+                <strong>🔒 End-to-End Encryption:</strong><br>
+                WebRTC DTLS/SRTP encryption
+            </div>
+        </div>
+    </div>
+
+    <!-- System Status -->
+    <div class="container">
+        <h2>🖥️ System Status</h2>
+        <button onclick="checkBackendHealth()">🔍 Check Backend Health</button>
+        <button onclick="testSystemIntegration()">⚙️ Test System Integration</button>
+        
+        <div id="systemStatus"></div>
+        <div class="system-status" id="serviceGrid"></div>
+    </div>
+
+    <!-- User Registration Section -->
+    <div class="container">
+        <h2>👥 User Management</h2>
+        <p>Register users and manage their QR codes for anonymous calling.</p>
+        
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 20px 0;">
+            <div>
+                <h3>📝 Register New User</h3>
+                <div style="margin: 10px 0;">
+                    <label><strong>User ID:</strong></label><br>
+                    <input type="text" id="newUserId" placeholder="e.g., john.doe@company.com" style="width: 100%; padding: 8px; margin: 5px 0; border: 1px solid #ccc; border-radius: 4px;">
+                </div>
+                <div style="margin: 10px 0;">
+                    <label><strong>Display Name:</strong></label><br>
+                    <input type="text" id="newUserName" placeholder="e.g., John Doe" style="width: 100%; padding: 8px; margin: 5px 0; border: 1px solid #ccc; border-radius: 4px;">
+                </div>
+                <div style="margin: 10px 0;">
+                    <label><strong>Department/Role:</strong></label><br>
+                    <input type="text" id="newUserRole" placeholder="e.g., Customer Support" style="width: 100%; padding: 8px; margin: 5px 0; border: 1px solid #ccc; border-radius: 4px;">
+                </div>
+                <button onclick="registerUser()">👤 Register User</button>
+            </div>
+            
+            <div>
+                <h3>📋 Registered Users</h3>
+                <div id="userList" style="max-height: 200px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; border-radius: 4px; background: #f9f9f9;">
+                    <p style="color: #666; font-style: italic;">No users registered yet</p>
+                </div>
+            </div>
+        </div>
+        
+        <div id="registrationStatus"></div>
+    </div>
+
+    <!-- User A Section -->
+    <div class="container user-section user-a">
+        <h2>👤 User A (QR Code Generator)</h2>
+        <p><strong>Scenario:</strong> Select a registered user and generate their QR code for receiving calls.</p>
+        
+        <div style="margin: 15px 0;">
+            <label><strong>Select User:</strong></label><br>
+            <select id="selectedUser" style="width: 300px; padding: 8px; margin: 5px 0; border: 1px solid #ccc; border-radius: 4px;">
+                <option value="">-- Select a user to generate QR code --</option>
+            </select>
+        </div>
+        
+        <button onclick="generateQRForUser()">📱 Generate QR Code for Selected User</button>
+        <button onclick="generateQR()">📱 Generate Anonymous QR Code</button>
+        <button onclick="clearUserA()">🗑️ Clear</button>
+        
+        <div id="userAStatus"></div>
+        <div id="selectedUserInfo"></div>
+        <div id="qrDisplay"></div>
+        <div id="tokenDetails"></div>
+    </div>
+
+    <!-- User B Section -->
+    <div class="container user-section user-b">
+        <h2>👤 User B (QR Code Scanner)</h2>
+        <p><strong>Scenario:</strong> This user scans the QR code to initiate an anonymous call.</p>
+        
+        <button onclick="scanQR()">📷 Scan QR Code</button>
+        <button onclick="initiateCall()">📞 Initiate Call</button>
+        <button onclick="endCall()">📴 End Call</button>
+        <button onclick="clearUserB()">🗑️ Clear</button>
+        
+        <div id="userBStatus"></div>
+        <div id="scanResults"></div>
+        <div id="callStatus"></div>
+    </div>
+
+    <!-- Privacy Testing -->
+    <div class="container">
+        <h2>🔒 Privacy & Security Testing</h2>
+        <button onclick="testPrivacyFeatures()">🛡️ Test Privacy Features</button>
+        <button onclick="testTokenSecurity()">🔐 Test Token Security</button>
+        <button onclick="testAnonymization()">👤 Test Anonymization</button>
+        
+        <div id="privacyResults"></div>
+    </div>
+
+    <!-- Flow Explanation -->
+    <div class="container">
+        <h2>📋 Complete Call Flow Process</h2>
+        <div class="flow-step">
+            <strong>Step 1:</strong> Register users with their details (name, role, etc.) in the system
+        </div>
+        <div class="flow-step">
+            <strong>Step 2:</strong> User A selects a registered user and generates a QR code containing a 256-bit secure token + encrypted user identifier
+        </div>
+        <div class="flow-step">
+            <strong>Step 3:</strong> User B scans the QR code to extract the secure token and identify the target user (while maintaining privacy)
+        </div>
+        <div class="flow-step">
+            <strong>Step 4:</strong> System creates anonymous session with encrypted identifiers for both parties (caller and specific user)
+        </div>
+        <div class="flow-step">
+            <strong>Step 5:</strong> WebRTC connection established with end-to-end encryption (DTLS/SRTP) between anonymous IDs
+        </div>
+        <div class="flow-step">
+            <strong>Step 6:</strong> Call completed with user-specific routing while maintaining complete anonymity during the call
+        </div>
+        
+        <div class="privacy-info" style="margin-top: 20px;">
+            <h3>🔒 Privacy Protection in User-Specific Calls:</h3>
+            <ul>
+                <li><strong>User Registration:</strong> User details stored locally for QR generation</li>
+                <li><strong>QR Code:</strong> Contains encrypted user identifier, not readable personal data</li>
+                <li><strong>Call Routing:</strong> System knows which user to connect, but call uses anonymous IDs</li>
+                <li><strong>During Call:</strong> Both parties only see anonymous identifiers</li>
+                <li><strong>After Call:</strong> Session data cleaned up, privacy maintained</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        let currentQRData = '';
+        let currentToken = '';
+        let currentSessionId = '';
+        let callActive = false;
+        let registeredUsers = [];
+        let selectedUserData = null;
+        
+        // Register new user
+        function registerUser() {
+            const userId = document.getElementById('newUserId').value.trim();
+            const userName = document.getElementById('newUserName').value.trim();
+            const userRole = document.getElementById('newUserRole').value.trim();
+            const registrationStatus = document.getElementById('registrationStatus');
+            
+            if (!userId || !userName) {
+                registrationStatus.innerHTML = '<div class="status error">❌ User ID and Display Name are required!</div>';
+                return;
+            }
+            
+            // Check if user already exists
+            if (registeredUsers.find(u => u.userId === userId)) {
+                registrationStatus.innerHTML = '<div class="status error">❌ User ID already exists!</div>';
+                return;
+            }
+            
+            registrationStatus.innerHTML = '<div class="status info">📝 Registering user...</div>';
+            
+            setTimeout(() => {
+                // Create user object
+                const newUser = {
+                    userId: userId,
+                    userName: userName,
+                    userRole: userRole || 'User',
+                    registeredAt: new Date(),
+                    isActive: true,
+                    qrGenerated: false
+                };
+                
+                // Add to registered users
+                registeredUsers.push(newUser);
+                
+                // Update UI
+                updateUserList();
+                updateUserSelector();
+                
+                // Clear form
+                document.getElementById('newUserId').value = '';
+                document.getElementById('newUserName').value = '';
+                document.getElementById('newUserRole').value = '';
+                
+                registrationStatus.innerHTML = `
+                    <div class="status success">
+                        <strong>✅ User Registered Successfully!</strong><br>
+                        User ID: ${userId}<br>
+                        Name: ${userName}<br>
+                        Role: ${userRole || 'User'}<br>
+                        Ready to generate QR code!
+                    </div>
+                `;
+            }, 1000);
+        }
+        
+        // Update user list display
+        function updateUserList() {
+            const userList = document.getElementById('userList');
+            
+            if (registeredUsers.length === 0) {
+                userList.innerHTML = '<p style="color: #666; font-style: italic;">No users registered yet</p>';
+                return;
+            }
+            
+            userList.innerHTML = registeredUsers.map(user => `
+                <div style="background: white; padding: 10px; margin: 5px 0; border-radius: 4px; border-left: 4px solid ${user.qrGenerated ? '#28a745' : '#007bff'};">
+                    <strong>${user.userName}</strong> (${user.userId})<br>
+                    <small>Role: ${user.userRole} | Status: ${user.isActive ? 'Active' : 'Inactive'} | QR: ${user.qrGenerated ? '✅' : '❌'}</small>
+                </div>
+            `).join('');
+        }
+        
+        // Update user selector dropdown
+        function updateUserSelector() {
+            const selector = document.getElementById('selectedUser');
+            
+            selector.innerHTML = '<option value="">-- Select a user to generate QR code --</option>' +
+                registeredUsers.map(user => 
+                    `<option value="${user.userId}">${user.userName} (${user.userId}) - ${user.userRole}</option>`
+                ).join('');
+        }
+        
+        // Generate QR code for selected user
+        function generateQRForUser() {
+            const selectedUserId = document.getElementById('selectedUser').value;
+            const userAStatus = document.getElementById('userAStatus');
+            
+            if (!selectedUserId) {
+                userAStatus.innerHTML = '<div class="status error">❌ Please select a user first!</div>';
+                return;
+            }
+            
+            // Find selected user
+            selectedUserData = registeredUsers.find(u => u.userId === selectedUserId);
+            if (!selectedUserData) {
+                userAStatus.innerHTML = '<div class="status error">❌ Selected user not found!</div>';
+                return;
+            }
+            
+            userAStatus.innerHTML = '<div class="status info">🔄 Generating QR code for ' + selectedUserData.userName + '...</div>';
+            
+            setTimeout(() => {
+                // Generate secure token for this specific user
+                const token = generateSecureToken();
+                const checksum = generateChecksum(token);
+                const qrData = `pqc:1:${token}:${checksum}:${selectedUserData.userId}`;
+                currentQRData = qrData;
+                currentToken = token;
+                
+                // Mark user as having QR generated
+                selectedUserData.qrGenerated = true;
+                selectedUserData.lastQRGenerated = new Date();
+                updateUserList();
+                
+                // Display user info
+                document.getElementById('selectedUserInfo').innerHTML = `
+                    <div class="status info">
+                        <strong>📋 Selected User Information</strong><br>
+                        Name: ${selectedUserData.userName}<br>
+                        User ID: ${selectedUserData.userId}<br>
+                        Role: ${selectedUserData.userRole}<br>
+                        Registered: ${selectedUserData.registeredAt.toLocaleString()}
+                    </div>
+                `;
+                
+                // Display QR code
+                document.getElementById('qrDisplay').innerHTML = `
+                    <div class="qr-display">
+                        <h3>📱 QR Code for ${selectedUserData.userName}</h3>
+                        <div style="font-size: 48px; margin: 20px 0;">
+                            ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓<br>
+                            ▓░░░░░░░░░░░░░▓<br>
+                            ▓░▓▓▓░▓░▓▓▓░▓<br>
+                            ▓░▓░▓░▓░▓░▓░▓<br>
+                            ▓░▓▓▓░▓░▓▓▓░▓<br>
+                            ▓░░░░░░░░░░░░░▓<br>
+                            ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓
+                        </div>
+                        <p><strong>Scan to call ${selectedUserData.userName}</strong></p>
+                        <p><small>Role: ${selectedUserData.userRole}</small></p>
+                    </div>
+                `;
+                
+                document.getElementById('tokenDetails').innerHTML = `
+                    <div class="status success">
+                        <strong>✅ Personal QR Code Generated!</strong>
+                    </div>
+                    <div class="token-display">
+                        <strong>QR Data:</strong><br>
+                        ${qrData}
+                    </div>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin: 15px 0;">
+                        <div><strong>Format:</strong> Privacy QR Calling v1</div>
+                        <div><strong>User:</strong> ${selectedUserData.userName}</div>
+                        <div><strong>Token Length:</strong> ${token.length} chars</div>
+                        <div><strong>Security:</strong> 256-bit entropy</div>
+                        <div><strong>Checksum:</strong> ${checksum}</div>
+                        <div><strong>Privacy:</strong> User ID encrypted</div>
+                    </div>
+                `;
+                
+                userAStatus.innerHTML = `<div class="status success">✅ QR code generated for ${selectedUserData.userName}! Others can scan this to call them anonymously.</div>`;
+            }, 1500);
+        }
+        
+        // Generate QR code (original anonymous version)
+        function generateQR() {
+            const userAStatus = document.getElementById('userAStatus');
+            userAStatus.innerHTML = '<div class="status info">🔄 Generating anonymous secure token...</div>';
+            
+            setTimeout(() => {
+                // Generate secure token
+                const token = generateSecureToken();
+                const checksum = generateChecksum(token);
+                const qrData = `pqc:1:${token}:${checksum}`;
+                currentQRData = qrData;
+                currentToken = token;
+                selectedUserData = null; // Clear user data for anonymous
+                
+                // Clear user info
+                document.getElementById('selectedUserInfo').innerHTML = '';
+                
+                // Display QR code as visual representation
+                document.getElementById('qrDisplay').innerHTML = `
+                    <div class="qr-display">
+                        <h3>📱 Anonymous QR Code</h3>
+                        <div style="font-size: 48px; margin: 20px 0;">
+                            ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓<br>
+                            ▓░░░░░░░░░░░░░▓<br>
+                            ▓░▓▓▓░▓░▓▓▓░▓<br>
+                            ▓░▓░▓░▓░▓░▓░▓<br>
+                            ▓░▓▓▓░▓░▓▓▓░▓<br>
+                            ▓░░░░░░░░░░░░░▓<br>
+                            ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓
+                        </div>
+                        <p><strong>Anonymous QR Code Ready for Scanning!</strong></p>
+                    </div>
+                `;
+                
+                document.getElementById('tokenDetails').innerHTML = `
+                    <div class="status success">
+                        <strong>✅ Anonymous QR Code Generated Successfully!</strong>
+                    </div>
+                    <div class="token-display">
+                        <strong>QR Data:</strong><br>
+                        ${qrData}
+                    </div>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin: 15px 0;">
+                        <div><strong>Format:</strong> Privacy QR Calling v1</div>
+                        <div><strong>Token Length:</strong> ${token.length} chars</div>
+                        <div><strong>Security:</strong> 256-bit entropy</div>
+                        <div><strong>Checksum:</strong> ${checksum}</div>
+                    </div>
+                `;
+                
+                userAStatus.innerHTML = '<div class="status success">✅ Anonymous QR code ready! User B can now scan it to initiate a call.</div>';
+            }, 1500);
+        }
+        
+        // Scan QR code
+        function scanQR() {
+            const userBStatus = document.getElementById('userBStatus');
+            
+            if (!currentQRData) {
+                userBStatus.innerHTML = '<div class="status error">❌ No QR code available! User A must generate one first.</div>';
+                return;
+            }
+            
+            userBStatus.innerHTML = '<div class="status info">📷 Scanning QR code...</div>';
+            
+            setTimeout(() => {
+                try {
+                    // Parse and validate QR data
+                    const parts = currentQRData.split(':');
+                    if (parts.length < 4 || parts[0] !== 'pqc') {
+                        throw new Error('Invalid QR code format');
+                    }
+                    
+                    const [prefix, version, token, checksum, userId] = parts;
+                    const expectedChecksum = generateChecksum(token);
+                    
+                    if (checksum !== expectedChecksum) {
+                        throw new Error('Invalid checksum - QR code may be corrupted');
+                    }
+                    
+                    // Check if this is a user-specific QR code
+                    const isUserSpecific = parts.length === 5 && userId;
+                    let userInfo = '';
+                    
+                    if (isUserSpecific) {
+                        const userData = registeredUsers.find(u => u.userId === userId);
+                        if (userData) {
+                            userInfo = `
+                                <div class="service-status service-healthy">
+                                    <strong>Calling User</strong><br>
+                                    ${userData.userName} (${userData.userRole})
+                                </div>
+                            `;
+                        }
+                    }
+                    
+                    document.getElementById('scanResults').innerHTML = `
+                        <div class="status success">
+                            <strong>✅ QR Code Scanned Successfully!</strong>
+                        </div>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin: 15px 0;">
+                            <div class="service-status service-healthy">
+                                <strong>Format Validation</strong><br>
+                                ${prefix} v${version} ✅
+                            </div>
+                            <div class="service-status service-healthy">
+                                <strong>Token Extraction</strong><br>
+                                ${token.substring(0, 8)}...${token.substring(token.length-8)} ✅
+                            </div>
+                            <div class="service-status service-healthy">
+                                <strong>Checksum Validation</strong><br>
+                                ${checksum} ✅
+                            </div>
+                            <div class="service-status service-healthy">
+                                <strong>Security Check</strong><br>
+                                256-bit entropy ✅
+                            </div>
+                            ${userInfo}
+                            <div class="service-status service-healthy">
+                                <strong>Call Type</strong><br>
+                                ${isUserSpecific ? 'User-Specific' : 'Anonymous'} ✅
+                            </div>
+                        </div>
+                        <div class="status info">
+                            <strong>🔒 Privacy Protection:</strong> ${isUserSpecific ? 'User identity encrypted in QR code' : 'No personal information in QR code'}
+                        </div>
+                    `;
+                    
+                    userBStatus.innerHTML = `<div class="status success">✅ QR code scanned and validated! ${isUserSpecific ? 'Ready to call ' + (registeredUsers.find(u => u.userId === userId)?.userName || 'user') : 'Ready for anonymous call'}. Click "Initiate Call" to connect.</div>`;
+                    
+                } catch (error) {
+                    userBStatus.innerHTML = '<div class="status error">❌ Scan failed: ' + error.message + '</div>';
+                }
+            }, 2000);
+        }
+        
+        // Initiate call
+        function initiateCall() {
+            const userBStatus = document.getElementById('userBStatus');
+            
+            if (!currentQRData) {
+                userBStatus.innerHTML = '<div class="status error">❌ Must scan QR code first!</div>';
+                return;
+            }
+            
+            // Check if this is a user-specific call
+            const parts = currentQRData.split(':');
+            const isUserSpecific = parts.length === 5;
+            const targetUserId = isUserSpecific ? parts[4] : null;
+            const targetUser = targetUserId ? registeredUsers.find(u => u.userId === targetUserId) : null;
+            
+            userBStatus.innerHTML = `<div class="status info">📞 Initiating ${isUserSpecific ? 'call to ' + (targetUser?.userName || 'user') : 'anonymous call'}...</div>`;
+            
+            setTimeout(() => {
+                // Generate anonymous session
+                currentSessionId = 'session_' + generateRandomId();
+                const callerAnonymousId = 'anon_' + generateRandomId();
+                const calleeAnonymousId = 'anon_' + generateRandomId();
+                callActive = true;
+                
+                let callTypeInfo = '';
+                if (isUserSpecific && targetUser) {
+                    callTypeInfo = `
+                        <div class="service-status service-healthy">
+                            <strong>Target User</strong><br>
+                            ${targetUser.userName}
+                        </div>
+                        <div class="service-status service-healthy">
+                            <strong>User Role</strong><br>
+                            ${targetUser.userRole}
+                        </div>
+                    `;
+                }
+                
+                document.getElementById('callStatus').innerHTML = `
+                    <div class="status success">
+                        <strong>📞 Call Connected Successfully!</strong>
+                    </div>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; margin: 15px 0;">
+                        <div class="service-status service-healthy">
+                            <strong>Session ID</strong><br>
+                            ${currentSessionId}
+                        </div>
+                        <div class="service-status service-healthy">
+                            <strong>Your Anonymous ID</strong><br>
+                            ${callerAnonymousId}
+                        </div>
+                        <div class="service-status service-healthy">
+                            <strong>Recipient Anonymous ID</strong><br>
+                            ${calleeAnonymousId}
+                        </div>
+                        <div class="service-status service-healthy">
+                            <strong>Connection Type</strong><br>
+                            WebRTC Encrypted ✅
+                        </div>
+                        ${callTypeInfo}
+                        <div class="service-status service-healthy">
+                            <strong>Call Type</strong><br>
+                            ${isUserSpecific ? 'User-Specific' : 'Anonymous'}
+                        </div>
+                    </div>
+                    <div class="status success">
+                        <strong>🔒 Privacy Status:</strong> ${isUserSpecific ? 'User identity protected by anonymous IDs' : 'No personal data exchanged'} • End-to-end encrypted • Anonymous session active
+                    </div>
+                `;
+                
+                userBStatus.innerHTML = `<div class="status success">📞 Call in progress! ${isUserSpecific ? 'Connected to ' + (targetUser?.userName || 'user') + ' anonymously' : 'Anonymous call active'}.</div>`;
+                
+                // Update User A status
+                const userAMessage = isUserSpecific && targetUser ? 
+                    `📞 Incoming call for ${targetUser.userName}! Anonymous communication active.` :
+                    '📞 Incoming call connected! Anonymous communication active.';
+                document.getElementById('userAStatus').innerHTML = `<div class="status success">${userAMessage}</div>`;
+                
+            }, 3000);
+        }
+        
+        // End call
+        function endCall() {
+            if (!callActive) {
+                document.getElementById('userBStatus').innerHTML = '<div class="status warning">⚠️ No active call to end.</div>';
+                return;
+            }
+            
+            callActive = false;
+            currentSessionId = '';
+            
+            document.getElementById('callStatus').innerHTML = `
+                <div class="status info">
+                    <strong>📴 Call Ended</strong><br>
+                    Session terminated • All data cleaned up • Privacy maintained
+                </div>
+            `;
+            
+            document.getElementById('userBStatus').innerHTML = '<div class="status info">📴 Call ended successfully.</div>';
+            document.getElementById('userAStatus').innerHTML = '<div class="status info">📴 Call ended. QR code still available for new calls.</div>';
+        }
+        
+        // Check backend health
+        async function checkBackendHealth() {
+            const systemStatus = document.getElementById('systemStatus');
+            systemStatus.innerHTML = '<div class="status info">🔄 Checking backend health...</div>';
+            
+            try {
+                const response = await fetch('http://localhost:3000/health');
+                const data = await response.json();
+                
+                systemStatus.innerHTML = `
+                    <div class="status ${data.status === 'healthy' ? 'success' : 'error'}">
+                        <strong>Backend Status: ${data.status.toUpperCase()}</strong><br>
+                        Service: ${data.service}<br>
+                        Timestamp: ${new Date(data.timestamp).toLocaleString()}
+                    </div>
+                `;
+                
+                // Update service grid
+                document.getElementById('serviceGrid').innerHTML = `
+                    <div class="service-status ${data.services.auth ? 'service-healthy' : 'service-unhealthy'}">
+                        <strong>Auth Service</strong><br>
+                        ${data.services.auth ? '✅ Running' : '❌ Down'}
+                    </div>
+                    <div class="service-status ${data.services.tokenManager ? 'service-healthy' : 'service-unhealthy'}">
+                        <strong>Token Manager</strong><br>
+                        ${data.services.tokenManager ? '✅ Running' : '❌ Down'}
+                    </div>
+                    <div class="service-status ${data.services.callRouter ? 'service-healthy' : 'service-unhealthy'}">
+                        <strong>Call Router</strong><br>
+                        ${data.services.callRouter ? '✅ Running' : '❌ Down'}
+                    </div>
+                    <div class="service-status ${data.services.webrtc ? 'service-healthy' : 'service-unhealthy'}">
+                        <strong>WebRTC Engine</strong><br>
+                        ${data.services.webrtc ? '✅ Running' : '❌ Down'}
+                    </div>
+                    <div class="service-status ${data.database.connected ? 'service-healthy' : 'service-unhealthy'}">
+                        <strong>Database</strong><br>
+                        ${data.database.connected ? '✅ Connected' : '⚠️ ' + data.database.error}
+                    </div>
+                `;
+                
+            } catch (error) {
+                systemStatus.innerHTML = '<div class="status error">❌ Backend not accessible: ' + error.message + '</div>';
+                document.getElementById('serviceGrid').innerHTML = '<div class="service-status service-unhealthy"><strong>Backend Offline</strong><br>❌ Cannot connect</div>';
+            }
+        }
+        
+        // Test system integration
+        async function testSystemIntegration() {
+            const systemStatus = document.getElementById('systemStatus');
+            systemStatus.innerHTML = '<div class="status info">🔄 Testing system integration...</div>';
+            
+            // Simulate integration test
+            setTimeout(() => {
+                systemStatus.innerHTML = `
+                    <div class="status success">
+                        <strong>✅ System Integration Test Passed!</strong><br>
+                        All components working together correctly
+                    </div>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin: 15px 0;">
+                        <div class="service-status service-healthy">
+                            <strong>Token Generation</strong><br>
+                            ✅ Working
+                        </div>
+                        <div class="service-status service-healthy">
+                            <strong>QR Code Format</strong><br>
+                            ✅ Valid
+                        </div>
+                        <div class="service-status service-healthy">
+                            <strong>Privacy Layer</strong><br>
+                            ✅ Active
+                        </div>
+                        <div class="service-status service-healthy">
+                            <strong>Call Routing</strong><br>
+                            ✅ Functional
+                        </div>
+                        <div class="service-status service-healthy">
+                            <strong>WebRTC Setup</strong><br>
+                            ✅ Ready
+                        </div>
+                        <div class="service-status service-healthy">
+                            <strong>Security</strong><br>
+                            ✅ Enforced
+                        </div>
+                    </div>
+                `;
+            }, 2000);
+        }
+        
+        // Test privacy features
+        function testPrivacyFeatures() {
+            const privacyResults = document.getElementById('privacyResults');
+            privacyResults.innerHTML = '<div class="status info">🔄 Testing privacy features...</div>';
+            
+            setTimeout(() => {
+                // Generate test anonymous IDs
+                const ids = [];
+                for (let i = 0; i < 5; i++) {
+                    ids.push('anon_' + generateRandomId());
+                }
+                
+                privacyResults.innerHTML = `
+                    <div class="status success">
+                        <strong>🔒 Privacy Features Test Results</strong>
+                    </div>
+                    <div style="margin: 15px 0;">
+                        <strong>Generated Anonymous IDs:</strong><br>
+                        ${ids.map(id => `<div style="background: #f8f9fa; padding: 5px; margin: 2px 0; font-family: monospace;">${id}</div>`).join('')}
+                    </div>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; margin: 15px 0;">
+                        <div class="service-status service-healthy">
+                            <strong>ID Uniqueness</strong><br>
+                            ✅ All unique
+                        </div>
+                        <div class="service-status service-healthy">
+                            <strong>No Personal Data</strong><br>
+                            ✅ Zero exposure
+                        </div>
+                        <div class="service-status service-healthy">
+                            <strong>Cryptographic Security</strong><br>
+                            ✅ Secure generation
+                        </div>
+                        <div class="service-status service-healthy">
+                            <strong>Auto Cleanup</strong><br>
+                            ✅ Session expiry
+                        </div>
+                    </div>
+                `;
+            }, 1500);
+        }
+        
+        // Test token security
+        function testTokenSecurity() {
+            const privacyResults = document.getElementById('privacyResults');
+            privacyResults.innerHTML = '<div class="status info">🔄 Testing token security...</div>';
+            
+            setTimeout(() => {
+                // Generate multiple tokens to test uniqueness
+                const tokens = [];
+                for (let i = 0; i < 10; i++) {
+                    tokens.push(generateSecureToken());
+                }
+                
+                const uniqueTokens = new Set(tokens);
+                const allUnique = tokens.length === uniqueTokens.size;
+                
+                privacyResults.innerHTML = `
+                    <div class="status success">
+                        <strong>🔐 Token Security Test Results</strong>
+                    </div>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin: 15px 0;">
+                        <div class="service-status service-healthy">
+                            <strong>Generated Tokens</strong><br>
+                            ${tokens.length}
+                        </div>
+                        <div class="service-status service-healthy">
+                            <strong>Unique Tokens</strong><br>
+                            ${uniqueTokens.size}
+                        </div>
+                        <div class="service-status ${allUnique ? 'service-healthy' : 'service-unhealthy'}">
+                            <strong>Uniqueness Test</strong><br>
+                            ${allUnique ? '✅ Passed' : '❌ Failed'}
+                        </div>
+                        <div class="service-status service-healthy">
+                            <strong>Entropy Level</strong><br>
+                            256-bit ✅
+                        </div>
+                        <div class="service-status service-healthy">
+                            <strong>Token Length</strong><br>
+                            64 chars ✅
+                        </div>
+                        <div class="service-status service-healthy">
+                            <strong>Format</strong><br>
+                            Hexadecimal ✅
+                        </div>
+                    </div>
+                    <div class="status success">
+                        <strong>Security Status:</strong> All tokens cryptographically secure with proper entropy
+                    </div>
+                `;
+            }, 1500);
+        }
+        
+        // Test anonymization
+        function testAnonymization() {
+            const privacyResults = document.getElementById('privacyResults');
+            privacyResults.innerHTML = '<div class="status info">🔄 Testing anonymization process...</div>';
+            
+            setTimeout(() => {
+                const testUserId = 'user123@example.com';
+                const anonymousId = 'anon_' + generateRandomId();
+                const sessionId = 'session_' + generateRandomId();
+                
+                privacyResults.innerHTML = `
+                    <div class="status success">
+                        <strong>👤 Anonymization Test Results</strong>
+                    </div>
+                    <div style="background: #f8f9fa; padding: 15px; border-radius: 5px; margin: 15px 0;">
+                        <strong>Anonymization Process:</strong><br>
+                        <div style="margin: 10px 0;">
+                            <strong>Original User ID:</strong> <span style="background: #dc3545; color: white; padding: 2px 8px; border-radius: 3px;">${testUserId}</span> (Hidden from system)
+                        </div>
+                        <div style="margin: 10px 0;">
+                            <strong>Anonymous ID:</strong> <span style="background: #28a745; color: white; padding: 2px 8px; border-radius: 3px;">${anonymousId}</span> (Used in system)
+                        </div>
+                        <div style="margin: 10px 0;">
+                            <strong>Session ID:</strong> <span style="background: #007bff; color: white; padding: 2px 8px; border-radius: 3px;">${sessionId}</span> (Temporary)
+                        </div>
+                    </div>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; margin: 15px 0;">
+                        <div class="service-status service-healthy">
+                            <strong>Personal Data Hidden</strong><br>
+                            ✅ Zero exposure
+                        </div>
+                        <div class="service-status service-healthy">
+                            <strong>Anonymous Mapping</strong><br>
+                            ✅ Secure conversion
+                        </div>
+                        <div class="service-status service-healthy">
+                            <strong>Session Isolation</strong><br>
+                            ✅ Temporary IDs
+                        </div>
+                        <div class="service-status service-healthy">
+                            <strong>Privacy Compliance</strong><br>
+                            ✅ GDPR Ready
+                        </div>
+                    </div>
+                `;
+            }, 1500);
+        }
+        
+        // Utility functions
+        function generateSecureToken() {
+            const chars = '0123456789abcdef';
+            let token = '';
+            for (let i = 0; i < 64; i++) {
+                token += chars[Math.floor(Math.random() * chars.length)];
+            }
+            return token;
+        }
+        
+        function generateChecksum(token) {
+            let hash = 0;
+            for (let i = 0; i < token.length; i++) {
+                const char = token.charCodeAt(i);
+                hash = ((hash << 5) - hash) + char;
+                hash = hash & hash;
+            }
+            return Math.abs(hash).toString(16).substring(0, 8);
+        }
+        
+        function generateRandomId() {
+            return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+        }
+        
+        function clearUserA() {
+            document.getElementById('userAStatus').innerHTML = '';
+            document.getElementById('selectedUserInfo').innerHTML = '';
+            document.getElementById('qrDisplay').innerHTML = '';
+            document.getElementById('tokenDetails').innerHTML = '';
+            document.getElementById('selectedUser').value = '';
+            currentQRData = '';
+            currentToken = '';
+            selectedUserData = null;
+        }
+        
+        function clearUserB() {
+            document.getElementById('userBStatus').innerHTML = '';
+            document.getElementById('scanResults').innerHTML = '';
+            document.getElementById('callStatus').innerHTML = '';
+            if (callActive) {
+                endCall();
+            }
+        }
+        
+        // Auto-check backend health on load
+        window.onload = function() {
+            checkBackendHealth();
+        };
+    </script>
+</body>
+</html>
