@@ -1,0 +1,31 @@
+meta {
+  name: Logout All Sessions
+  type: http
+  seq: 8
+}
+
+post {
+  url: {{apiUrl}}/auth/logout-all
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+headers {
+  Content-Type: application/json
+}
+
+script:post-response {
+  if (res.getStatus() === 200) {
+    bru.setEnvVar("authToken", "");
+  }
+}
+
+tests {
+  test("Logout all should succeed", function() {
+    expect(res.getStatus()).to.equal(200);
+  });
+}

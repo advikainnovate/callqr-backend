@@ -23,10 +23,11 @@ const PORT = process.env.PORT || 3000;
 
 // Security middleware
 app.use(helmet());
-app.use(cors({
-  origin: true, // Allow all origins for development
-  credentials: true
-}));
+// CORS disabled
+// app.use(cors({
+//   origin: true, // Allow all origins for development
+//   credentials: true
+// }));
 
 // Standard middleware stack
 app.use(...createStandardMiddlewareStack());
@@ -117,17 +118,17 @@ app.use((err: Error, req: express.Request, res: express.Response, next: express.
   });
 });
 
-// 404 handler
-app.use('*', (req, res) => {
-  res.status(404).json({ 
-    error: 'Endpoint not found',
-    timestamp: new Date().toISOString()
-  });
-});
-
 // Start server with simple integrated system
 if (require.main === module) {
   initializeSystem().then(() => {
+    // 404 handler - MUST be after all routes are mounted
+    app.use('*', (req, res) => {
+      res.status(404).json({ 
+        error: 'Endpoint not found',
+        timestamp: new Date().toISOString()
+      });
+    });
+
     app.listen(PORT, () => {
       console.log(`Backend server running on port ${PORT}`);
       console.log(`Health check: http://localhost:${PORT}/health`);

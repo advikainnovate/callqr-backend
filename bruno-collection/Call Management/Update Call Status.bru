@@ -1,0 +1,36 @@
+meta {
+  name: Update Call Status
+  type: http
+  seq: 2
+}
+
+put {
+  url: {{apiUrl}}/calls/status
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "sessionId": "{{sessionId}}",
+    "status": "ACTIVE"
+  }
+}
+
+tests {
+  test("Status update should succeed", function() {
+    expect(res.getStatus()).to.equal(200);
+  });
+  
+  test("Should confirm session ID", function() {
+    expect(res.getBody().sessionId).to.equal(bru.getEnvVar("sessionId"));
+  });
+  
+  test("Should confirm status", function() {
+    expect(res.getBody().status).to.equal("ACTIVE");
+  });
+}

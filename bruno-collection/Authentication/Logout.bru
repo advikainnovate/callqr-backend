@@ -1,0 +1,31 @@
+meta {
+  name: Logout
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{apiUrl}}/auth/logout
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+headers {
+  Content-Type: application/json
+}
+
+script:post-response {
+  if (res.getStatus() === 200) {
+    bru.setEnvVar("authToken", "");
+  }
+}
+
+tests {
+  test("Logout should succeed", function() {
+    expect(res.getStatus()).to.equal(200);
+  });
+}

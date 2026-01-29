@@ -1,0 +1,33 @@
+meta {
+  name: Get Active Calls
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{apiUrl}}/calls/active/my-calls
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+headers {
+  Content-Type: application/json
+}
+
+tests {
+  test("Get active calls should succeed", function() {
+    expect(res.getStatus()).to.equal(200);
+  });
+  
+  test("Should return calls array", function() {
+    expect(res.getBody().activeCalls).to.be.an('array');
+  });
+  
+  test("Should return count", function() {
+    expect(res.getBody().count).to.be.a('number');
+  });
+}
