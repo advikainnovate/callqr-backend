@@ -1,8 +1,8 @@
-# Privacy-Preserving QR-Based Calling System
+# Privacy-Preserving QR-Based Calling System - Backend
 
-> **🎉 PRODUCTION READY** - Complete implementation with comprehensive testing and documentation
+> **🎉 PRODUCTION READY** - Complete backend implementation with comprehensive testing and documentation
 
-A secure, anonymous communication system that enables voice calls through QR code scanning while maintaining complete privacy for both parties. **No phone numbers, no personal data exchange, just secure anonymous communication.**
+A secure, anonymous communication backend that enables voice calls through QR code scanning while maintaining complete privacy for both parties. **No phone numbers, no personal data exchange, just secure anonymous communication.**
 
 ## ✅ **SYSTEM STATUS: FULLY OPERATIONAL**
 
@@ -11,7 +11,7 @@ A secure, anonymous communication system that enables voice calls through QR cod
 - ✅ **No Phone Number Exchange**: Complete privacy with zero personal data sharing
 - ✅ **Backend-Controlled Routing**: Sophisticated call routing with privacy protection
 - ✅ **Secure Encrypted Communication**: End-to-end WebRTC encryption (DTLS/SRTP)
-- ✅ **Mobile + Backend Architecture**: Production-ready React Native + Node.js system
+- ✅ **Production-Ready Backend**: Node.js backend with comprehensive API
 
 **Test Coverage:** 96+ tests passing across all components
 **Security Level:** Enterprise-grade with 256-bit token security
@@ -28,35 +28,25 @@ A secure, anonymous communication system that enables voice calls through QR cod
 
 ## 🏗️ Project Structure
 
-This is a monorepo containing a complete production-ready system:
+This backend provides complete API services for privacy-preserving QR-based calling:
 
 ```
 ├── packages/
-│   ├── backend/                    # Node.js backend services (TypeScript)
-│   │   ├── src/
-│   │   │   ├── api/               # REST API endpoints and middleware
-│   │   │   ├── auth/              # Authentication and user management
-│   │   │   ├── database/          # Database connection and migrations
-│   │   │   ├── integration/       # System integration and orchestration
-│   │   │   ├── routing/           # Privacy-preserving call routing
-│   │   │   ├── security/          # Token generation and QR code management
-│   │   │   ├── utils/             # Utilities and helper functions
-│   │   │   └── webrtc/            # WebRTC engine and signaling
-│   │   ├── test-*.js              # System verification scripts
-│   │   └── dist/                  # Compiled JavaScript output
-│   └── mobile/                     # React Native mobile application
+│   └── backend/                    # Node.js backend services (TypeScript)
 │       ├── src/
-│       │   ├── components/        # React Native UI components
-│       │   ├── integration/       # App integration and call flow
-│       │   ├── types/             # TypeScript type definitions
-│       │   └── utils/             # Mobile utilities and helpers
-│       └── tests/                 # Mobile app tests
+│       │   ├── api/               # REST API endpoints and middleware
+│       │   ├── auth/              # Authentication and user management
+│       │   ├── database/          # Database connection and migrations
+│       │   ├── integration/       # System integration and orchestration
+│       │   ├── routing/           # Privacy-preserving call routing
+│       │   ├── security/          # Token generation and QR code management
+│       │   ├── utils/             # Utilities and helper functions
+│       │   └── webrtc/            # WebRTC engine and signaling
+│       ├── test-*.js              # System verification scripts
+│       └── dist/                  # Compiled JavaScript output
 ├── docker/                         # Docker configuration
 │   └── coturn/                    # TURN server configuration
-├── .kiro/specs/privacy-qr-calling/ # Complete system specification
-│   ├── requirements.md            # Detailed requirements document
-│   ├── design.md                  # System design and architecture
-│   └── tasks.md                   # Implementation task list (COMPLETED)
+├── test-real-webrtc.html          # WebRTC testing interface
 └── docker-compose.yml             # Development environment setup
 ```
 
@@ -128,31 +118,15 @@ This is a monorepo containing a complete production-ready system:
    ```
    Should return `{"status": "healthy"}` with all services operational.
 
-### 📱 **Step 3: Mobile App Setup & Testing**
+### 🌐 **Step 3: Test WebRTC Interface**
 
-1. **Navigate to mobile app:**
-   ```bash
-   cd packages/mobile
-   ```
+1. **Open the test interface:**
+   Open `test-real-webrtc.html` in your browser to test WebRTC functionality
 
-2. **Build the mobile app:**
-   ```bash
-   npm run build
-   ```
-
-3. **Start Metro bundler:**
-   ```bash
-   npm run start
-   ```
-
-4. **Run on device/simulator:**
-   ```bash
-   # For Android
-   npm run android
-   
-   # For iOS (macOS only)
-   npm run ios
-   ```
+2. **Test call flow:**
+   - Generate QR codes
+   - Test token validation
+   - Verify WebRTC connections
 
 ### 🧪 **Step 4: Run Complete Test Suite**
 
@@ -170,22 +144,18 @@ npm run test:property
 
 # Run backend tests specifically
 cd packages/backend && npm test
-
-# Run mobile tests specifically
-cd packages/mobile && npm test
 ```
 
 **Expected Results:**
 - **Backend Tests**: 96+ tests passing
 - **Integration Tests**: All core functionality verified
 - **Security Tests**: All privacy and encryption tests passing
-- **Mobile Tests**: UI and integration tests passing
 
 ## 🔍 **Testing Scenarios for QA Teams**
 
 ### **Scenario 1: Basic Call Flow**
-1. **User A**: Open mobile app → Generate QR code
-2. **User B**: Open mobile app → Scan User A's QR code
+1. **User A**: Use test interface → Generate QR code
+2. **User B**: Use test interface → Scan User A's QR code
 3. **Expected**: Call initiates immediately, both users connected
 4. **Verify**: No personal information displayed anywhere
 
@@ -199,8 +169,7 @@ cd packages/mobile && npm test
 1. Test with invalid QR codes
 2. Test with expired tokens
 3. Test network disconnection during call
-4. Test permission denial scenarios
-5. **Expected**: Graceful error handling with user-friendly messages
+4. **Expected**: Graceful error handling with user-friendly messages
 
 ### **Scenario 4: Security Testing**
 1. Attempt to enumerate tokens
@@ -263,25 +232,14 @@ Monitor these key metrics during testing:
 **Backend won't start:**
 ```bash
 # Check if ports are available
-lsof -i :3000
-lsof -i :8443
+netstat -an | findstr :3000
+netstat -an | findstr :8443
 
 # Check Docker services
 docker-compose ps
 
 # Check logs
 docker-compose logs
-```
-
-**Mobile app build fails:**
-```bash
-# Clear React Native cache
-cd packages/mobile
-npx react-native start --reset-cache
-
-# Clean and rebuild
-rm -rf node_modules
-npm install
 ```
 
 **Database connection issues:**
@@ -306,7 +264,6 @@ curl -I http://localhost:3478
 ### **Log Locations**
 
 - **Backend Logs**: Console output (structured JSON logging)
-- **Mobile Logs**: React Native debugger console
 - **Database Logs**: `docker-compose logs postgres`
 - **TURN Server Logs**: `docker-compose logs coturn`
 
@@ -467,7 +424,7 @@ node test-token-flow.js
 
 ```
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Mobile App    │    │   Mobile App    │    │   Mobile App    │
+│   Frontend      │    │   Frontend      │    │   Frontend      │
 │   (User A)      │    │   (User B)      │    │   (User C)      │
 └─────────┬───────┘    └─────────┬───────┘    └─────────┬───────┘
           │                      │                      │
@@ -498,31 +455,6 @@ node test-token-flow.js
                     │     Database Layer        │
                     │  (PostgreSQL + Encryption)│
                     └───────────────────────────┘
-```
-
-### **Mobile Application Architecture**
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    React Native App                         │
-├─────────────────────────────────────────────────────────────┤
-│  UI Components                                              │
-│  ├── QRGenerationScreen    ├── CallScreen                   │
-│  ├── QRScanningScreen      ├── CallStatusDisplay            │
-│  ├── PermissionScreen      └── IncomingCallNotification     │
-├─────────────────────────────────────────────────────────────┤
-│  Integration Layer                                          │
-│  ├── AppIntegration (Main orchestrator)                     │
-│  └── CallFlowHandler (Call management)                      │
-├─────────────────────────────────────────────────────────────┤
-│  Utilities & Services                                       │
-│  ├── TokenValidator        ├── PermissionManager            │
-│  ├── ErrorHandler          └── WebRTC Client                │
-├─────────────────────────────────────────────────────────────┤
-│  Native Modules                                             │
-│  ├── Camera (QR Scanning)  ├── Microphone                  │
-│  └── WebRTC (Voice Calls)  └── Network                     │
-└─────────────────────────────────────────────────────────────┘
 ```
 
 ### **Privacy Protection Flow**
@@ -594,7 +526,7 @@ ALLOWED_ORIGINS=http://localhost:3000,http://localhost:19006
 
 ### **Mobile App Configuration**
 
-Create `packages/mobile/.env`:
+For your separate frontend application, configure these environment variables:
 
 ```bash
 # Backend API Configuration
@@ -676,15 +608,8 @@ NODE_ENV=production npm start
 pm2 start dist/index.js --name privacy-qr-backend
 ```
 
-**Mobile App Deployment:**
-```bash
-# Build production APK (Android)
-cd packages/mobile
-npx react-native build-android --mode=release
-
-# Build iOS app (requires Xcode)
-npx react-native build-ios --mode=Release
-```
+**Frontend Integration:**
+Your separate frontend application can integrate with this backend using the provided API endpoints.
 
 ### **Docker Production Deployment**
 
