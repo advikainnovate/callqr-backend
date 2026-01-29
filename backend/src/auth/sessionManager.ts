@@ -4,8 +4,8 @@
  * Handles user session creation, validation, and cleanup with security controls.
  */
 
-import jwt from 'jsonwebtoken';
-import crypto from 'crypto';
+import * as jwt from 'jsonwebtoken';
+import * as crypto from 'crypto';
 import { UserSession, JWTPayload } from './types';
 import { UserId } from '../utils/types';
 

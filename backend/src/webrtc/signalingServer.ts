@@ -3,7 +3,7 @@
  * Handles secure signaling for WebRTC peer connections
  */
 
-import WebSocket from 'ws';
+import * as WebSocket from 'ws';
 import { createServer } from 'https';
 import { readFileSync } from 'fs';
 import { AnonymousSessionId, SignalingMessage } from './types';

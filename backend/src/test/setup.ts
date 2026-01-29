@@ -4,7 +4,7 @@
  * This file configures the testing environment for both unit tests and property-based tests.
  */
 
-import dotenv from 'dotenv';
+import * as dotenv from 'dotenv';
 
 // Load test environment variables
 dotenv.config({ path: '.env.test' });
