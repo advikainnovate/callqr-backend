@@ -4,8 +4,8 @@
  * Implements secure password hashing using bcrypt with proper salt generation.
  */
 
-import bcrypt from 'bcrypt';
-import crypto from 'crypto';
+import * as bcrypt from 'bcrypt';
+import * as crypto from 'crypto';
 
 /**
  * Password hash configuration

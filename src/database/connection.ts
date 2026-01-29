@@ -8,7 +8,7 @@
  */
 
 import { Pool, PoolClient, PoolConfig } from 'pg';
-import crypto from 'crypto';
+import * as crypto from 'crypto';
 
 /**
  * Database configuration interface

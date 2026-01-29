@@ -8,8 +8,8 @@
  */
 
 import { DatabaseManager } from './connection';
-import fs from 'fs';
-import path from 'path';
+import * as fs from 'fs';
+import * as path from 'path';
 
 /**
  * Migration interface

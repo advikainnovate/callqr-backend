@@ -9,7 +9,7 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
-import dotenv from 'dotenv';
+import * as dotenv from 'dotenv';
 import { createApiRouter } from './api/routes';
 import { checkDatabaseHealth } from './database';
 import { simpleIntegration, SimpleIntegrationConfig } from './integration/simpleIntegration';

@@ -5,7 +5,7 @@
  * multi-factor authentication, and session management.
  */
 
-import crypto from 'crypto';
+import * as crypto from 'crypto';
 import { 
   UserRegistrationRequest, 
   UserLoginRequest, 

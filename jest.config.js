@@ -18,7 +18,6 @@ module.exports = {
   coverageDirectory: 'coverage',
   coverageReporters: ['text', 'lcov', 'html'],
   setupFilesAfterEnv: ['<rootDir>/src/test/setup.ts'],
-  testTimeout: 10000,
   moduleFileExtensions: ['ts', 'js', 'json', 'node'],
   // Separate test patterns for unit and property tests
   projects: [

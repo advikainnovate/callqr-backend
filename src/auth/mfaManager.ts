@@ -4,7 +4,7 @@
  * Implements TOTP-based multi-factor authentication for enhanced security.
  */
 
-import crypto from 'crypto';
+import * as crypto from 'crypto';
 import { MFASetupResponse, MFAVerificationRequest } from './types';
 
 /**
