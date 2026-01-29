@@ -83,6 +83,7 @@ This backend provides complete API services for privacy-preserving QR-based call
 
 **Required Software:**
 - **Node.js 18+** and **npm 9+**
+- **PM2** (for production): `npm install -g pm2`
 - **Docker** and **Docker Compose**
 - **Git** for version control
 
@@ -609,27 +610,60 @@ CREATE TABLE call_sessions (
 
 ## 🚀 **Deployment Guide**
 
-### **Production Deployment Checklist**
+### **Production Deployment with PM2**
 
-**Pre-Deployment:**
-- [ ] All tests passing (96+ tests)
-- [ ] Security audit completed
-- [ ] Performance testing completed
-- [ ] Database backup strategy in place
-- [ ] SSL certificates configured
-- [ ] Environment variables secured
-- [ ] Monitoring and alerting configured
-
-**Backend Deployment:**
+**Quick Start:**
 ```bash
-# Build production version
+# Install dependencies
+npm install
+
+# Start with PM2 (recommended)
+npm run start:pm2
+```
+
+**Manual PM2 Setup:**
+```bash
+# Build application
 npm run build
 
-# Start production server
-NODE_ENV=production npm start
+# Start with PM2 ecosystem
+pm2 start ecosystem.config.js --env production
 
-# Or use PM2 for process management
-pm2 start dist/index.js --name privacy-qr-backend
+# Monitor
+pm2 status
+pm2 logs callqr-backend
+```
+
+**PM2 Management:**
+```bash
+# Restart
+npm run restart:pm2
+
+# Stop
+npm run stop:pm2
+
+# View logs
+npm run logs:pm2
+
+# Monitor resources
+pm2 monit
+```
+
+See [DEPLOYMENT.md](DEPLOYMENT.md) for detailed deployment instructions and troubleshooting.
+
+### **Environment Configuration**
+
+Create `.env`:
+```bash
+NODE_ENV=production
+PORT=9001
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=privacy_qr_calling
+DB_USER=privacy_user
+DB_PASSWORD=secure_password
+JWT_SECRET=your-super-secure-jwt-secret-key-here
+# ... see .env.example for all variables
 ```
 
 **Frontend Integration:**
