@@ -1,0 +1,29 @@
+meta {
+  name: Cleanup Expired Tokens
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{apiUrl}}/tokens/cleanup
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+headers {
+  Content-Type: application/json
+}
+
+tests {
+  test("Token cleanup should succeed", function() {
+    expect(res.getStatus()).to.equal(200);
+  });
+  
+  test("Should return cleaned count", function() {
+    expect(res.getBody().cleanedCount).to.be.a('number');
+  });
+}

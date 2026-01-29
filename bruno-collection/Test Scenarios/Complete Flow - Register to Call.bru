@@ -1,0 +1,52 @@
+meta {
+  name: Complete Flow - Register to Call
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{apiUrl}}/auth/register
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "email": "flowtest@example.com",
+    "password": "FlowTest123!",
+    "emergencyContact": "emergency@example.com",
+    "vehicleNumber": "FLOW123"
+  }
+}
+
+script:post-response {
+  // Step 1: Register
+  if (res.getStatus() === 201 || res.getStatus() === 200) {
+    console.log("✓ Registration successful");
+    
+    // Step 2: Login
+    const loginReq = {
+      url: bru.getEnvVar("apiUrl") + "/auth/login",
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: "flowtest@example.com",
+        password: "FlowTest123!"
+      })
+    };
+    
+    // Note: Bruno doesn't support chained requests in scripts
+    // This is a demonstration of the flow structure
+    console.log("Next: Login with credentials");
+  }
+}
+
+tests {
+  test("Registration should succeed", function() {
+    expect(res.getStatus()).to.be.oneOf([200, 201]);
+  });
+}

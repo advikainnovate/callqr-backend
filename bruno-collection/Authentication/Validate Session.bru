@@ -1,0 +1,29 @@
+meta {
+  name: Validate Session
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{apiUrl}}/auth/session/validate
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+headers {
+  Content-Type: application/json
+}
+
+tests {
+  test("Session validation should succeed", function() {
+    expect(res.getStatus()).to.equal(200);
+  });
+  
+  test("Should return valid session info", function() {
+    expect(res.getBody().valid).to.equal(true);
+  });
+}

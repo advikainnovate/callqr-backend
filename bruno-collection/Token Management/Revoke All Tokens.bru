@@ -1,0 +1,29 @@
+meta {
+  name: Revoke All Tokens
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{apiUrl}}/tokens/revoke-all
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+headers {
+  Content-Type: application/json
+}
+
+tests {
+  test("Token revocation should succeed", function() {
+    expect(res.getStatus()).to.equal(200);
+  });
+  
+  test("Should return revoked count", function() {
+    expect(res.getBody().revokedCount).to.be.a('number');
+  });
+}

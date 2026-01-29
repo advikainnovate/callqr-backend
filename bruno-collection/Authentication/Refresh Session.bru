@@ -1,0 +1,35 @@
+meta {
+  name: Refresh Session
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{apiUrl}}/auth/session/refresh
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+headers {
+  Content-Type: application/json
+}
+
+script:post-response {
+  if (res.getStatus() === 200) {
+    bru.setEnvVar("authToken", res.getBody().token);
+  }
+}
+
+tests {
+  test("Session refresh should succeed", function() {
+    expect(res.getStatus()).to.equal(200);
+  });
+  
+  test("Should return new token", function() {
+    expect(res.getBody().token).to.exist;
+  });
+}

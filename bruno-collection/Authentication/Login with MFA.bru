@@ -1,0 +1,36 @@
+meta {
+  name: Login with MFA
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{apiUrl}}/auth/login
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "email": "test@example.com",
+    "password": "SecurePassword123!",
+    "mfaCode": "123456"
+  }
+}
+
+script:post-response {
+  if (res.getStatus() === 200) {
+    bru.setEnvVar("authToken", res.getBody().token);
+    bru.setEnvVar("userId", res.getBody().userId);
+  }
+}
+
+tests {
+  test("MFA login should succeed", function() {
+    expect(res.getStatus()).to.equal(200);
+  });
+}

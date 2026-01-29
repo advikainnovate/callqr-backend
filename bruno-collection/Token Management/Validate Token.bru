@@ -1,0 +1,35 @@
+meta {
+  name: Validate Token
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{apiUrl}}/tokens/validate
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "token": "{{qrToken}}"
+  }
+}
+
+tests {
+  test("Token validation should succeed", function() {
+    expect(res.getStatus()).to.equal(200);
+  });
+  
+  test("Should return valid status", function() {
+    expect(res.getBody().valid).to.equal(true);
+  });
+  
+  test("Should allow call initiation", function() {
+    expect(res.getBody().canInitiateCall).to.equal(true);
+  });
+}

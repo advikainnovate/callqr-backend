@@ -1,0 +1,43 @@
+meta {
+  name: Generate Token
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{apiUrl}}/tokens/generate
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+headers {
+  Content-Type: application/json
+}
+
+script:post-response {
+  if (res.getStatus() === 201) {
+    bru.setEnvVar("qrToken", res.getBody().qrCodeData);
+  }
+}
+
+tests {
+  test("Token generation should succeed", function() {
+    expect(res.getStatus()).to.equal(201);
+  });
+  
+  test("Should return QR code data", function() {
+    expect(res.getBody().qrCodeData).to.exist;
+  });
+  
+  test("Should return token ID", function() {
+    expect(res.getBody().tokenId).to.exist;
+  });
+  
+  test("Should return expiration date", function() {
+    expect(res.getBody().expiresAt).to.exist;
+  });
+}

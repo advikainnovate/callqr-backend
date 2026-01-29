@@ -1,0 +1,34 @@
+meta {
+  name: Register User
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{apiUrl}}/auth/register
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "email": "test@example.com",
+    "password": "SecurePassword123!",
+    "emergencyContact": "emergency@example.com",
+    "vehicleNumber": "ABC123"
+  }
+}
+
+tests {
+  test("Registration should succeed", function() {
+    expect(res.getStatus()).to.be.oneOf([200, 201]);
+  });
+  
+  test("Should return success message", function() {
+    expect(res.getBody().message).to.exist;
+  });
+}
