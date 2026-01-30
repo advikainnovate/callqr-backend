@@ -63,7 +63,7 @@ export class WebRTCService {
 
         const decoded = jwt.verify(token, appConfig.jwt.secret) as any;
         const user = await userService.getUserById(decoded.userId);
-        
+
         if (!user || !user.isActive) {
           return next(new Error('Invalid user'));
         }
@@ -81,12 +81,12 @@ export class WebRTCService {
   private setupEventHandlers() {
     this.io.on('connection', (socket: AuthenticatedSocket) => {
       const userId = socket.userId!;
-      
+
       logger.info(`User connected to WebRTC: ${userId}`);
-      
+
       // Store user connection
       this.connectedUsers.set(userId, socket.id);
-      
+
       // Join user to their personal room
       socket.join(userId);
 
@@ -126,7 +126,7 @@ export class WebRTCService {
   private async handleWebRTCSignal(socket: AuthenticatedSocket, data: WebRTCSignal) {
     try {
       const { callId, targetUserId, data: signalData } = data;
-      
+
       // Verify user is part of the call
       const call = await callService.getCallById(callId);
       if (!call || (call.callerId !== socket.userId && call.receiverId !== socket.userId)) {
@@ -153,7 +153,7 @@ export class WebRTCService {
   private async handleCallInitiation(socket: AuthenticatedSocket, data: { callId: string }) {
     try {
       const { callId } = data;
-      
+
       // Verify call and get details
       const call = await callService.getCallById(callId);
       if (!call || call.callerId !== socket.userId) {
@@ -163,16 +163,22 @@ export class WebRTCService {
 
       // Notify receiver
       const receiverSocketId = this.connectedUsers.get(call.receiverId);
+
+      logger.info(`Initiating call ${callId} from ${socket.userId} to ${call.receiverId}`);
+      logger.info(`Connected Users: ${JSON.stringify(Array.from(this.connectedUsers.keys()))}`);
+      logger.info(`Receiver Socket ID found: ${receiverSocketId}`);
+
       if (receiverSocketId) {
         this.io.to(receiverSocketId).emit('incoming-call', {
           callId: call.id,
           callerId: call.callerId,
           callType: call.callType,
         });
-        
+
         // Update call status
         await callService.updateCallStatus(callId, 'initiated');
       } else {
+        logger.warn(`Receiver ${call.receiverId} is NOT online. Call failed.`);
         socket.emit('error', { message: 'Receiver is not online' });
       }
     } catch (error) {
@@ -184,7 +190,7 @@ export class WebRTCService {
   private async handleCallAcceptance(socket: AuthenticatedSocket, data: { callId: string }) {
     try {
       const { callId } = data;
-      
+
       // Verify call and get details
       const call = await callService.getCallById(callId);
       if (!call || call.receiverId !== socket.userId) {
@@ -194,7 +200,7 @@ export class WebRTCService {
 
       // Update call status
       await callService.updateCallStatus(callId, 'connected');
-      
+
       // Notify caller
       const callerSocketId = this.connectedUsers.get(call.callerId);
       if (callerSocketId) {
@@ -203,7 +209,7 @@ export class WebRTCService {
           receiverId: call.receiverId,
         });
       }
-      
+
       // Notify receiver that call is connected
       socket.emit('call-connected', { callId: call.id });
     } catch (error) {
@@ -215,7 +221,7 @@ export class WebRTCService {
   private async handleCallRejection(socket: AuthenticatedSocket, data: { callId: string }) {
     try {
       const { callId } = data;
-      
+
       // Verify call and get details
       const call = await callService.getCallById(callId);
       if (!call || call.receiverId !== socket.userId) {
@@ -225,7 +231,7 @@ export class WebRTCService {
 
       // Update call status
       await callService.updateCallStatus(callId, 'failed');
-      
+
       // Notify caller
       const callerSocketId = this.connectedUsers.get(call.callerId);
       if (callerSocketId) {
@@ -243,7 +249,7 @@ export class WebRTCService {
   private async handleCallEnd(socket: AuthenticatedSocket, data: { callId: string }) {
     try {
       const { callId } = data;
-      
+
       // End the call
       const success = await callService.endCall(callId, socket.userId!);
       if (!success) {
@@ -256,7 +262,7 @@ export class WebRTCService {
       if (call) {
         const otherUserId = call.callerId === socket.userId ? call.receiverId : call.callerId;
         const otherSocketId = this.connectedUsers.get(otherUserId);
-        
+
         if (otherSocketId) {
           this.io.to(otherSocketId).emit('call-ended', {
             callId: call.id,
@@ -264,7 +270,7 @@ export class WebRTCService {
           });
         }
       }
-      
+
       socket.emit('call-ended', { callId });
     } catch (error) {
       logger.error('Error handling call end:', error);

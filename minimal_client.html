@@ -247,7 +247,13 @@
             });
 
             socket.on('call-ended', () => {
+                console.log('Call ended event received');
                 cleanupCall();
+            });
+
+            socket.on('error', (err) => {
+                console.error('Socket Error:', err);
+                alert('Connection Error: ' + (err.message || JSON.stringify(err)));
             });
         }
 
@@ -348,12 +354,19 @@
             };
 
             peerConnection.ontrack = (event) => {
+                console.log('Received remote track');
                 document.getElementById('remoteVideo').srcObject = event.streams[0];
+            };
+
+            peerConnection.oniceconnectionstatechange = () => {
+                console.log('ICE State:', peerConnection.iceConnectionState);
+                if (peerConnection.iceConnectionState === 'failed') alert('P2P Connection Failed');
             };
 
             const offer = await peerConnection.createOffer();
             await peerConnection.setLocalDescription(offer);
 
+            console.log('Sending Offer to:', remoteUserId);
             socket.emit('webrtc-signal', {
                 type: 'offer',
                 callId: currentCallId,
@@ -385,6 +398,7 @@
             const answer = await peerConnection.createAnswer();
             await peerConnection.setLocalDescription(answer);
 
+            console.log('Sending Answer to:', fromUserId);
             socket.emit('webrtc-signal', {
                 type: 'answer',
                 callId: currentCallId,
