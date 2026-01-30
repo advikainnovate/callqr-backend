@@ -17,15 +17,15 @@ async function dropTables() {
     ];
 
     for (const table of tables) {
-      await sql`DROP TABLE IF EXISTS ${sql(table)} CASCADE`;
+      await sql.unsafe(`DROP TABLE IF EXISTS "${table}" CASCADE`);
       console.log(`Dropped table: ${table}`);
     }
 
     // Drop migration table and schema
-    await sql`DROP TABLE IF EXISTS "__drizzle_migrations" CASCADE`;
+    await sql.unsafe(`DROP TABLE IF EXISTS "__drizzle_migrations" CASCADE`);
     console.log('Dropped migration table');
 
-    await sql`DROP SCHEMA IF EXISTS "drizzle" CASCADE`;
+    await sql.unsafe(`DROP SCHEMA IF EXISTS "drizzle" CASCADE`);
     console.log('Dropped drizzle schema');
 
     console.log('All tables dropped successfully!');

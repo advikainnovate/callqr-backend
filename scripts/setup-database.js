@@ -11,16 +11,14 @@ async function createDatabase() {
   try {
     console.log(`Checking if database '${dbName}' exists...`);
     
-    // Check if database exists
-    const result = await postgresSql`
-      SELECT 1 FROM pg_database WHERE datname = ${postgresSql(dbName)}
-    `;
+    // Check if database exists using raw SQL
+    const result = await postgresSql.unsafe(`SELECT 1 FROM pg_database WHERE datname = '${dbName}'`);
     
     if (result.length > 0) {
       console.log(`✅ Database '${dbName}' already exists!`);
     } else {
-      // Create the database
-      await postgresSql`CREATE DATABASE ${postgresSql(dbName)}`;
+      // Create the database using raw SQL
+      await postgresSql.unsafe(`CREATE DATABASE "${dbName}"`);
       console.log(`✅ Database '${dbName}' created successfully!`);
     }
     

@@ -83,11 +83,10 @@ RATE_LIMIT_MAX_REQUESTS=100
 
 ### 3. Database Setup
 ```bash
-# Generate and run migrations
-npm run db:generate
-npm run db:migrate
+# Setup database (creates if doesn't exist)
+node scripts/setup-database.js
 
-# Or push schema directly
+# Then run migrations
 npm run db:push
 ```
 

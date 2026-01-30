@@ -26,13 +26,20 @@ describe('Example Controller Integration', () => {
       const exampleData = {
         name: 'Test Item',
         description: 'A test item',
-        price: 99, // Changed to integer as per schema
-        metadata: { category: 'electronics' },
+        price: 99,
+        metadata: { 
+          category: 'electronics',
+          priority: 'medium'
+        },
       };
       const res = await request(server)
         .post('/api/examples')
-        .send(exampleData)
-        .expect(201);
+        .send(exampleData);
+      
+      console.log('Response status:', res.status);
+      console.log('Response body:', res.body);
+      
+      expect(res.status).toBe(201);
       expect(res.body.success).toBe(true);
       expect(res.body.data).toHaveProperty('id');
       expect(res.body.data.name).toBe('Test Item');
