@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QR Call - Minimal Client</title>
+    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --bg: #0f172a;
+            --surface: #1e293b;
+            --text: #f8fafc;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .card {
+            background: var(--surface);
+            padding: 2rem;
+            border-radius: 12px;
+            margin-bottom: 1rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        input {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            background: #334155;
+            border: 1px solid #475569;
+            color: white;
+            border-radius: 6px;
+        }
+
+        button {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        button:hover {
+            opacity: 0.9;
+        }
+
+        .video-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        video {
+            width: 100%;
+            border-radius: 8px;
+            background: #000;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .success {
+            color: #4ade80;
+        }
+
+        .error {
+            color: #ef4444;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container">
+        <h1>QR Call System</h1>
+
+        <!-- Connection Setup -->
+        <div id="setup-panel" class="card">
+            <h2>1. Connect to Server</h2>
+            <input type="text" id="server-url" placeholder="Enter Server URL (e.g. https://api.myapp.com)"
+                value="http://localhost:4000">
+            <button onclick="connectServer()">Set Server</button>
+        </div>
+
+        <!-- Auth -->
+        <div id="auth-panel" class="card hidden">
+            <h2>2. Login / Register</h2>
+            <input type="email" id="email" placeholder="Email">
+            <input type="password" id="password" placeholder="Password">
+            <div style="display: flex; gap: 10px; justify-content: center;">
+                <button onclick="register()">Register</button>
+                <button onclick="login()">Login</button>
+            </div>
+            <p id="auth-msg"></p>
+        </div>
+
+        <!-- Dashboard -->
+        <div id="dashboard-panel" class="card hidden">
+            <h2>3. Dashboard</h2>
+            <p>Logged in as: <span id="user-email-display"></span></p>
+
+            <div
+                style="display: flex; gap: 20px; justify-content: center; border-bottom: 1px solid #334155; padding-bottom: 20px; margin-bottom: 20px;">
+                <!-- Creator Flow -->
+                <div style="flex: 1;">
+                    <h3>Create Identity</h3>
+                    <button onclick="createQR()">Generate QR Code</button>
+                    <div id="qr-result" style="margin-top: 10px; word-break: break-all;"></div>
+                </div>
+
+                <!-- Scanner Flow -->
+                <div style="flex: 1; border-left: 1px solid #334155;">
+                    <h3>Scan Identity</h3>
+                    <input type="text" id="scan-token" placeholder="Enter Friend's QR Token">
+                    <button onclick="scanQR()">Scan & Call</button>
+                </div>
+            </div>
+
+            <!-- Active Call UI -->
+            <div id="call-ui" class="hidden">
+                <h3 class="success">📞 Call Active</h3>
+                <div class="video-grid">
+                    <video id="localVideo" autoplay muted playsinline></video>
+                    <video id="remoteVideo" autoplay playsinline></video>
+                </div>
+                <button onclick="endCall()" style="background: #ef4444; margin-top: 1rem;">End Call</button>
+            </div>
+
+            <div id="incoming-call" class="hidden" style="background: #064e3b; padding: 10px; border-radius: 8px;">
+                <h3>📞 Incoming Call...</h3>
+                <button onclick="acceptCall()">Accept</button>
+                <button onclick="rejectCall()" style="background: #ef4444;">Reject</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let API_URL = '';
+        let token = '';
+        let socket = null;
+        let myUserId = '';
+        let remoteUserId = '';
+        let currentCallId = '';
+
+        // WebRTC globals
+        let peerConnection = null;
+        let localStream = null;
+        const iceConfig = {
+            iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+        };
+
+        function connectServer() {
+            API_URL = document.getElementById('server-url').value.replace(/\/$/, '');
+            document.getElementById('setup-panel').classList.add('hidden');
+            document.getElementById('auth-panel').classList.remove('hidden');
+        }
+
+        async function register() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            try {
+                const res = await fetch(`${API_URL}/api/users/register`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    document.getElementById('auth-msg').innerText = 'Registered! Please login.';
+                    document.getElementById('auth-msg').className = 'success';
+                } else {
+                    throw new Error(data.message);
+                }
+            } catch (e) {
+                document.getElementById('auth-msg').innerText = e.message;
+                document.getElementById('auth-msg').className = 'error';
+            }
+        }
+
+        async function login() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            try {
+                const res = await fetch(`${API_URL}/api/users/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    token = data.data.token;
+                    myUserId = data.data.user.id;
+                    document.getElementById('user-email-display').innerText = email;
+                    initSocket();
+                    document.getElementById('auth-panel').classList.add('hidden');
+                    document.getElementById('dashboard-panel').classList.remove('hidden');
+                }
+            } catch (e) {
+                document.getElementById('auth-msg').innerText = 'Login failed';
+            }
+        }
+
+        function initSocket() {
+            socket = io(API_URL, {
+                auth: { token }
+            });
+
+            socket.on('connect', () => console.log('Connected to socket'));
+
+            socket.on('incoming-call', (data) => {
+                currentCallId = data.callId;
+                remoteUserId = data.callerId;
+                document.getElementById('incoming-call').classList.remove('hidden');
+            });
+
+            socket.on('call-accepted', async (data) => {
+                console.log('Call accepted!', data);
+                await createOffer();
+            });
+
+            socket.on('webrtc-signal', async (signal) => {
+                if (signal.type === 'offer') {
+                    await handleOffer(signal.data, signal.fromUserId);
+                } else if (signal.type === 'answer') {
+                    await handleAnswer(signal.data);
+                } else if (signal.type === 'ice-candidate') {
+                    await handleCandidate(signal.data);
+                }
+            });
+
+            socket.on('call-ended', () => {
+                cleanupCall();
+            });
+        }
+
+        // --- QR Logic ---
+
+        async function createQR() {
+            const res = await fetch(`${API_URL}/api/qr-codes/create`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+            const data = await res.json();
+            if (data.success) {
+                const token = data.data.qrCode.token;
+                document.getElementById('qr-result').innerHTML = `
+                <p><strong>Your Token:</strong> ${token}</p>
+                <p style="font-size: 0.8em; color: gray;">Share this text with your friend to scan.</p>
+            `;
+            }
+        }
+
+        async function scanQR() {
+            const qrToken = document.getElementById('scan-token').value;
+            // 1. Scan to get user ID
+            const res = await fetch(`${API_URL}/api/qr-codes/scan`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ token: qrToken })
+            });
+            const data = await res.json();
+
+            if (data.success) {
+                const targetUserId = data.data.user.id;
+                console.log('Found user:', targetUserId);
+                remoteUserId = targetUserId;
+                startCall(targetUserId, data.data.qrCodeId);
+            } else {
+                alert('Invalid QR Token');
+            }
+        }
+
+        // --- WebRTC Logic ---
+
+        async function setupLocalMedia() {
+            localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+            document.getElementById('localVideo').srcObject = localStream;
+            document.getElementById('call-ui').classList.remove('hidden');
+        }
+
+        async function startCall(targetUserId, qrId) {
+            await setupLocalMedia();
+
+            // 1. Initiate Call on Backend
+            const res = await fetch(`${API_URL}/api/calls/initiate`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    qrCodeId: qrId,
+                    callType: 'video'
+                })
+            });
+            const data = await res.json();
+            currentCallId = data.data.id;
+
+            // 2. Signal Initiation via Socket
+            socket.emit('initiate-call', { callId: currentCallId });
+            console.log('Call initiated, waiting for acceptance...');
+        }
+
+        async function acceptCall() {
+            document.getElementById('incoming-call').classList.add('hidden');
+            await setupLocalMedia();
+
+            socket.emit('accept-call', { callId: currentCallId });
+        }
+
+        async function createOffer() {
+            peerConnection = new RTCPeerConnection(iceConfig);
+            localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+
+            peerConnection.onicecandidate = (event) => {
+                if (event.candidate) {
+                    socket.emit('webrtc-signal', {
+                        type: 'ice-candidate',
+                        callId: currentCallId,
+                        targetUserId: remoteUserId,
+                        data: event.candidate
+                    });
+                }
+            };
+
+            peerConnection.ontrack = (event) => {
+                document.getElementById('remoteVideo').srcObject = event.streams[0];
+            };
+
+            const offer = await peerConnection.createOffer();
+            await peerConnection.setLocalDescription(offer);
+
+            socket.emit('webrtc-signal', {
+                type: 'offer',
+                callId: currentCallId,
+                targetUserId: remoteUserId,
+                data: offer
+            });
+        }
+
+        async function handleOffer(offer, fromUserId) {
+            peerConnection = new RTCPeerConnection(iceConfig);
+            localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+
+            peerConnection.onicecandidate = (event) => {
+                if (event.candidate) {
+                    socket.emit('webrtc-signal', {
+                        type: 'ice-candidate',
+                        callId: currentCallId,
+                        targetUserId: fromUserId,
+                        data: event.candidate
+                    });
+                }
+            };
+
+            peerConnection.ontrack = (event) => {
+                document.getElementById('remoteVideo').srcObject = event.streams[0];
+            };
+
+            await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+            const answer = await peerConnection.createAnswer();
+            await peerConnection.setLocalDescription(answer);
+
+            socket.emit('webrtc-signal', {
+                type: 'answer',
+                callId: currentCallId,
+                targetUserId: fromUserId,
+                data: answer
+            });
+        }
+
+        async function handleAnswer(answer) {
+            await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+        }
+
+        async function handleCandidate(candidate) {
+            if (peerConnection) {
+                await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+            }
+        }
+
+        function endCall() {
+            socket.emit('end-call', { callId: currentCallId });
+            cleanupCall();
+        }
+
+        function cleanupCall() {
+            if (localStream) {
+                localStream.getTracks().forEach(t => t.stop());
+            }
+            if (peerConnection) {
+                peerConnection.close();
+            }
+            document.getElementById('call-ui').classList.add('hidden');
+            document.getElementById('remoteVideo').srcObject = null;
+            document.getElementById('localVideo').srcObject = null;
+            alert('Call Ended');
+        }
+
+        function rejectCall() {
+            socket.emit('reject-call', { callId: currentCallId });
+            document.getElementById('incoming-call').classList.add('hidden');
+        }
+
+    </script>
+</body>
+
+</html>

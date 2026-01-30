@@ -5,9 +5,13 @@ meta {
 }
 
 get {
-  url: "{{baseUrl}}/api/calls/history?limit=10"
-  auth: bearer
+  url: {{baseUrl}}/api/calls/history?limit=10
   body: none
+  auth: bearer
+}
+
+params:query {
+  limit: 10
 }
 
 auth:bearer {
