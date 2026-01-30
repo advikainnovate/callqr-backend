@@ -223,18 +223,19 @@
             let socketUrl = API_URL;
             let socketOptions = {
                 auth: { token },
-                transports: ['polling', 'websocket']
+                transports: ['polling'] // Force polling to bypass proxy websocket issues
             };
+            
+            // Visual indicator of version
+            document.querySelector('h1').innerText = 'QR Call System (v2 - Polling)';
 
             try {
                 const urlObj = new URL(API_URL);
-                const pathName = urlObj.pathname.replace(/\/$/, ''); // Remove trailing slash
+                const pathName = urlObj.pathname.replace(/\/$/, ''); 
                 
-                // Use the origin (e.g. https://api.example.com) as the connection URL
-                // This prevents socket.io from treating the path as a namespace
                 socketUrl = urlObj.origin;
 
-                // If there is a meaningful path (e.g. /callqr-backend), use it for socket path
+                // If path is /callqr-backend, we use /callqr-backend/socket.io
                 if (pathName && pathName !== '/') {
                     socketOptions.path = `${pathName}/socket.io`;
                     console.log('Using custom socket params -> URL:', socketUrl, 'Path:', socketOptions.path);
@@ -248,7 +249,7 @@
 
             socket.on('connect', () => {
                 console.log('✅ Connected to socket:', socket.id);
-                document.getElementById('auth-msg').innerText = 'Socket Connected';
+                document.getElementById('auth-msg').innerText = 'Socket Connected (Polling)';
                 document.getElementById('auth-msg').className = 'success';
             });
 
@@ -257,8 +258,6 @@
                 document.getElementById('auth-msg').innerText = 'Socket Error: ' + err.message;
                 document.getElementById('auth-msg').className = 'error';
             });
-
-
 
             socket.on('incoming-call', (data) => {
                 currentCallId = data.callId;
@@ -323,6 +322,11 @@
         }
 
         async function scanQR() {
+            if (!socket || !socket.connected) {
+                alert('Socket not connected! Cannot scan. Check console logs.');
+                return;
+            }
+
             const qrToken = document.getElementById('scan-token').value;
             // 1. Scan to get user ID
             const res = await fetch(`${API_URL}/api/qr-codes/scan`, {

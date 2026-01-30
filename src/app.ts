@@ -20,6 +20,12 @@ const app = express();
 // Trust proxy for rate limiting when behind reverse proxy
 app.set('trust proxy', 1);
 
+// Debug Logger to trace socket path issues
+app.use((req, res, next) => {
+  console.log(`[DEBUG] Incoming Request: ${req.method} ${req.originalUrl}`);
+  next();
+});
+
 // Core Middlewares
 app.use(helmet());
 app.use(corsMiddleware);
@@ -37,7 +43,7 @@ app.get('/healthz', async (_, res) => {
   try {
     // Import database client for health check
     const { client } = await import('./db');
-    
+
     const health = {
       status: 'ok',
       timestamp: new Date().toISOString(),
@@ -46,35 +52,38 @@ app.get('/healthz', async (_, res) => {
       services: {
         database: { status: 'unknown', details: '' },
         webrtc: { status: 'unknown', details: '' },
-        environment: { status: 'ok', details: process.env.NODE_ENV || 'development' }
-      }
+        environment: {
+          status: 'ok',
+          details: process.env.NODE_ENV || 'development',
+        },
+      },
     };
 
     // Check database connection
     try {
       await client`SELECT 1`;
-      health.services.database = { 
-        status: 'connected', 
-        details: 'PostgreSQL connection successful' 
+      health.services.database = {
+        status: 'connected',
+        details: 'PostgreSQL connection successful',
       };
     } catch (error) {
-      health.services.database = { 
-        status: 'error', 
-        details: `Database connection failed: ${error instanceof Error ? error.message : 'Unknown error'}` 
+      health.services.database = {
+        status: 'error',
+        details: `Database connection failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
       };
       health.status = 'degraded';
     }
 
     // Check if we can access the webrtc service (basic check)
     try {
-      health.services.webrtc = { 
-        status: 'running', 
-        details: 'WebRTC signaling service available' 
+      health.services.webrtc = {
+        status: 'running',
+        details: 'WebRTC signaling service available',
       };
     } catch (error) {
-      health.services.webrtc = { 
-        status: 'error', 
-        details: `WebRTC service error: ${error instanceof Error ? error.message : 'Unknown error'}` 
+      health.services.webrtc = {
+        status: 'error',
+        details: `WebRTC service error: ${error instanceof Error ? error.message : 'Unknown error'}`,
       };
       health.status = 'degraded';
     }
@@ -86,7 +95,7 @@ app.get('/healthz', async (_, res) => {
       status: 'error',
       timestamp: new Date().toISOString(),
       error: 'Health check failed',
-      details: error instanceof Error ? error.message : 'Unknown error'
+      details: error instanceof Error ? error.message : 'Unknown error',
     });
   }
 });
