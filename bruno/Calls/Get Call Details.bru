@@ -6,8 +6,12 @@ meta {
 
 get {
   url: "{{baseUrl}}/api/calls/{{callId}}"
-  auth: none
+  auth: bearer
   body: none
+}
+
+auth:bearer {
+  token: {{authToken}}
 }
 
 tests {
