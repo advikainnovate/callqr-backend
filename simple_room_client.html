@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QR Call - Simple Room</title>
+    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+    <style>
+        :root {
+            --primary: #7c3aed;
+            --bg: #111827;
+            --surface: #1f2937;
+            --text: #f9fafb;
+            --success: #10b981;
+        }
+
+        body {
+            font-family: system-ui, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            padding: 20px;
+            text-align: center;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .card {
+            background: var(--surface);
+            padding: 2rem;
+            border-radius: 12px;
+            margin-bottom: 1rem;
+        }
+
+        input {
+            width: 100%;
+            padding: 12px;
+            margin: 10px 0;
+            background: #374151;
+            border: 1px solid #4b5563;
+            color: white;
+            border-radius: 8px;
+            box-sizing: border-box;
+        }
+
+        button {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            width: 100%;
+            transition: opacity 0.2s;
+        }
+
+        button:hover {
+            opacity: 0.9;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .video-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        video {
+            width: 100%;
+            border-radius: 8px;
+            background: black;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>Simple Room Chat</h1>
+
+        <div id="setup-panel" class="card">
+            <h2>1. Connect Server</h2>
+            <input type="text" id="server-url" value="http://localhost:4000">
+            <button onclick="connectServer()">Next</button>
+        </div>
+
+        <div id="auth-panel" class="card hidden">
+            <h2>2. Login</h2>
+            <input type="email" id="email" placeholder="Email (e.g. user1@test.com)">
+            <input type="password" id="password" placeholder="Password">
+            <div style="display: flex; gap: 10px;">
+                <button onclick="register()">Register</button>
+                <button onclick="login()">Login</button>
+            </div>
+            <p id="msg"></p>
+        </div>
+
+        <div id="room-panel" class="card hidden">
+            <h2>3. Join Room</h2>
+            <input type="text" id="room-id" placeholder="Enter Room Name (e.g. MyChat)">
+            <button onclick="joinRoom()" style="background: var(--success)">Join Room</button>
+        </div>
+
+        <div id="call-panel" class="hidden">
+            <div class="video-grid">
+                <div style="position: relative;">
+                    <video id="localVideo" autoplay muted playsinline></video>
+                    <span
+                        style="position: absolute; bottom: 5px; left: 5px; background: rgba(0,0,0,0.5); padding: 2px 5px; border-radius: 4px; font-size: 0.8em;">You</span>
+                </div>
+                <div style="position: relative;">
+                    <video id="remoteVideo" autoplay playsinline></video>
+                    <span
+                        style="position: absolute; bottom: 5px; left: 5px; background: rgba(0,0,0,0.5); padding: 2px 5px; border-radius: 4px; font-size: 0.8em;">Remote</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let API_URL = '';
+        let token = '';
+        let socket = null;
+        let myRoomId = '';
+
+        let peerConnection = null;
+        let localStream = null;
+        const iceConfig = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+
+        function connectServer() {
+            API_URL = document.getElementById('server-url').value.replace(/\/$/, '');
+            show('auth-panel');
+        }
+
+        function show(id) {
+            document.querySelectorAll('.card, #call-panel').forEach(el => el.classList.add('hidden'));
+            document.getElementById(id).classList.remove('hidden');
+        }
+
+        async function register() {
+            // ... (Same reuse auth logic from before)
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            try {
+                await fetch(`${API_URL}/api/users/register`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password }) });
+                alert('Registered! Now Login.');
+            } catch (e) { alert(e); }
+        }
+
+        async function login() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const res = await fetch(`${API_URL}/api/users/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password }) });
+            const data = await res.json();
+            if (data.success) {
+                token = data.data.token;
+                initSocket();
+                show('room-panel');
+            }
+        }
+
+        function initSocket() {
+            socket = io(API_URL, { auth: { token } });
+
+            socket.on('user-joined', async (data) => {
+                console.log('User joined:', data.userId);
+                // I am the existing user, new user joined -> I CALL THEM
+                await createOffer();
+            });
+
+            socket.on('room-signal', async (data) => {
+                if (data.fromUserId === socket.userId) return; // Ignore self
+
+                if (data.type === 'offer') await handleOffer(data.payload);
+                else if (data.type === 'answer') await handleAnswer(data.payload);
+                else if (data.type === 'ice-candidate') await handleCandidate(data.payload);
+            });
+        }
+
+        async function joinRoom() {
+            myRoomId = document.getElementById('room-id').value;
+            if (!myRoomId) return alert('Enter room name');
+
+            await setupMedia();
+            socket.emit('join-room', myRoomId);
+            show('call-panel');
+        }
+
+        async function setupMedia() {
+            localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+            document.getElementById('localVideo').srcObject = localStream;
+        }
+
+        async function createOffer() {
+            createPeer();
+            const offer = await peerConnection.createOffer();
+            await peerConnection.setLocalDescription(offer);
+            sendSignal('offer', offer);
+        }
+
+        async function handleOffer(offer) {
+            createPeer();
+            await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+            const answer = await peerConnection.createAnswer();
+            await peerConnection.setLocalDescription(answer);
+            sendSignal('answer', answer);
+        }
+
+        async function handleAnswer(answer) {
+            await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+        }
+
+        async function handleCandidate(candidate) {
+            if (peerConnection) await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+        }
+
+        function createPeer() {
+            if (peerConnection) return; // Already exists
+            peerConnection = new RTCPeerConnection(iceConfig);
+            localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+
+            peerConnection.onicecandidate = (event) => {
+                if (event.candidate) sendSignal('ice-candidate', event.candidate);
+            };
+
+            peerConnection.ontrack = (event) => {
+                document.getElementById('remoteVideo').srcObject = event.streams[0];
+            };
+        }
+
+        function sendSignal(type, payload) {
+            socket.emit('room-signal', { roomId: myRoomId, type, payload });
+        }
+    </script>
+</body>
+
+</html>

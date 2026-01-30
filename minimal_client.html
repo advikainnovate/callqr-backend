@@ -294,7 +294,7 @@
                 const targetUserId = data.data.user.id;
                 console.log('Found user:', targetUserId);
                 remoteUserId = targetUserId;
-                startCall(targetUserId, data.data.qrCodeId);
+                startCall(targetUserId, qrToken);
             } else {
                 alert('Invalid QR Token');
             }
@@ -308,7 +308,7 @@
             document.getElementById('call-ui').classList.remove('hidden');
         }
 
-        async function startCall(targetUserId, qrId) {
+        async function startCall(targetUserId, qrTokenString) {
             await setupLocalMedia();
 
             // 1. Initiate Call on Backend
@@ -319,8 +319,8 @@
                     'Authorization': `Bearer ${token}`
                 },
                 body: JSON.stringify({
-                    qrCodeId: qrId,
-                    callType: 'video'
+                    qrToken: qrTokenString,
+                    callType: 'webrtc'
                 })
             });
             const data = await res.json();
