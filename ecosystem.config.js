@@ -8,12 +8,9 @@ module.exports = {
       watch: false,
       max_memory_restart: '1G',
       env: {
-        NODE_ENV: 'development',
-        PORT: 4000
-      },
-      env_production: {
         NODE_ENV: 'production',
-        PORT: 4000
+        PORT: 9001,
+        SIGNALING_PORT: 8999
       },
       error_file: './logs/err.log',
       out_file: './logs/out.log',
@@ -26,26 +23,5 @@ module.exports = {
       max_restarts: 10,
       min_uptime: '10s'
     }
-  ],
-  
-  deploy: {
-    production: {
-      user: 'deploy',
-      host: 'your-server-ip',
-      ref: 'origin/main',
-      repo: 'git@github.com:your-username/callqr-backend.git',
-      path: '/var/www/callqr-backend',
-      'pre-deploy-local': '',
-      'post-deploy': 'npm install && npm run build && pm2 reload ecosystem.config.js --env production',
-      'pre-setup': ''
-    },
-    staging: {
-      user: 'deploy',
-      host: 'your-staging-server-ip',
-      ref: 'origin/develop',
-      repo: 'git@github.com:your-username/callqr-backend.git',
-      path: '/var/www/callqr-backend-staging',
-      'post-deploy': 'npm install && npm run build && pm2 reload ecosystem.config.js --env staging'
-    }
-  }
+  ]
 };
