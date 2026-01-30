@@ -120,23 +120,6 @@ export class WebRTCService {
         logger.info(`User disconnected from WebRTC: ${userId}`);
         this.connectedUsers.delete(userId);
       });
-
-      // --- Simple Room Logic (Symmetric Flow) ---
-      socket.on('join-room', (roomId: string) => {
-        logger.info(`User ${userId} joining room ${roomId}`);
-        socket.join(roomId);
-        // Notify others in room
-        socket.to(roomId).emit('user-joined', { userId });
-      });
-
-      socket.on('room-signal', (data: { roomId: string; type: string; payload: any }) => {
-        // Broadcast signal to everyone else in the room
-        socket.to(data.roomId).emit('room-signal', {
-          type: data.type,
-          payload: data.payload,
-          fromUserId: userId
-        });
-      });
     });
   }
 
