@@ -96,7 +96,7 @@
         <div id="setup-panel" class="card">
             <h2>1. Connect to Server</h2>
             <input type="text" id="server-url" placeholder="Enter Server URL (e.g. https://api.myapp.com)"
-                value="http://localhost:4000">
+                value="https://api.advikainnovate.cloud/callqr-backend/">
             <button onclick="connectServer()">Set Server</button>
         </div>
 
@@ -219,21 +219,71 @@
         }
 
         function initSocket() {
-            socket = io(API_URL, {
-                auth: { token }
+            // Intelligent path handling for subpath deployments
+            let socketUrl = API_URL;
+            let socketOptions = {
+                auth: { token },
+                transports: ['polling', 'websocket']
+            };
+
+            try {
+                const urlObj = new URL(API_URL);
+                const pathName = urlObj.pathname.replace(/\/$/, ''); // Remove trailing slash
+                
+                // Use the origin (e.g. https://api.example.com) as the connection URL
+                // This prevents socket.io from treating the path as a namespace
+                socketUrl = urlObj.origin;
+
+                // If there is a meaningful path (e.g. /callqr-backend), use it for socket path
+                if (pathName && pathName !== '/') {
+                    socketOptions.path = `${pathName}/socket.io`;
+                    console.log('Using custom socket params -> URL:', socketUrl, 'Path:', socketOptions.path);
+                }
+            } catch (e) {
+                console.warn('Error parsing API URL for socket path:', e);
+            }
+
+            console.log('Connecting to socket at:', socketUrl, 'with options:', socketOptions);
+            socket = io(socketUrl, socketOptions);
+
+            socket.on('connect', () => {
+                console.log('✅ Connected to socket:', socket.id);
+                document.getElementById('auth-msg').innerText = 'Socket Connected';
+                document.getElementById('auth-msg').className = 'success';
             });
 
-            socket.on('connect', () => console.log('Connected to socket'));
+            socket.on('connect_error', (err) => {
+                console.error('❌ Socket Connection Error:', err);
+                document.getElementById('auth-msg').innerText = 'Socket Error: ' + err.message;
+                document.getElementById('auth-msg').className = 'error';
+            });
+
+
 
             socket.on('incoming-call', (data) => {
                 currentCallId = data.callId;
-                remoteUserId = data.callerId;
+                remoteUserId = data.callerId; // In incoming call, the other person is the caller
+                console.log('Incoming call from:', remoteUserId);
                 document.getElementById('incoming-call').classList.remove('hidden');
             });
 
             socket.on('call-accepted', async (data) => {
-                console.log('Call accepted!', data);
+                console.log('Call accepted by remote!', data);
+                // We are the Caller. The Callee accepted.
+                // Now we start the WebRTC negotiation.
                 await createOffer();
+            });
+
+            socket.on('call-connected', (data) => {
+                 console.log('Call connected confirmed by server', data);
+                 // We are the Callee. Server confirmed we joined.
+                 // We wait for the Offer from the Caller now.
+            });
+
+            socket.on('call-rejected', (data) => {
+                console.log('Call rejected');
+                alert('Call was rejected by the user.');
+                cleanupCall();
             });
 
             socket.on('webrtc-signal', async (signal) => {
@@ -247,6 +297,7 @@
             });
 
             socket.on('call-ended', () => {
+                console.log('Call ended by remote');
                 cleanupCall();
             });
         }
@@ -288,7 +339,7 @@
                 const targetUserId = data.data.user.id;
                 console.log('Found user:', targetUserId);
                 remoteUserId = targetUserId;
-                startCall(targetUserId, data.data.qrCodeId);
+                startCall(targetUserId, qrToken);
             } else {
                 alert('Invalid QR Token');
             }
@@ -302,7 +353,7 @@
             document.getElementById('call-ui').classList.remove('hidden');
         }
 
-        async function startCall(targetUserId, qrId) {
+        async function startCall(targetUserId, qrTokenInput) {
             await setupLocalMedia();
 
             // 1. Initiate Call on Backend
@@ -313,12 +364,19 @@
                     'Authorization': `Bearer ${token}`
                 },
                 body: JSON.stringify({
-                    qrCodeId: qrId,
-                    callType: 'video'
+                    qrToken: qrTokenInput,
+                    callType: 'webrtc'
                 })
             });
             const data = await res.json();
-            currentCallId = data.data.id;
+            
+            if (!data.success) {
+                console.error('Initiate call failed:', data);
+                alert(`Failed to initiate call: ${data.message || 'Unknown error'}`);
+                return;
+            }
+
+            currentCallId = data.data.call.id;
 
             // 2. Signal Initiation via Socket
             socket.emit('initiate-call', { callId: currentCallId });
