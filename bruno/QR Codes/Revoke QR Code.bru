@@ -1,0 +1,19 @@
+meta {
+  name: "Revoke QR Code"
+  type: http
+  seq: 12
+}
+
+patch {
+  url: {{baseUrl}}/api/qr-codes/{{qrCodeId}}/revoke
+  body: none
+  auth: none
+}
+
+tests {
+  test("Should revoke QR code successfully", function() {
+    expect(res.status).to.equal(200);
+    expect(res.body.success).to.be.true;
+    expect(res.body.message).to.equal('QR code revoked successfully');
+  });
+}

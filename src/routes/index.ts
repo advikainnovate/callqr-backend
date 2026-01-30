@@ -1,0 +1,26 @@
+import { Router } from 'express';
+import { logger } from '../utils';
+import exampleRoutes from './example.routes';
+import userRoutes from './user.routes';
+import qrCodeRoutes from './qrCode.routes';
+import callRoutes from './call.routes';
+import webrtcRoutes from './webrtc.routes';
+
+const router = Router();
+
+// Example routes
+router.use('/examples', exampleRoutes);
+
+// User routes
+router.use('/users', userRoutes);
+
+// QR Code routes
+router.use('/qr-codes', qrCodeRoutes);
+
+// Call routes
+router.use('/calls', callRoutes);
+
+// WebRTC routes
+router.use('/webrtc', webrtcRoutes);
+
+export default router;

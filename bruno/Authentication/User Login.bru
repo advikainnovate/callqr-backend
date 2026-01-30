@@ -1,0 +1,29 @@
+meta {
+  name: "User Login"
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/users/login
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "email": "{{testEmail}}"
+  }
+}
+
+tests {
+  test("Should login user successfully", function() {
+    expect(res.status).to.equal(200);
+    expect(res.body.success).to.be.true;
+    expect(res.body.data.user.email).to.equal(env.testEmail);
+    expect(res.body.data.token).to.be.a('string');
+    
+    // Update token for subsequent tests
+    bru.setEnvVar("authToken", res.body.data.token);
+  });
+}

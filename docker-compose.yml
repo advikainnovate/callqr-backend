@@ -1,86 +1,54 @@
 version: '3.8'
 
 services:
-  # PostgreSQL database for secure token storage
-  postgres:
-    image: postgres:15-alpine
-    container_name: privacy-qr-postgres
-    environment:
-      POSTGRES_DB: privacy_qr_calling
-      POSTGRES_USER: privacy_user
-      POSTGRES_PASSWORD: secure_password_change_in_production
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./packages/backend/database/init:/docker-entrypoint-initdb.d
-    networks:
-      - privacy-qr-network
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U privacy_user -d privacy_qr_calling"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-  # Redis for session management and caching
-  redis:
-    image: redis:7-alpine
-    container_name: privacy-qr-redis
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    networks:
-      - privacy-qr-network
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-  # Backend development server
-  backend:
+  # API Service (Your Express App)
+  api:
     build:
       context: .
-      dockerfile: packages/backend/Dockerfile.dev
-    container_name: privacy-qr-backend
+      dockerfile: Dockerfile
     ports:
-      - "3000:3000"
-    volumes:
-      - ./packages/backend:/app/packages/backend
-      - /app/packages/backend/node_modules
+      - '4000:4000'
+    env_file:
+      - ./.env
     environment:
-      NODE_ENV: development
-      PORT: 3000
-      DATABASE_URL: postgresql://privacy_user:secure_password_change_in_production@postgres:5432/privacy_qr_calling
-      REDIS_URL: redis://redis:6379
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    networks:
-      - privacy-qr-network
-    command: npm run dev
-
-  # STUN/TURN server for WebRTC
-  coturn:
-    image: coturn/coturn:latest
-    container_name: privacy-qr-coturn
-    ports:
-      - "3478:3478/udp"
-      - "3478:3478/tcp"
-      - "49152-65535:49152-65535/udp"
+      # Override the DATABASE_URL from the .env file to use the Docker service name
+      - DATABASE_URL=postgresql://user:password@db:5432/app_db
     volumes:
-      - ./docker/coturn/turnserver.conf:/etc/coturn/turnserver.conf
+      - .:/app
+      # Mount a volume to prevent node_modules from being overwritten by the host directory
+      - /app/node_modules
+    depends_on:
+      db:
+        condition: service_healthy
     networks:
-      - privacy-qr-network
-    command: ["-c", "/etc/coturn/turnserver.conf"]
+      - app-network
+    # This command automatically runs migrations and then starts the development server.
+    command: sh -c "npm run db:push && npm run dev"
 
-volumes:
-  postgres_data:
-  redis_data:
+  # PostgreSQL Database Service
+  db:
+    image: postgres:16-alpine
+    ports:
+      - '5432:5432'
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: app_db
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - app-network
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U user -d app_db']
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
+# Define the network
 networks:
-  privacy-qr-network:
+  app-network:
     driver: bridge
+
+# Define the volume for data persistence
+volumes:
+  postgres-data:

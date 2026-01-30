@@ -1,0 +1,27 @@
+meta {
+  name: "Scan QR Code"
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/api/qr-codes/scan
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "token": "{{qrToken}}"
+  }
+}
+
+tests {
+  test("Should scan QR code successfully", function() {
+    expect(res.status).to.equal(200);
+    expect(res.body.success).to.be.true;
+    expect(res.body.data.qrCodeId).to.be.a('string');
+    expect(res.body.data.userId).to.be.a('string');
+    expect(res.body.data.scanCount).to.be.a('number');
+  });
+}

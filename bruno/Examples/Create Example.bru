@@ -1,0 +1,27 @@
+meta {
+  name: "Create Example"
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/examples
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "title": "Test Example",
+    "description": "This is a test example",
+    "category": "test"
+  }
+}
+
+tests {
+  test("Should create example successfully", function() {
+    expect(res.status).to.equal(201);
+    expect(res.body.success).to.be.true;
+    expect(res.body.data.example.title).to.equal("Test Example");
+  });
+}

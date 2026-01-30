@@ -1,0 +1,42 @@
+meta {
+  name: "User Registration"
+  type: http
+  seq: 1
+}
+
+post {
+  url: "{{baseUrl}}/api/users/register"
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "email": "test.user@example.com"
+  }
+}
+
+vars:pre-request {
+  // Generate random email for testing
+  const timestamp = Date.now();
+  bru.setEnvVar("testEmail", `test.user.${timestamp}@example.com`);
+}
+
+body:json {
+  {
+    "email": "{{testEmail}}"
+  }
+}
+
+tests {
+  test("Should register user successfully", function() {
+    expect(res.status).to.equal(201);
+    expect(res.body.success).to.be.true;
+    expect(res.body.data.user.email).to.be.a('string');
+    expect(res.body.data.token).to.be.a('string');
+    
+    // Store token for subsequent tests
+    bru.setEnvVar("authToken", res.body.data.token);
+    bru.setEnvVar("userId", res.body.data.user.id);
+  });
+}

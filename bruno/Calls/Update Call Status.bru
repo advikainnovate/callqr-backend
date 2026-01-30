@@ -1,0 +1,28 @@
+meta {
+  name: "Update Call Status"
+  type: http
+  seq: 9
+}
+
+patch {
+  url: "{{baseUrl}}/api/calls/{{callId}}/status"
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "status": "connected",
+    "duration": 0
+  }
+}
+
+tests {
+  test("Should update call status successfully", function() {
+    expect(res.status).to.equal(200);
+    expect(res.body.success).to.be.true;
+    expect(res.body.data.call.id).to.equal(env.callId);
+    expect(res.body.data.call.status).to.equal('connected');
+    expect(res.body.data.call.duration).to.be.a('number');
+  });
+}
