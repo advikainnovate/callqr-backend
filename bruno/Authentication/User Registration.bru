@@ -5,18 +5,12 @@ meta {
 }
 
 post {
-  url: "{{baseUrl}}/api/users/register"
+  url: {{baseUrl}}/api/users/register
   body: json
   auth: none
 }
 
-body:json {
-  {
-    "email": "test.user@example.com"
-  }
-}
-
-vars:pre-request {
+script:pre-request {
   // Generate random email for testing
   const timestamp = Date.now();
   bru.setEnvVar("testEmail", `test.user.${timestamp}@example.com`);
