@@ -400,6 +400,7 @@
 
             peerConnection.onicecandidate = (event) => {
                 if (event.candidate) {
+                    console.log('🧊 Sending ICE candidate');
                     socket.emit('webrtc-signal', {
                         type: 'ice-candidate',
                         callId: currentCallId,
@@ -409,7 +410,19 @@
                 }
             };
 
+            peerConnection.oniceconnectionstatechange = () => {
+                console.log('🔄 ICE Connection State:', peerConnection.iceConnectionState);
+                if (peerConnection.iceConnectionState === 'failed') {
+                    alert('WebRTC Connection Failed (ICE). Check network/firewall.');
+                }
+            };
+
+            peerConnection.onsignalingstatechange = () => {
+                console.log('🚦 Signaling State:', peerConnection.signalingState);
+            };
+
             peerConnection.ontrack = (event) => {
+                console.log('📺 Received Remote Track:', event.streams[0].id);
                 document.getElementById('remoteVideo').srcObject = event.streams[0];
             };
 
