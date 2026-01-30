@@ -7,7 +7,11 @@ meta {
 patch {
   url: "{{baseUrl}}/api/calls/{{callId}}/status"
   body: json
-  auth: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
 }
 
 body:json {
