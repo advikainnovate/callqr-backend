@@ -1,0 +1,19 @@
+meta {
+  name: "Get All Examples"
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/examples
+  body: none
+  auth: none
+}
+
+tests {
+  test("Should get all examples", function() {
+    expect(res.status).to.equal(200);
+    expect(res.body.success).to.be.true;
+    expect(res.body.data.examples).to.be.an('array');
+  });
+}

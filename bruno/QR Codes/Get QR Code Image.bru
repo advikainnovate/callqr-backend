@@ -1,0 +1,18 @@
+meta {
+  name: "Get QR Code Image"
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{baseUrl}}/api/qr-codes/image/{{qrToken}}
+  body: none
+  auth: none
+}
+
+tests {
+  test("Should return QR code image", function() {
+    expect(res.status).to.equal(200);
+    expect(res.headers['content-type']).to.include('image/');
+  });
+}

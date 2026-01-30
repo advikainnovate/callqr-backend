@@ -1,0 +1,30 @@
+meta {
+  name: "Get Call History"
+  type: http
+  seq: 11
+}
+
+get {
+  url: "{{baseUrl}}/api/calls/history?limit=10"
+  auth: none
+  body: none
+}
+
+tests {
+  test("Should get call history successfully", function() {
+    expect(res.status).to.equal(200);
+    expect(res.body.success).to.be.true;
+    expect(res.body.data.calls).to.be.an('object');
+    expect(res.body.data.calls.made).to.be.an('array');
+    expect(res.body.data.calls.received).to.be.an('array');
+    
+    // Check structure of made calls
+    if (res.body.data.calls.made.length > 0) {
+      const call = res.body.data.calls.made[0];
+      expect(call.id).to.be.a('string');
+      expect(call.receiverId).to.be.a('string');
+      expect(call.status).to.be.a('string');
+      expect(call.callType).to.equal('webrtc');
+    }
+  });
+}

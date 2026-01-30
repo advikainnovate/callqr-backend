@@ -1,0 +1,19 @@
+meta {
+  name: "End Call"
+  type: http
+  seq: 10
+}
+
+patch {
+  url: "{{baseUrl}}/api/calls/{{callId}}/end"
+  body: none
+  auth: none
+}
+
+tests {
+  test("Should end call successfully", function() {
+    expect(res.status).to.equal(200);
+    expect(res.body.success).to.be.true;
+    expect(res.body.message).to.equal('Call ended successfully');
+  });
+}

@@ -1,8 +1,19 @@
+
+*.csv
+
+# PNPM
+pnpm-lock.yaml
+
 # Dependencies
 node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+pnpm-debug.log*
+
+# Production build
+dist/
+build/
 
 # Environment variables
 .env
@@ -11,33 +22,18 @@ yarn-error.log*
 .env.test.local
 .env.production.local
 
-# Build outputs
-dist/
-build/
-*.tsbuildinfo
-
 # Logs
 logs/
 *.log
-
-# Runtime data
-pids/
-*.pid
-*.seed
-*.pid.lock
-
-# Coverage directory used by tools like istanbul
-coverage/
-*.lcov
-
-# nyc test coverage
-.nyc_output
 
 # Dependency directories
 jspm_packages/
 
 # Optional npm cache directory
 .npm
+
+# Optional eslint cache
+.eslintcache
 
 # Optional REPL history
 .node_repl_history
@@ -51,6 +47,13 @@ jspm_packages/
 # dotenv environment variables file
 .env
 
+# parcel-bundler cache (https://parceljs.org/)
+.cache
+.parcel-cache
+
+# Stores VSCode versions used for testing VSCode extensions
+.vscode-test
+
 # IDE files
 .vscode/
 .idea/
@@ -58,46 +61,14 @@ jspm_packages/
 *.swo
 *~
 
-# OS generated files
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
-
-# React Native
-.expo/
-.expo-shared/
-
-# Android
-android/app/build/
-android/build/
-android/.gradle/
-android/captures/
-android/gradlew.bat
-android/local.properties
-*.keystore
-
-# iOS
-ios/build/
-ios/Pods/
-ios/*.xcworkspace
-ios/*.xcuserdata
-
-# Docker
-.dockerignore
-
-# Database
-*.db
-*.sqlite
-*.sqlite3
-
-# Temporary files
+# Temporary folders
 tmp/
 temp/
 
 # Test files
 test-results/
-junit.xml
+playwright-report/
+test-results.xml
+
+# TypeScript cache
+*.tsbuildinfo 

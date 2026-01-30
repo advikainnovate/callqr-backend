@@ -1,0 +1,33 @@
+meta {
+  name: "Initiate Call"
+  type: http
+  seq: 7
+}
+
+post {
+  url: "{{baseUrl}}/api/calls/initiate"
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "qrToken": "{{qrToken}}",
+    "callType": "webrtc"
+  }
+}
+
+tests {
+  test("Should initiate call successfully", function() {
+    expect(res.status).to.equal(201);
+    expect(res.body.success).to.be.true;
+    expect(res.body.data.call.id).to.be.a('string');
+    expect(res.body.data.call.callerId).to.be.a('string');
+    expect(res.body.data.call.receiverId).to.be.a('string');
+    expect(res.body.data.call.status).to.equal('initiated');
+    expect(res.body.data.call.callType).to.equal('webrtc');
+    
+    // Store call ID for subsequent tests
+    bru.setEnvVar("callId", res.body.data.call.id);
+  });
+}
