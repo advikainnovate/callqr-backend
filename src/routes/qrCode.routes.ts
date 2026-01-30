@@ -20,22 +20,22 @@ router.get('/image/:token', qrCodeController.getQRCodeImage);
 
 // Protected routes (temporarily disabled for testing)
 router.post('/create', 
-  // (req: Request, res: Response, next: NextFunction) => 
-  //   authenticateToken(req as AuthenticatedRequest, res, next),
+  (req: Request, res: Response, next: NextFunction) => 
+    authenticateToken(req as AuthenticatedRequest, res, next),
   // qrCreateLimiter, // Disabled for testing
   validateRequest(createQRCodeSchema),
   qrCodeController.createQRCode
 );
 
 router.get('/my-codes', 
-  // (req: Request, res: Response, next: NextFunction) => 
-  //   authenticateToken(req as AuthenticatedRequest, res, next),
+  (req: Request, res: Response, next: NextFunction) => 
+    authenticateToken(req as AuthenticatedRequest, res, next),
   qrCodeController.getUserQRCodes
 );
 
 router.patch('/:qrCodeId/revoke', 
-  // (req: Request, res: Response, next: NextFunction) => 
-  //   authenticateToken(req as AuthenticatedRequest, res, next),
+  (req: Request, res: Response, next: NextFunction) => 
+    authenticateToken(req as AuthenticatedRequest, res, next),
   validateParams(qrCodeIdSchema),
   qrCodeController.revokeQRCode
 );

@@ -8,15 +8,13 @@ import { AuthenticatedRequest } from '../middlewares/auth.middleware';
 export class CallController {
   async initiateCall(req: Request, res: Response, next: NextFunction) {
     try {
-      // Temporarily use a hardcoded valid UUID for testing
-      const userId = '123e4567-e89b-12d3-a456-426614174000';
-      // const userId = req.user?.userId;
-      // if (!userId) {
-      //   return res.status(401).json({
-      //     success: false,
-      //     message: 'Unauthorized',
-      //   });
-      // }
+      const userId = (req as AuthenticatedRequest).user?.userId;
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          message: 'Unauthorized',
+        });
+      }
 
       const validatedData = initiateCallSchema.parse(req.body);
       
@@ -80,17 +78,15 @@ export class CallController {
 
   async updateCallStatus(req: Request, res: Response, next: NextFunction) {
     try {
-      // Temporarily use a hardcoded valid UUID for testing
-      const userId = '123e4567-e89b-12d3-a456-426614174000';
-      // const userId = req.user?.userId;
+      const userId = (req as AuthenticatedRequest).user?.userId;
       const { callId } = req.params;
 
-      // if (!userId) {
-      //   return res.status(401).json({
-      //     success: false,
-      //     message: 'Unauthorized',
-      //   });
-      // }
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          message: 'Unauthorized',
+        });
+      }
 
       const validatedData = updateCallStatusSchema.parse(req.body);
       
@@ -153,15 +149,13 @@ export class CallController {
 
   async getCallHistory(req: Request, res: Response, next: NextFunction) {
     try {
-      // Temporarily use a hardcoded valid UUID for testing
-      const userId = '123e4567-e89b-12d3-a456-426614174000';
-      // const userId = req.user?.userId;
-      // if (!userId) {
-      //   return res.status(401).json({
-      //     success: false,
-      //     message: 'Unauthorized',
-      //   });
-      // }
+      const userId = (req as AuthenticatedRequest).user?.userId;
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          message: 'Unauthorized',
+        });
+      }
 
       const limit = parseInt(req.query.limit as string) || 50;
       const callHistory = await callService.getCallHistory(userId, Math.min(limit, 100));
@@ -200,15 +194,13 @@ export class CallController {
 
   async getActiveCalls(req: Request, res: Response, next: NextFunction) {
     try {
-      // Temporarily use a hardcoded valid UUID for testing
-      const userId = '123e4567-e89b-12d3-a456-426614174000';
-      // const userId = req.user?.userId;
-      // if (!userId) {
-      //   return res.status(401).json({
-      //     success: false,
-      //     message: 'Unauthorized',
-      //   });
-      // }
+      const userId = (req as AuthenticatedRequest).user?.userId;
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          message: 'Unauthorized',
+        });
+      }
 
       const activeCalls = await callService.getActiveCalls(userId);
 
@@ -231,17 +223,15 @@ export class CallController {
 
   async endCall(req: Request, res: Response, next: NextFunction) {
     try {
-      // Temporarily use a hardcoded valid UUID for testing
-      const userId = '123e4567-e89b-12d3-a456-426614174000';
-      // const userId = req.user?.userId;
+      const userId = (req as AuthenticatedRequest).user?.userId;
       const { callId } = req.params;
 
-      // if (!userId) {
-      //   return res.status(401).json({
-      //     success: false,
-      //     message: 'Unauthorized',
-      //   });
-      // }
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          message: 'Unauthorized',
+        });
+      }
 
       const success = await callService.endCall(callId, userId);
 
@@ -273,17 +263,15 @@ export class CallController {
 
   async getCallDetails(req: Request, res: Response, next: NextFunction) {
     try {
-      // Temporarily use a hardcoded valid UUID for testing
-      const userId = '123e4567-e89b-12d3-a456-426614174000';
-      // const userId = req.user?.userId;
+      const userId = (req as AuthenticatedRequest).user?.userId;
       const { callId } = req.params;
 
-      // if (!userId) {
-      //   return res.status(401).json({
-      //     success: false,
-      //     message: 'Unauthorized',
-      //   });
-      // }
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          message: 'Unauthorized',
+        });
+      }
 
       const call = await callService.getCallById(callId);
       if (!call) {

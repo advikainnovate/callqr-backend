@@ -7,11 +7,16 @@ meta {
 post {
   url: {{baseUrl}}/api/qr-codes/create
   body: json
-  auth: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
 }
 
 body:json {
   {
+    
   }
 }
 
