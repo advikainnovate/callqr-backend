@@ -17,6 +17,9 @@ import routes from './routes/index';
 
 const app = express();
 
+// Trust proxy for rate limiting when behind reverse proxy
+app.set('trust proxy', 1);
+
 // Core Middlewares
 app.use(helmet());
 app.use(corsMiddleware);
@@ -29,7 +32,7 @@ app.use(requestLogger);
 app.use(xssProtection);
 app.use(sanitizeInput);
 
-// Health Check Route (outside /api prefix)
+// Health Check Routes (outside /api prefix)
 app.get('/healthz', async (_, res) => {
   try {
     // Import database client for health check
