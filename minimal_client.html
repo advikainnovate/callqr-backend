@@ -225,14 +225,14 @@
                 auth: { token },
                 transports: ['polling'] // Force polling to bypass proxy websocket issues
             };
-            
+
             // Visual indicator of version
             document.querySelector('h1').innerText = 'QR Call System (v2 - Polling)';
 
             try {
                 const urlObj = new URL(API_URL);
-                const pathName = urlObj.pathname.replace(/\/$/, ''); 
-                
+                const pathName = urlObj.pathname.replace(/\/$/, '');
+
                 socketUrl = urlObj.origin;
 
                 // If path is /callqr-backend, we use /callqr-backend/socket.io
@@ -274,9 +274,9 @@
             });
 
             socket.on('call-connected', (data) => {
-                 console.log('Call connected confirmed by server', data);
-                 // We are the Callee. Server confirmed we joined.
-                 // We wait for the Offer from the Caller now.
+                console.log('Call connected confirmed by server', data);
+                // We are the Callee. Server confirmed we joined.
+                // We wait for the Offer from the Caller now.
             });
 
             socket.on('call-rejected', (data) => {
@@ -373,7 +373,7 @@
                 })
             });
             const data = await res.json();
-            
+
             if (!data.success) {
                 console.error('Initiate call failed:', data);
                 alert(`Failed to initiate call: ${data.message || 'Unknown error'}`);
@@ -400,7 +400,9 @@
 
             peerConnection.onicecandidate = (event) => {
                 if (event.candidate) {
-                    console.log('🧊 Sending ICE candidate');
+                    const candidateType = event.candidate.candidate.includes('typ srflx') ? '🌍 Public (STUN)' : '🏠 Local (Host)';
+                    console.log(`🧊 Sending ICE candidate (${candidateType}):`, event.candidate.candidate);
+
                     socket.emit('webrtc-signal', {
                         type: 'ice-candidate',
                         callId: currentCallId,
@@ -443,6 +445,9 @@
 
             peerConnection.onicecandidate = (event) => {
                 if (event.candidate) {
+                    const candidateType = event.candidate.candidate.includes('typ srflx') ? '🌍 Public (STUN)' : '🏠 Local (Host)';
+                    console.log(`🧊 Sending ICE candidate (${candidateType}) [Answerer]:`, event.candidate.candidate);
+
                     socket.emit('webrtc-signal', {
                         type: 'ice-candidate',
                         callId: currentCallId,
