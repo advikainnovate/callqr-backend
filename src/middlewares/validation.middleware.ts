@@ -5,6 +5,21 @@ import { logger } from '../utils';
 export const validateRequest = (schema: z.ZodSchema) => {
   return (req: Request, res: Response, next: NextFunction) => {
     try {
+      if (req.body === undefined) {
+        return res.status(400).json({
+          success: false,
+          message: 'Validation error',
+          errors: [
+            {
+              field: '',
+              message:
+                'Request body is required (or could not be parsed). Ensure you send JSON with Content-Type: application/json.',
+              code: 'invalid_type',
+            },
+          ],
+        });
+      }
+
       // Validate request body
       const validatedData = schema.parse(req.body);
       

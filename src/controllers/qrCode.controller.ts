@@ -9,15 +9,13 @@ import { AuthenticatedRequest } from '../middlewares/auth.middleware';
 export class QRCodeController {
   async createQRCode(req: Request, res: Response, next: NextFunction) {
     try {
-      // Temporarily use a hardcoded valid UUID for testing
-      const userId = '123e4567-e89b-12d3-a456-426614174000';
-      // const userId = req.user?.userId;
-      // if (!userId) {
-      //   return res.status(401).json({
-      //     success: false,
-      //     message: 'Unauthorized',
-      //   });
-      // }
+      const userId = (req as AuthenticatedRequest).user?.userId;
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          message: 'Unauthorized',
+        });
+      }
 
       const validatedData = createQRCodeSchema.parse(req.body);
       
@@ -116,15 +114,13 @@ export class QRCodeController {
 
   async getUserQRCodes(req: Request, res: Response, next: NextFunction) {
     try {
-      // Temporarily use a hardcoded valid UUID for testing
-      const userId = '123e4567-e89b-12d3-a456-426614174000';
-      // const userId = req.user?.userId;
-      // if (!userId) {
-      //   return res.status(401).json({
-      //     success: false,
-      //     message: 'Unauthorized',
-      //   });
-      // }
+      const userId = (req as AuthenticatedRequest).user?.userId;
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          message: 'Unauthorized',
+        });
+      }
 
       const qrCodes = await qrCodeService.getUserQRCodes(userId);
 
@@ -151,17 +147,15 @@ export class QRCodeController {
 
   async revokeQRCode(req: Request, res: Response, next: NextFunction) {
     try {
-      // Temporarily use a hardcoded valid UUID for testing
-      const userId = '123e4567-e89b-12d3-a456-426614174000';
-      // const userId = req.user?.userId;
+      const userId = (req as AuthenticatedRequest).user?.userId;
       const { qrCodeId } = req.params;
 
-      // if (!userId) {
-      //   return res.status(401).json({
-      //     success: false,
-      //     message: 'Unauthorized',
-      //   });
-      // }
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          message: 'Unauthorized',
+        });
+      }
 
       const success = await qrCodeService.revokeQRCode(qrCodeId, userId);
       

@@ -5,9 +5,13 @@ meta {
 }
 
 post {
-  url: "{{baseUrl}}/api/calls/initiate"
+  url: {{baseUrl}}/api/calls/initiate
   body: json
-  auth: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
 }
 
 body:json {
