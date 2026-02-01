@@ -163,9 +163,24 @@
         // WebRTC globals
         let peerConnection = null;
         let localStream = null;
-        const iceConfig = {
+        let iceConfig = {
             iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
         };
+
+        async function fetchIceConfig() {
+            try {
+                const res = await fetch(`${API_URL}/api/webrtc/config`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const result = await res.json();
+                if (result.success) {
+                    iceConfig = result.data;
+                    console.log('✅ WebRTC ICE Config loaded:', iceConfig);
+                }
+            } catch (e) {
+                console.error('❌ Failed to fetch ICE config:', e);
+            }
+        }
 
         function connectServer() {
             API_URL = document.getElementById('server-url').value.replace(/\/$/, '');
@@ -209,6 +224,10 @@
                     token = data.data.token;
                     myUserId = data.data.user.id;
                     document.getElementById('user-email-display').innerText = email;
+
+                    // Fetch TURN server credentials
+                    await fetchIceConfig();
+
                     initSocket();
                     document.getElementById('auth-panel').classList.add('hidden');
                     document.getElementById('dashboard-panel').classList.remove('hidden');
@@ -223,7 +242,7 @@
             let socketUrl = API_URL;
             let socketOptions = {
                 auth: { token },
-                transports: ['polling'] // Force polling to bypass proxy websocket issues
+                transports: ['websocket', 'polling'] // Try websocket first for better stability
             };
 
             // Visual indicator of version

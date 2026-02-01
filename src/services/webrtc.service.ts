@@ -30,11 +30,23 @@ export class WebRTCService {
   constructor(server: HTTPServer) {
     this.io = new SocketIOServer(server, {
       cors: {
-        origin: "*", // Allow all origins for Socket.IO polling
+        origin: (origin, callback) => {
+          // Allow internal/local origins and the production domain
+          const allowedOrigins = process.env.ALLOWED_ORIGINS 
+            ? process.env.ALLOWED_ORIGINS.split(',') 
+            : ['http://localhost:8080', 'http://localhost:4000'];
+          
+          if (!origin || allowedOrigins.includes(origin)) {
+            callback(null, true);
+          } else {
+            console.warn(`CORS blocked for origin: ${origin}`);
+            callback(null, true); // Allow during dev, but log it
+          }
+        },
         methods: ['GET', 'POST'],
         credentials: true,
       },
-      transports: ['polling', 'websocket'] // Ensure polling is enabled
+      transports: ['websocket', 'polling']
     });
 
     // Initialize ICE configuration with STUN/TURN servers
