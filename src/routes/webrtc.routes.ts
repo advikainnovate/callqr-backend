@@ -11,13 +11,24 @@ router.get('/config', (req, res) => {
     const iceConfig = {
       iceServers: [
         { urls: process.env.STUN_SERVER || 'stun:stun.l.google.com:19302' },
-        ...(process.env.TURN_SERVER ? [{
-          urls: process.env.TURN_SERVER.includes(':') ? process.env.TURN_SERVER : `${process.env.TURN_SERVER}:443`,
-          username: process.env.TURN_USERNAME,
-          credential: process.env.TURN_PASSWORD,
-        }] : [])
-      ]
+        ...(process.env.TURN_SERVER
+          ? [
+              {
+                urls: process.env.TURN_SERVER.includes(':')
+                  ? process.env.TURN_SERVER
+                  : `${process.env.TURN_SERVER}:443`,
+                username: process.env.TURN_USERNAME,
+                credential: process.env.TURN_PASSWORD,
+              },
+            ]
+          : []),
+      ],
     };
+
+    console.log(
+      'Sending ICE Config to client:',
+      JSON.stringify(iceConfig, null, 2)
+    );
 
     res.json({
       success: true,

@@ -421,7 +421,10 @@
 
             peerConnection.onicecandidate = (event) => {
                 if (event.candidate) {
-                    const candidateType = event.candidate.candidate.includes('typ srflx') ? '🌍 Public (STUN)' : '🏠 Local (Host)';
+                    let candidateType = '🏠 Local (Host)';
+                    if (event.candidate.candidate.includes('typ srflx')) candidateType = '🌍 Public (STUN)';
+                    if (event.candidate.candidate.includes('typ relay')) candidateType = '🔄 Relay (TURN)';
+
                     console.log(`🧊 Sending ICE candidate (${candidateType}):`, event.candidate.candidate);
 
                     socket.emit('webrtc-signal', {
@@ -468,7 +471,10 @@
 
             peerConnection.onicecandidate = (event) => {
                 if (event.candidate) {
-                    const candidateType = event.candidate.candidate.includes('typ srflx') ? '🌍 Public (STUN)' : '🏠 Local (Host)';
+                    let candidateType = '🏠 Local (Host)';
+                    if (event.candidate.candidate.includes('typ srflx')) candidateType = '🌍 Public (STUN)';
+                    if (event.candidate.candidate.includes('typ relay')) candidateType = '🔄 Relay (TURN)';
+                    
                     console.log(`🧊 Sending ICE candidate (${candidateType}) [Answerer]:`, event.candidate.candidate);
 
                     socket.emit('webrtc-signal', {
