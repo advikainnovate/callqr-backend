@@ -29,12 +29,13 @@ export class WebRTCService {
 
   constructor(server: HTTPServer) {
     this.io = new SocketIOServer(server, {
+      path: '/callqr-backend/socket.io', // Path used by your Nginx/Cloud URL
       cors: {
-        origin: true, // Automatically reflect the request origin (required for credentials)
+        origin: true, // Echoes back the request origin (perfect for credentials)
         methods: ['GET', 'POST'],
         credentials: true,
       },
-      transports: ['websocket', 'polling']
+      transports: ['websocket'] // Skip polling to avoid 'Worker Process' mismatch
     });
 
     // Initialize ICE configuration with STUN/TURN servers

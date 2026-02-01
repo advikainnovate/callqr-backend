@@ -242,12 +242,11 @@
             let socketUrl = API_URL;
             let socketOptions = {
                 auth: { token },
-                transports: ['polling'],
-                upgrade: false
+                transports: ['websocket'], // FORCE websocket only
             };
 
             // Visual indicator of version
-            document.querySelector('h1').innerText = 'QR Call System (v2 - Polling)';
+            document.querySelector('h1').innerText = 'QR Call System (v2 - WebSocket)';
 
             try {
                 const urlObj = new URL(API_URL);
