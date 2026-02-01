@@ -91,6 +91,9 @@ export class WebRTCService {
 
       // Store user connection
       this.connectedUsers.set(userId, socket.id);
+      logger.info(
+        `User connected: ${userId} (${socket.id}). Total online: ${this.connectedUsers.size}`
+      );
 
       // Join user to their personal room
       socket.join(userId);
@@ -148,12 +151,19 @@ export class WebRTCService {
       // Forward signal to target user
       const targetSocketId = this.connectedUsers.get(targetUserId);
       if (targetSocketId) {
+        logger.info(
+          `[Signal] Forwarding ${data.type} from ${socket.userId} to ${targetUserId}`
+        );
         this.io.to(targetSocketId).emit('webrtc-signal', {
           type: data.type,
           callId,
           fromUserId: socket.userId,
           data: data.data,
         });
+      } else {
+        logger.warn(
+          `[Signal] Target user ${targetUserId} not found (Caller: ${socket.userId})`
+        );
       }
     } catch (error) {
       logger.error('Error handling WebRTC signal:', error);
