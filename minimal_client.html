@@ -460,6 +460,8 @@
             });
         }
 
+        let candidateQueue = [];
+
         async function handleOffer(offer, fromUserId) {
             peerConnection = new RTCPeerConnection(iceConfig);
             localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
@@ -483,6 +485,14 @@
             };
 
             await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+            
+            // Process queued candidates now that remote description is set
+            while (candidateQueue.length > 0) {
+                const c = candidateQueue.shift();
+                await peerConnection.addIceCandidate(new RTCIceCandidate(c));
+                console.log('✅ Added queued ICE candidate');
+            }
+
             const answer = await peerConnection.createAnswer();
             await peerConnection.setLocalDescription(answer);
 
@@ -496,11 +506,34 @@
 
         async function handleAnswer(answer) {
             await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+            
+            // Process queued candidates now that remote description is set
+            while (candidateQueue.length > 0) {
+                const c = candidateQueue.shift();
+                await peerConnection.addIceCandidate(new RTCIceCandidate(c));
+                console.log('✅ Added queued ICE candidate');
+            }
         }
 
         async function handleCandidate(candidate) {
-            if (peerConnection) {
-                await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+            try {
+                if (peerConnection) {
+                    // Check if remote description is set by checking signaling state or remoteDescription
+                    if (peerConnection.remoteDescription && peerConnection.remoteDescription.type) {
+                        await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+                        console.log('✅ Added ICE candidate');
+                    } else {
+                        console.log('⏳ queuing ICE candidate (remote description not ready)');
+                        candidateQueue.push(candidate);
+                    }
+                } else {
+                     // If PeerConnection doesn't exist yet, queue it? 
+                     // Usually handleOffer creates it immediately, but safer to queue if logic changes.
+                     console.log('⏳ queuing ICE candidate (no peer connection yet)');
+                     candidateQueue.push(candidate);
+                }
+            } catch (e) {
+                console.error('Error adding ICE candidate', e);
             }
         }
 
