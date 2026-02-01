@@ -12,9 +12,9 @@ router.get('/config', (req, res) => {
       iceServers: [
         { urls: process.env.STUN_SERVER || 'stun:stun.l.google.com:19302' },
         ...(process.env.TURN_SERVER ? [{
-          urls: process.env.TURN_SERVER,
+          urls: process.env.TURN_SERVER.includes(':') ? process.env.TURN_SERVER : `${process.env.TURN_SERVER}:443`,
           username: process.env.TURN_USERNAME,
-          credential: process.env.TURN_PASSWORD
+          credential: process.env.TURN_PASSWORD,
         }] : [])
       ]
     };
