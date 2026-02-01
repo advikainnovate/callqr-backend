@@ -437,9 +437,11 @@
             };
 
             peerConnection.oniceconnectionstatechange = () => {
-                console.log('🔄 ICE Connection State:', peerConnection.iceConnectionState);
-                if (peerConnection.iceConnectionState === 'failed') {
-                    alert('WebRTC Connection Failed (ICE). Check network/firewall.');
+                const state = peerConnection.iceConnectionState;
+                console.log('🔄 ICE Connection State:', state);
+                if (state === 'failed' || state === 'disconnected') {
+                    document.getElementById('auth-msg').innerText = 'ICE Connection Failed! (Check TURN)';
+                    document.getElementById('auth-msg').className = 'error';
                 }
             };
 
