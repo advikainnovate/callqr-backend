@@ -30,21 +30,7 @@ export class WebRTCService {
   constructor(server: HTTPServer) {
     this.io = new SocketIOServer(server, {
       cors: {
-        origin: (origin, callback) => {
-          const allowedOriginsStr = process.env.ALLOWED_ORIGINS || '';
-          const allowedOrigins = allowedOriginsStr.split(',').map(o => o.trim());
-
-          const isAllowed = !origin ||
-            allowedOriginsStr === '*' ||
-            allowedOrigins.includes(origin);
-
-          if (isAllowed) {
-            callback(null, true);
-          } else {
-            console.error(`[CORS REJECTED] Origin: "${origin}" | Allowed: "${allowedOriginsStr}"`);
-            callback(new Error('Not allowed by CORS'));
-          }
-        },
+        origin: true, // Automatically reflect the request origin (required for credentials)
         methods: ['GET', 'POST'],
         credentials: true,
       },
