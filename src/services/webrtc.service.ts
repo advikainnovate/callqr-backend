@@ -29,25 +29,28 @@ export class WebRTCService {
 
   constructor(server: HTTPServer) {
     this.io = new SocketIOServer(server, {
-      path: '/callqr-backend/socket.io', // Path used by your Nginx/Cloud URL
       cors: {
         origin: true, // Echoes back the request origin (perfect for credentials)
         methods: ['GET', 'POST'],
         credentials: true,
       },
-      transports: ['websocket'] // Skip polling to avoid 'Worker Process' mismatch
+      transports: ['websocket'], // Skip polling to avoid 'Worker Process' mismatch
     });
 
     // Initialize ICE configuration with STUN/TURN servers
     this.iceConfig = {
       iceServers: [
         { urls: process.env.STUN_SERVER || 'stun:stun.l.google.com:19302' },
-        ...(process.env.TURN_SERVER ? [{
-          urls: process.env.TURN_SERVER,
-          username: process.env.TURN_USERNAME,
-          credential: process.env.TURN_PASSWORD
-        }] : [])
-      ]
+        ...(process.env.TURN_SERVER
+          ? [
+              {
+                urls: process.env.TURN_SERVER,
+                username: process.env.TURN_USERNAME,
+                credential: process.env.TURN_PASSWORD,
+              },
+            ]
+          : []),
+      ],
     };
 
     this.setupMiddleware();
@@ -125,13 +128,19 @@ export class WebRTCService {
     });
   }
 
-  private async handleWebRTCSignal(socket: AuthenticatedSocket, data: WebRTCSignal) {
+  private async handleWebRTCSignal(
+    socket: AuthenticatedSocket,
+    data: WebRTCSignal
+  ) {
     try {
       const { callId, targetUserId, data: signalData } = data;
 
       // Verify user is part of the call
       const call = await callService.getCallById(callId);
-      if (!call || (call.callerId !== socket.userId && call.receiverId !== socket.userId)) {
+      if (
+        !call ||
+        (call.callerId !== socket.userId && call.receiverId !== socket.userId)
+      ) {
         socket.emit('error', { message: 'Unauthorized to signal this call' });
         return;
       }
@@ -152,7 +161,10 @@ export class WebRTCService {
     }
   }
 
-  private async handleCallInitiation(socket: AuthenticatedSocket, data: { callId: string }) {
+  private async handleCallInitiation(
+    socket: AuthenticatedSocket,
+    data: { callId: string }
+  ) {
     try {
       const { callId } = data;
 
@@ -183,7 +195,10 @@ export class WebRTCService {
     }
   }
 
-  private async handleCallAcceptance(socket: AuthenticatedSocket, data: { callId: string }) {
+  private async handleCallAcceptance(
+    socket: AuthenticatedSocket,
+    data: { callId: string }
+  ) {
     try {
       const { callId } = data;
 
@@ -214,7 +229,10 @@ export class WebRTCService {
     }
   }
 
-  private async handleCallRejection(socket: AuthenticatedSocket, data: { callId: string }) {
+  private async handleCallRejection(
+    socket: AuthenticatedSocket,
+    data: { callId: string }
+  ) {
     try {
       const { callId } = data;
 
@@ -242,7 +260,10 @@ export class WebRTCService {
     }
   }
 
-  private async handleCallEnd(socket: AuthenticatedSocket, data: { callId: string }) {
+  private async handleCallEnd(
+    socket: AuthenticatedSocket,
+    data: { callId: string }
+  ) {
     try {
       const { callId } = data;
 
@@ -256,7 +277,8 @@ export class WebRTCService {
       // Get call details to notify other participant
       const call = await callService.getCallById(callId);
       if (call) {
-        const otherUserId = call.callerId === socket.userId ? call.receiverId : call.callerId;
+        const otherUserId =
+          call.callerId === socket.userId ? call.receiverId : call.callerId;
         const otherSocketId = this.connectedUsers.get(otherUserId);
 
         if (otherSocketId) {
