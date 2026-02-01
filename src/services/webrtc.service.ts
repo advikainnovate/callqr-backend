@@ -31,16 +31,18 @@ export class WebRTCService {
     this.io = new SocketIOServer(server, {
       cors: {
         origin: (origin, callback) => {
-          // Allow internal/local origins and the production domain
-          const allowedOrigins = process.env.ALLOWED_ORIGINS 
-            ? process.env.ALLOWED_ORIGINS.split(',') 
-            : ['http://localhost:8080', 'http://localhost:4000'];
-          
-          if (!origin || allowedOrigins.includes(origin)) {
+          const allowedOriginsStr = process.env.ALLOWED_ORIGINS || '';
+          const allowedOrigins = allowedOriginsStr.split(',').map(o => o.trim());
+
+          const isAllowed = !origin ||
+            allowedOriginsStr === '*' ||
+            allowedOrigins.includes(origin);
+
+          if (isAllowed) {
             callback(null, true);
           } else {
-            console.warn(`CORS blocked for origin: ${origin}`);
-            callback(null, true); // Allow during dev, but log it
+            console.error(`[CORS REJECTED] Origin: "${origin}" | Allowed: "${allowedOriginsStr}"`);
+            callback(new Error('Not allowed by CORS'));
           }
         },
         methods: ['GET', 'POST'],

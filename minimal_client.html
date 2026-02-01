@@ -242,7 +242,8 @@
             let socketUrl = API_URL;
             let socketOptions = {
                 auth: { token },
-                transports: ['websocket', 'polling'] // Try websocket first for better stability
+                transports: ['polling'],
+                upgrade: false
             };
 
             // Visual indicator of version
