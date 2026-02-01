@@ -445,6 +445,17 @@
                 }
             };
 
+            peerConnection.onicecandidateerror = (event) => {
+                console.error('❌ ICE Candidate Error:', event);
+                console.error('Error Code:', event.errorCode);
+                console.error('Error Text:', event.errorText);
+                console.error('URL:', event.url);
+                
+                if (event.errorCode >= 700) {
+                    alert(`TURN Server Error: ${event.errorText} (Check Credentials/Firewall)`);
+                }
+            };
+
             peerConnection.onsignalingstatechange = () => {
                 console.log('🚦 Signaling State:', peerConnection.signalingState);
             };
