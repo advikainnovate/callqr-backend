@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
+import bcrypt from 'bcrypt';
 import { userService } from '../services/user.service';
 import { registerUserSchema, loginUserSchema } from '../schemas/user.schema';
 import { logger } from '../utils';
@@ -10,19 +11,33 @@ export class UserController {
   async register(req: Request, res: Response, next: NextFunction) {
     try {
       const validatedData = registerUserSchema.parse(req.body);
-      
-      // Check if user already exists
-      const existingUser = await userService.getUserByEmail(validatedData.email);
-      if (existingUser) {
+
+      // Check for uniqueness
+      const [emailUser, usernameUser, phoneUser] = await Promise.all([
+        userService.getUserByEmail(validatedData.email),
+        userService.getUserByUsername(validatedData.username),
+        userService.getUserByPhone(validatedData.phoneNo)
+      ]);
+
+      if (emailUser || usernameUser || phoneUser) {
+        let field = emailUser ? 'Email' : usernameUser ? 'Username' : 'Phone number';
         return res.status(409).json({
           success: false,
-          message: 'User with this email already exists',
+          message: `${field} already exists`,
         });
       }
 
-      // Create new user
-      const user = await userService.createUser(validatedData);
-      
+      // Hash password
+      const saltRounds = 10;
+      const hashedPassword = await bcrypt.hash(validatedData.password, saltRounds);
+
+      // Create new user (remove plain password, add hash)
+      const { password, ...userToCreate } = validatedData;
+      const user = await userService.createUser({
+        ...userToCreate,
+        passwordHash: hashedPassword
+      });
+
       // Generate JWT token
       const token = jwt.sign(
         { userId: user.id, email: user.email },
@@ -38,7 +53,10 @@ export class UserController {
         data: {
           user: {
             id: user.id,
+            username: user.username,
             email: user.email,
+            phoneNo: user.phoneNo,
+            vehicleType: user.vehicleType,
             isActive: user.isActive,
             createdAt: user.createdAt,
           },
@@ -60,10 +78,25 @@ export class UserController {
   async login(req: Request, res: Response, next: NextFunction) {
     try {
       const validatedData = loginUserSchema.parse(req.body);
-      
-      // Find user by email
-      const user = await userService.getUserByEmail(validatedData.email);
+
+      // Find user by email or username
+      let user;
+      if (validatedData.email) {
+        user = await userService.getUserByEmail(validatedData.email);
+      } else if (validatedData.username) {
+        user = await userService.getUserByUsername(validatedData.username);
+      }
+
       if (!user) {
+        return res.status(401).json({
+          success: false,
+          message: 'Invalid credentials',
+        });
+      }
+
+      // Verify password
+      const isPasswordValid = await bcrypt.compare(validatedData.password, user.passwordHash);
+      if (!isPasswordValid) {
         return res.status(401).json({
           success: false,
           message: 'Invalid credentials',
@@ -93,7 +126,10 @@ export class UserController {
         data: {
           user: {
             id: user.id,
+            username: user.username,
             email: user.email,
+            phoneNo: user.phoneNo,
+            vehicleType: user.vehicleType,
             isActive: user.isActive,
             createdAt: user.createdAt,
           },
@@ -115,7 +151,7 @@ export class UserController {
   async getProfile(req: Request, res: Response, next: NextFunction) {
     try {
       const userId = (req as any).user?.userId;
-      
+
       if (!userId) {
         return res.status(401).json({
           success: false,

@@ -14,7 +14,7 @@ export class UserService {
           id: uuidv4(),
         })
         .returning();
-      
+
       logger.info(`User created successfully: ${user.id}`);
       return user;
     } catch (error) {
@@ -30,10 +30,40 @@ export class UserService {
         .from(users)
         .where(eq(users.email, email))
         .limit(1);
-      
+
       return user || null;
     } catch (error) {
       logger.error('Error fetching user by email:', error);
+      throw error;
+    }
+  }
+
+  async getUserByUsername(username: string): Promise<User | null> {
+    try {
+      const [user] = await db
+        .select()
+        .from(users)
+        .where(eq(users.username, username))
+        .limit(1);
+
+      return user || null;
+    } catch (error) {
+      logger.error('Error fetching user by username:', error);
+      throw error;
+    }
+  }
+
+  async getUserByPhone(phoneNo: string): Promise<User | null> {
+    try {
+      const [user] = await db
+        .select()
+        .from(users)
+        .where(eq(users.phoneNo, phoneNo))
+        .limit(1);
+
+      return user || null;
+    } catch (error) {
+      logger.error('Error fetching user by phone:', error);
       throw error;
     }
   }
@@ -45,7 +75,7 @@ export class UserService {
         .from(users)
         .where(eq(users.id, id))
         .limit(1);
-      
+
       return user || null;
     } catch (error) {
       logger.error('Error fetching user by ID:', error);
@@ -60,7 +90,7 @@ export class UserService {
         .set({ ...userData, updatedAt: new Date() })
         .where(eq(users.id, id))
         .returning();
-      
+
       return user || null;
     } catch (error) {
       logger.error('Error updating user:', error);
@@ -75,7 +105,7 @@ export class UserService {
         .set({ isActive: false, updatedAt: new Date() })
         .where(eq(users.id, id))
         .returning();
-      
+
       return !!user;
     } catch (error) {
       logger.error('Error deactivating user:', error);
