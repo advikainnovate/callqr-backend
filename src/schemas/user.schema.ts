@@ -18,5 +18,20 @@ export const loginUserSchema = z.object({
   path: ["email"]
 });
 
+export const updateProfileSchema = z.object({
+  username: z.string().min(3).optional(),
+  email: z.string().email().optional(),
+  phoneNo: z.string().regex(/^\+?[\d\s-]{10,}$/).optional(),
+  emergencyNo: z.string().optional(),
+  vehicleType: z.enum(['two_wheeler', 'four_wheeler', 'public_vehicle']).optional(),
+});
+
+export const changePasswordSchema = z.object({
+  currentPassword: z.string(),
+  newPassword: z.string().min(6),
+});
+
 export type RegisterUserInput = z.infer<typeof registerUserSchema>;
 export type LoginUserInput = z.infer<typeof loginUserSchema>;
+export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
+export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;

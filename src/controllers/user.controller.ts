@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import bcrypt from 'bcrypt';
 import { userService } from '../services/user.service';
-import { registerUserSchema, loginUserSchema } from '../schemas/user.schema';
+import { registerUserSchema, loginUserSchema, updateProfileSchema, changePasswordSchema } from '../schemas/user.schema';
 import { logger } from '../utils';
 import jwt from 'jsonwebtoken';
 import { appConfig } from '../config';
@@ -172,11 +172,122 @@ export class UserController {
         data: {
           user: {
             id: user.id,
+            username: user.username,
             email: user.email,
+            phoneNo: user.phoneNo,
+            emergencyNo: user.emergencyNo,
+            vehicleType: user.vehicleType,
             isActive: user.isActive,
             createdAt: user.createdAt,
           },
         },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async updateProfile(req: Request, res: Response, next: NextFunction) {
+    try {
+      const userId = (req as any).user?.userId;
+      const validatedData = updateProfileSchema.parse(req.body);
+
+      // If updating unique fields, check for collisions
+      if (validatedData.email || validatedData.username || validatedData.phoneNo) {
+        const checks = [];
+        if (validatedData.email) checks.push(userService.getUserByEmail(validatedData.email));
+        if (validatedData.username) checks.push(userService.getUserByUsername(validatedData.username));
+        if (validatedData.phoneNo) checks.push(userService.getUserByPhone(validatedData.phoneNo));
+
+        const results = await Promise.all(checks);
+        const collision = results.find(u => u && u.id !== userId);
+
+        if (collision) {
+          return res.status(409).json({
+            success: false,
+            message: 'One of the provided unique fields (email, username, or phone) is already taken',
+          });
+        }
+      }
+
+      const updatedUser = await userService.updateUser(userId, validatedData);
+
+      res.json({
+        success: true,
+        message: 'Profile updated successfully',
+        data: {
+          user: {
+            id: updatedUser?.id,
+            username: updatedUser?.username,
+            email: updatedUser?.email,
+            phoneNo: updatedUser?.phoneNo,
+            emergencyNo: updatedUser?.emergencyNo,
+            vehicleType: updatedUser?.vehicleType,
+            isActive: updatedUser?.isActive,
+          },
+        },
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({
+          success: false,
+          message: 'Validation error',
+          errors: error.issues,
+        });
+      }
+      next(error);
+    }
+  }
+
+  async changePassword(req: Request, res: Response, next: NextFunction) {
+    try {
+      const userId = (req as any).user?.userId;
+      const { currentPassword, newPassword } = changePasswordSchema.parse(req.body);
+
+      const user = await userService.getUserById(userId);
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: 'User not found',
+        });
+      }
+
+      // Verify current password
+      const isPasswordValid = await bcrypt.compare(currentPassword, user.passwordHash);
+      if (!isPasswordValid) {
+        return res.status(401).json({
+          success: false,
+          message: 'Incorrect current password',
+        });
+      }
+
+      // Hash new password
+      const hashedPassword = await bcrypt.hash(newPassword, 10);
+      await userService.updateUser(userId, { passwordHash: hashedPassword });
+
+      res.json({
+        success: true,
+        message: 'Password updated successfully',
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({
+          success: false,
+          message: 'Validation error',
+          errors: error.issues,
+        });
+      }
+      next(error);
+    }
+  }
+  async deleteAccount(req: Request, res: Response, next: NextFunction) {
+    try {
+      const userId = (req as any).user?.userId;
+      await userService.deactivateUser(userId);
+
+      res.json({
+        success: true,
+        message: 'Account deactivated successfully',
       });
     } catch (error) {
       next(error);

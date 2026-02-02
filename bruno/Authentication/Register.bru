@@ -11,14 +11,21 @@ post {
 }
 
 script:pre-request {
-  // Generate random email for testing
+  // Generate random data for testing
   const timestamp = Date.now();
-  bru.setEnvVar("testEmail", `test.user.${timestamp}@example.com`);
+  const testUser = `user_${timestamp}`;
+  bru.setEnvVar("testUsername", testUser);
+  bru.setEnvVar("testEmail", `${testUser}@example.com`);
+  bru.setEnvVar("testPhone", `+9198${timestamp.toString().slice(-8)}`);
 }
 
 body:json {
   {
-    "email": "{{testEmail}}"
+    "username": "{{testUsername}}",
+    "email": "{{testEmail}}",
+    "password": "securepassword123",
+    "phoneNo": "{{testPhone}}",
+    "vehicleType": "four_wheeler"
   }
 }
 
