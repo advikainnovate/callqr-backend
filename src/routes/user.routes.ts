@@ -9,23 +9,41 @@ import { Request, Response, NextFunction } from 'express';
 const router = Router();
 
 // Public routes with rate limiting and validation
-router.post('/register', 
+router.post('/register',
   authLimiter,
   validateRequest(registerUserSchema),
   userController.register
 );
 
-router.post('/login', 
+router.post('/login',
   authLimiter,
   validateRequest(loginUserSchema),
   userController.login
 );
 
-// Protected routes (temporarily disabled for testing)
-router.get('/profile', 
-  // (req: Request, res: Response, next: NextFunction) => 
-  //   authenticateToken(req as AuthenticatedRequest, res, next),
+// Protected routes
+router.get('/profile',
+  (req: Request, res: Response, next: NextFunction) =>
+    authenticateToken(req as AuthenticatedRequest, res, next),
   userController.getProfile
+);
+
+router.patch('/profile',
+  (req: Request, res: Response, next: NextFunction) =>
+    authenticateToken(req as AuthenticatedRequest, res, next),
+  userController.updateProfile
+);
+
+router.post('/change-password',
+  (req: Request, res: Response, next: NextFunction) =>
+    authenticateToken(req as AuthenticatedRequest, res, next),
+  userController.changePassword
+);
+
+router.delete('/profile',
+  (req: Request, res: Response, next: NextFunction) =>
+    authenticateToken(req as AuthenticatedRequest, res, next),
+  userController.deleteAccount
 );
 
 export default router;

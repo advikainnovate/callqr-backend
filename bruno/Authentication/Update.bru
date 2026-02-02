@@ -1,0 +1,32 @@
+meta {
+  name: "Update Profile"
+  type: http
+  seq: 4
+}
+
+patch {
+  url: {{baseUrl}}/api/users/profile
+  body: json
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{authToken}}
+}
+
+body:json {
+  {
+    "username": "johndoe_updated",
+    "phoneNo": "+19876543210",
+    "emergencyNo": "+1122334455",
+    "vehicleType": "two_wheeler"
+  }
+}
+
+tests {
+  test("Should update profile successfully", function() {
+    expect(res.status).to.equal(200);
+    expect(res.body.success).to.be.true;
+    expect(res.body.data.user.username).to.equal("johndoe_updated");
+  });
+}
