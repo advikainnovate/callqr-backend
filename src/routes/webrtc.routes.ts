@@ -14,17 +14,7 @@ router.get('/config', (req, res) => {
         ...(process.env.TURN_SERVER
           ? [
               {
-                urls: 'turn:global.turn.metered.ca:80?transport=udp',
-                username: process.env.TURN_USERNAME,
-                credential: process.env.TURN_PASSWORD,
-              },
-              {
-                urls: 'turn:global.turn.metered.ca:80?transport=tcp',
-                username: process.env.TURN_USERNAME,
-                credential: process.env.TURN_PASSWORD,
-              },
-              {
-                urls: 'turns:global.turn.metered.ca:443?transport=tcp',
+                urls: process.env.TURN_SERVER, // e.g. turn:123.45.67.89:3478?transport=udp
                 username: process.env.TURN_USERNAME,
                 credential: process.env.TURN_PASSWORD,
               },
