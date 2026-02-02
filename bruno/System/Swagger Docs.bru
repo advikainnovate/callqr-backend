@@ -1,0 +1,17 @@
+meta {
+  name: "Swagger Docs"
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api-docs
+  body: none
+  auth: none
+}
+
+tests {
+  test("Should load swagger docs", function() {
+    expect(res.status).to.equal(200);
+  });
+}

@@ -100,77 +100,86 @@ npm run build
 npm start
 ```
 
+### 5. Multi-Process Deployment (PM2)
+In production environments (like a PM2 cluster), Socket.IO **must** be configured to use `websocket` transport exclusively to avoid session ID mismatches across different worker processes.
+
+```env
+# Ensure this is set and client uses:
+transports: ['websocket']
+```
+
 ## 🧪 Testing
 
 ### Using Bruno Collection
-1. Open Bruno and import the collection from the `/bruno` directory
+1. Open [Bruno](https://usebruno.com) and import the collection from the `/bruno` directory
 2. Configure the environment with your server URL (`{{baseUrl}}`)
 3. Run tests in sequence to test the complete flow
 
 ### Complete Testing Flow
-1. **User Registration** → Create test user
-2. **User Login** → Get authentication token
-3. **Create QR Code** → Generate scannable QR code
-4. **Scan QR Code** → Get user profile (privacy-preserving)
-5. **Initiate Call** → Start WebRTC call signaling
-6. **WebRTC Config** → Get STUN/TURN servers
+1. **Register** → Create test user
+2. **Login** → Get authentication token
+3. **Create QR** → Generate scannable QR code
+4. **Scan QR** → Get privacy-preserving profile
+5. **Initiate Call** → Start WebRTC signaling
+6. **Get Config** → Fetch STUN/TURN servers
 
 ## 📱 API Endpoints
 
 ### Authentication
-- `POST /api/users/register` - Register new user
+- `POST /api/users/register` - Register new account
 - `POST /api/users/login` - User login
-- `GET /api/users/profile` - Get user profile
+- `GET /api/users/profile` - Get current session profile
 
 ### QR Code Management
-- `POST /api/qr-codes/create` - Create new QR code
-- `POST /api/qr-codes/scan` - Scan QR code and get user profile
-- `GET /api/qr-codes/my-codes` - Get user's QR codes
-- `PATCH /api/qr-codes/{qrCodeId}/revoke` - Revoke QR code
+- `POST /api/qr-codes/create` - Generate a new encrypted QR token
+- `POST /api/qr-codes/scan` - Map token to User ID (privacy-safe)
+- `GET /api/qr-codes/my-codes` - List all your active/revoked codes
+- `GET /api/qr-codes/image/{token}` - Get a scannable PNG image of a token
+- `PATCH /api/qr-codes/{qrCodeId}/revoke` - Disable a specific QR code
 
 ### Call Management
-- `POST /api/calls/initiate` - Initiate new call
-- `GET /api/calls/{callId}` - Get call details
-- `GET /api/calls/history` - Get call history
-- `GET /api/calls/active` - Get active calls
-- `PATCH /api/calls/{callId}/status` - Update call status
-- `PATCH /api/calls/{callId}/end` - End call
+- `POST /api/calls/initiate` - Start a call session
+- `GET /api/calls/{callId}` - View call status/logs
+- `GET /api/calls/history` - User's call log
+- `GET /api/calls/active` - Currently running calls
+- `PATCH /api/calls/{callId}/status` - Update session status
+- `PATCH /api/calls/{callId}/end` - Terminate call
 
 ### WebRTC Configuration
-- `GET /api/webrtc/config` - Get ICE server configuration
+- `GET /api/webrtc/config` - Fetches dynamic ICE (STUN/TURN) servers
 
 ### System
-- `GET /healthz` - Health check endpoint
-- `GET /api-docs` - Swagger API documentation
+- `GET /healthz` - Load balancer health check
+- `GET /api-docs` - Live Swagger documentation
 
 ## 🔌 WebRTC Integration
 
-### Get WebRTC Configuration
-```bash
-curl -X GET http://localhost:4000/api/webrtc/config
-```
+### Connection Strategy (Production)
+For maximum stability behind Nginx/Load Balancers:
+1. **Force WebSockets**: Skip polling to avoid 400/502 errors.
+2. **Path Matching**: If deployed on a subpath (e.g., `/callqr-backend/`), ensure the Socket.IO `path` matches exactly.
 
-Response:
-```json
-{
-  "success": true,
-  "data": {
-    "iceServers": [
-      { "urls": "stun:stun.l.google.com:19302" }
-    ]
-  }
-}
-```
-
-### Socket.IO Connection
+### Client Initialization
 ```javascript
-import io from 'socket.io-client';
-
-const socket = io('http://localhost:4000', {
-  auth: {
-    token: 'YOUR_JWT_TOKEN'
-  }
+const socket = io('https://api.yourdomain.com', {
+  path: '/callqr-backend/socket.io', // Match your deployment subpath
+  transports: ['websocket'],        // REQUIRED for stability
+  upgrade: false,                   // Prevent transport fallback
+  auth: { token: 'JWT_TOKEN' }
 });
+```
+
+### Nginx Configuration
+Ensure your Nginx proxy includes headers to allow WebSocket upgrades:
+```nginx
+location /callqr-backend/socket.io/ {
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_http_version 1.1;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header Host $host;
+    proxy_pass http://localhost:9001/callqr-backend/socket.io/;
+}
 ```
 
 ### WebRTC Events
