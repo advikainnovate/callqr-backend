@@ -95,19 +95,30 @@
         <!-- Connection Setup -->
         <div id="setup-panel" class="card">
             <h2>1. Connect to Server</h2>
-            <input type="text" id="server-url" placeholder="Enter Server URL (e.g. https://api.myapp.com)"
-                value="https://api.advikainnovate.cloud/callqr-backend/">
+            <input type="text" id="server-url" placeholder="Enter Server URL (e.g. http://localhost:4000)"
+                value="http://localhost:4000">
             <button onclick="connectServer()">Set Server</button>
+            <p style="font-size: 0.8rem; color: #94a3b8; margin-top: 0.5rem;">Default is set to localhost:4000</p>
         </div>
 
         <!-- Auth -->
         <div id="auth-panel" class="card hidden">
             <h2>2. Login / Register</h2>
+            <div id="register-fields">
+                <input type="text" id="reg-username" placeholder="Username (for registration)">
+                <input type="text" id="reg-phone" placeholder="Phone Number (e.g. +919876543210)">
+                <select id="reg-vehicle"
+                    style="width: 100%; padding: 10px; margin: 10px 0; background: #334155; border: 1px solid #475569; color: white; border-radius: 6px;">
+                    <option value="two_wheeler">Two Wheeler</option>
+                    <option value="four_wheeler">Four Wheeler</option>
+                    <option value="public_vehicle">Public Vehicle</option>
+                </select>
+            </div>
             <input type="email" id="email" placeholder="Email">
             <input type="password" id="password" placeholder="Password">
-            <div style="display: flex; gap: 10px; justify-content: center;">
-                <button onclick="register()">Register</button>
-                <button onclick="login()">Login</button>
+            <div style="display: flex; gap: 10px; justify-content: center; margin-top: 10px;">
+                <button onclick="register()">Register New User</button>
+                <button onclick="login()" style="background: #10b981;">Login</button>
             </div>
             <p id="auth-msg"></p>
         </div>
@@ -193,18 +204,36 @@
         async function register() {
             const email = document.getElementById('email').value;
             const password = document.getElementById('password').value;
+            const username = document.getElementById('reg-username').value;
+            const phoneNo = document.getElementById('reg-phone').value;
+            const vehicleType = document.getElementById('reg-vehicle').value;
+
+            if (!username || !phoneNo) {
+                alert('Username and Phone Number are required for registration');
+                return;
+            }
+
             try {
                 const res = await fetch(`${API_URL}/api/users/register`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email, password })
+                    body: JSON.stringify({
+                        email,
+                        password,
+                        username,
+                        phoneNo,
+                        vehicleType
+                    })
                 });
                 const data = await res.json();
                 if (data.success) {
                     document.getElementById('auth-msg').innerText = 'Registered! Please login.';
                     document.getElementById('auth-msg').className = 'success';
+                    // Clear registration specific fields
+                    document.getElementById('reg-username').value = '';
+                    document.getElementById('reg-phone').value = '';
                 } else {
-                    throw new Error(data.message);
+                    throw new Error(data.message || (data.errors ? data.errors[0].message : 'Registration failed'));
                 }
             } catch (e) {
                 document.getElementById('auth-msg').innerText = e.message;
@@ -330,15 +359,22 @@
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}`
-                }
+                },
+                body: JSON.stringify({}) // Send empty body to satisfy validator if needed
             });
             const data = await res.json();
             if (data.success) {
-                const token = data.data.qrCode.token;
+                const qrToken = data.data.qrCode.token;
+                const qrImage = data.data.qrCodeDataURL;
                 document.getElementById('qr-result').innerHTML = `
-                <p><strong>Your Token:</strong> ${token}</p>
-                <p style="font-size: 0.8em; color: gray;">Share this text with your friend to scan.</p>
+                <div style="background: white; padding: 10px; display: inline-block; border-radius: 8px; margin: 10px 0;">
+                    <img src="${qrImage}" alt="QR Code" style="width: 200px; height: 200px;">
+                </div>
+                <p><strong>Your Token:</strong> <code style="background: #334155; padding: 2px 5px; border-radius: 4px;">${qrToken}</code></p>
+                <p style="font-size: 0.8em; color: #94a3b8;">Share this token or show this QR to your friend.</p>
             `;
+            } else {
+                alert('Failed to create QR: ' + (data.message || 'Unknown error'));
             }
         }
 
@@ -450,7 +486,7 @@
                 console.error('Error Code:', event.errorCode);
                 console.error('Error Text:', event.errorText);
                 console.error('URL:', event.url);
-                
+
                 if (event.errorCode >= 700) {
                     alert(`TURN Server Error: ${event.errorText} (Check Credentials/Firewall)`);
                 }
@@ -487,7 +523,7 @@
                     let candidateType = '🏠 Local (Host)';
                     if (event.candidate.candidate.includes('typ srflx')) candidateType = '🌍 Public (STUN)';
                     if (event.candidate.candidate.includes('typ relay')) candidateType = '🔄 Relay (TURN)';
-                    
+
                     console.log(`🧊 Sending ICE candidate (${candidateType}) [Answerer]:`, event.candidate.candidate);
 
                     socket.emit('webrtc-signal', {
@@ -504,7 +540,7 @@
             };
 
             await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
-            
+
             // Process queued candidates now that remote description is set
             while (candidateQueue.length > 0) {
                 const c = candidateQueue.shift();
@@ -525,7 +561,7 @@
 
         async function handleAnswer(answer) {
             await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
-            
+
             // Process queued candidates now that remote description is set
             while (candidateQueue.length > 0) {
                 const c = candidateQueue.shift();
@@ -546,10 +582,10 @@
                         candidateQueue.push(candidate);
                     }
                 } else {
-                     // If PeerConnection doesn't exist yet, queue it? 
-                     // Usually handleOffer creates it immediately, but safer to queue if logic changes.
-                     console.log('⏳ queuing ICE candidate (no peer connection yet)');
-                     candidateQueue.push(candidate);
+                    // If PeerConnection doesn't exist yet, queue it? 
+                    // Usually handleOffer creates it immediately, but safer to queue if logic changes.
+                    console.log('⏳ queuing ICE candidate (no peer connection yet)');
+                    candidateQueue.push(candidate);
                 }
             } catch (e) {
                 console.error('Error adding ICE candidate', e);
