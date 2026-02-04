@@ -15,6 +15,24 @@ export class QRCodeService {
 
   async createQRCode(userId: string, expiresAt?: Date): Promise<QRCodeType> {
     try {
+      // Check if the user already has an active, non-revoked QR code
+      const [existingQRCode] = await db
+        .select()
+        .from(qrCodes)
+        .where(
+          and(
+            eq(qrCodes.userId, userId),
+            eq(qrCodes.isActive, true),
+            eq(qrCodes.isRevoked, false)
+          )
+        )
+        .limit(1);
+
+      if (existingQRCode) {
+        logger.info(`Returning existing active QR code for user: ${userId}`);
+        return existingQRCode;
+      }
+
       const token = this.generateSecureToken();
 
       const [qrCode] = await db

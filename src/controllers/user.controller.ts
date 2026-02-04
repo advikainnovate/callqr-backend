@@ -6,6 +6,7 @@ import { registerUserSchema, loginUserSchema, updateProfileSchema, changePasswor
 import { logger } from '../utils';
 import jwt from 'jsonwebtoken';
 import { appConfig } from '../config';
+import { qrCodeService } from '../services/qrCode.service';
 
 export class UserController {
   async register(req: Request, res: Response, next: NextFunction) {
@@ -46,6 +47,15 @@ export class UserController {
       );
 
       logger.info(`User registered successfully: ${user.id}`);
+
+      // Automatically create a permanent QR code for the new user
+      try {
+        await qrCodeService.createQRCode(user.id);
+        logger.info(`Automatic QR code created for new user: ${user.id}`);
+      } catch (qrError) {
+        logger.error(`Failed to auto-create QR code for user ${user.id}:`, qrError);
+        // We don't fail registration if QR creation fails, but we log it
+      }
 
       res.status(201).json({
         success: true,

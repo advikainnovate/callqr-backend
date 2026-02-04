@@ -132,8 +132,8 @@
                 style="display: flex; gap: 20px; justify-content: center; border-bottom: 1px solid #334155; padding-bottom: 20px; margin-bottom: 20px;">
                 <!-- Creator Flow -->
                 <div style="flex: 1;">
-                    <h3>Create Identity</h3>
-                    <button onclick="createQR()">Generate QR Code</button>
+                    <h3>My Identity</h3>
+                    <button onclick="createQR()">Show My QR Code</button>
                     <div id="qr-result" style="margin-top: 10px; word-break: break-all;"></div>
                 </div>
 
@@ -262,6 +262,9 @@
                     initSocket();
                     document.getElementById('auth-panel').classList.add('hidden');
                     document.getElementById('dashboard-panel').classList.remove('hidden');
+
+                    // Automatically show/fetch the user's permanent QR code
+                    createQR();
                 }
             } catch (e) {
                 document.getElementById('auth-msg').innerText = 'Login failed';
