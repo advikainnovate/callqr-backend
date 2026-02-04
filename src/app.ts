@@ -27,7 +27,10 @@ app.use((req, res, next) => {
 });
 
 // Core Middlewares
-app.use(helmet());
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+  crossOriginEmbedderPolicy: false,
+}));
 app.use(corsMiddleware);
 app.use(generalLimiter);
 app.use(bodyParserMiddleware);
