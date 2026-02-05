@@ -1,0 +1,32 @@
+meta {
+  name: "Create Report"
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/reports
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+body:json {
+  {
+    "type": "bug",
+    "subject": "App crashes on start",
+    "description": "The application terminates immediately after opening on iOS 17."
+  }
+}
+
+tests {
+  test("Should submit report successfully", function() {
+    expect(res.status).to.equal(201);
+    expect(res.body.success).to.be.true;
+    expect(res.body.data.report.type).to.equal("bug");
+    expect(res.body.data.report.status).to.equal("pending");
+  });
+}

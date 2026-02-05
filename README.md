@@ -11,6 +11,8 @@ A secure, privacy-focused calling system where users can initiate WebRTC calls b
 - **QR Code Management**: Create, scan, revoke QR codes with expiration
 - **Call Routing**: Automatic call setup through secure token mapping
 - **Real-time Communication**: Socket.IO for instant call signaling
+- **Subscription Tiers**: Managed daily call limits (Free, Gold, Platinum)
+- **Reporting System**: Submit and track bug reports or complaints
 
 ### Security Features
 - **Rate Limiting**: Prevent abuse with intelligent rate limiting
@@ -144,6 +146,11 @@ transports: ['websocket']
 - `GET /api/calls/active` - Currently running calls
 - `PATCH /api/calls/{callId}/status` - Update session status
 - `PATCH /api/calls/{callId}/end` - Terminate call
+- `GET /api/calls/usage` - Get daily call consumption and limits
+
+### Reports & Feedback
+- `POST /api/reports` - Submit a bug report or complaint
+- `GET /api/reports/my-reports` - List reports submitted by the user
 
 ### WebRTC Configuration
 - `GET /api/webrtc/config` - Fetches dynamic ICE (STUN/TURN) servers
@@ -213,6 +220,7 @@ socket.emit('end-call', { callId: 'CALL_ID' });
 - `id` (UUID) - Primary key
 - `email` (TEXT) - Unique email address
 - `isActive` (BOOLEAN) - Account status
+- `subscriptionTier` (TEXT) - User tier (free, gold, platinum)
 - `isDeleted` (BOOLEAN) - Soft delete flag
 - `createdAt` (TIMESTAMP) - Registration time
 - `updatedAt` (TIMESTAMP) - Last update time
@@ -241,6 +249,15 @@ socket.emit('end-call', { callId: 'CALL_ID' });
 - `endedAt` (TIMESTAMP) - Call end time
 - `createdAt` (TIMESTAMP) - Creation time
 - `updatedAt` (TIMESTAMP) - Last update time
+
+### Reports Table
+- `id` (UUID) - Primary key
+- `userId` (UUID) - Foreign key to users
+- `type` (VARCHAR) - bug, complaint, feature_request, other
+- `subject` (TEXT) - Short summary
+- `description` (TEXT) - Full details
+- `status` (VARCHAR) - pending, in_progress, resolved, closed
+- `createdAt` (TIMESTAMP) - Submission time
 
 ## 🔒 Security Features
 

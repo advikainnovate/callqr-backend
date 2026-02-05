@@ -186,7 +186,6 @@ export class CallService {
       throw error;
     }
   }
-
   async getCallHistory(userId: string, limit: number = 100): Promise<{
     made: Call[];
     received: Call[];
@@ -200,6 +199,45 @@ export class CallService {
       return { made, received };
     } catch (error) {
       logger.error('Error fetching call history:', error);
+      throw error;
+    }
+  }
+
+  async getCallUsage(userId: string): Promise<{
+    used: number;
+    limit: number;
+    tier: string;
+    remaining: number;
+  }> {
+    try {
+      const user = await userService.getUserById(userId);
+      if (!user) throw new Error('User not found');
+
+      const startOfDay = new Date();
+      startOfDay.setHours(0, 0, 0, 0);
+
+      const tier = (user.subscriptionTier as keyof typeof DAILY_CALL_LIMITS) || SUBSCRIPTION_TIERS.FREE;
+      const limit = DAILY_CALL_LIMITS[tier];
+
+      const [result] = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(calls)
+        .where(
+          and(
+            eq(calls.receiverId, userId),
+            gte(calls.createdAt, startOfDay)
+          )
+        );
+
+      const used = Number(result.count);
+      return {
+        used,
+        limit,
+        tier,
+        remaining: Math.max(0, limit - used),
+      };
+    } catch (error) {
+      logger.error('Error fetching call usage:', error);
       throw error;
     }
   }
