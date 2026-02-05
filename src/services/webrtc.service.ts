@@ -29,6 +29,7 @@ export class WebRTCService {
 
   constructor(server: HTTPServer) {
     this.io = new SocketIOServer(server, {
+      path: '/callqr-backend/socket.io',
       cors: {
         origin: true, // Echoes back the request origin (perfect for credentials)
         methods: ['GET', 'POST'],

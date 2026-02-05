@@ -8,6 +8,20 @@
       "when": 1769716289017,
       "tag": "0000_dashing_demogoblin",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1770285310034,
+      "tag": "0001_red_wolf_cub",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1770286170164,
+      "tag": "0002_glorious_warbird",
+      "breakpoints": true
     }
   ]
 }

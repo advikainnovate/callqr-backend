@@ -1,0 +1,27 @@
+meta {
+  name: "Get Call Usage"
+  type: http
+  seq: 12
+}
+
+get {
+  url: {{baseUrl}}/api/calls/usage
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+tests {
+  test("Should get call usage successfully", function() {
+    expect(res.status).to.equal(200);
+    expect(res.body.success).to.be.true;
+    expect(res.body.data.usage).to.be.an('object');
+    expect(res.body.data.usage.used).to.be.a('number');
+    expect(res.body.data.usage.limit).to.be.a('number');
+    expect(res.body.data.usage.tier).to.be.a('string');
+    expect(res.body.data.usage.remaining).to.be.a('number');
+  });
+}

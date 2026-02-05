@@ -17,7 +17,7 @@ export class CallController {
       }
 
       const validatedData = initiateCallSchema.parse(req.body);
-      
+
       const call = await callService.initiateCall(
         userId,
         validatedData.qrToken,
@@ -89,7 +89,7 @@ export class CallController {
       }
 
       const validatedData = updateCallStatusSchema.parse(req.body);
-      
+
       // Check if user is part of this call
       const existingCall = await callService.getCallById(callId);
       if (!existingCall) {
@@ -305,6 +305,28 @@ export class CallController {
             createdAt: call.createdAt,
             updatedAt: call.updatedAt,
           },
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+  async getCallUsage(req: Request, res: Response, next: NextFunction) {
+    try {
+      const userId = (req as AuthenticatedRequest).user?.userId;
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          message: 'Unauthorized',
+        });
+      }
+
+      const usage = await callService.getCallUsage(userId);
+
+      res.json({
+        success: true,
+        data: {
+          usage,
         },
       });
     } catch (error) {
