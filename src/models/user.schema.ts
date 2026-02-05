@@ -10,6 +10,7 @@ export const users = pgTable('users', {
   vehicleType: text('vehicle_type', { enum: ['two_wheeler', 'four_wheeler', 'public_vehicle'] }),
   isDeleted: boolean('is_deleted').default(false),
   isActive: boolean('is_active').default(true),
+  subscriptionTier: text('subscription_tier', { enum: ['free', 'gold', 'platinum'] }).default('free'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });

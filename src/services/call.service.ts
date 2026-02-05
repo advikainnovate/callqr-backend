@@ -1,10 +1,11 @@
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, desc, sql, gte } from 'drizzle-orm';
 import { db } from '../db';
-import { calls, type NewCall, type Call } from '../models';
+import { calls, type NewCall, type Call, type User } from '../models';
 import { v4 as uuidv4 } from 'uuid';
 import { logger } from '../utils';
 import { qrCodeService } from './qrCode.service';
 import { userService } from './user.service';
+import { SUBSCRIPTION_TIERS, DAILY_CALL_LIMITS } from '../constants/subscriptions';
 
 export class CallService {
   async initiateCall(
@@ -24,6 +25,9 @@ export class CallService {
       if (!receiver || !receiver.isActive) {
         throw new Error('QR code owner not found or inactive');
       }
+
+      // Check daily call limit for the receiver
+      await this.checkDailyLimit(receiver);
 
       // Check if caller is trying to call themselves
       if (callerId === qrCode.userId) {
@@ -197,6 +201,37 @@ export class CallService {
     } catch (error) {
       logger.error('Error fetching call history:', error);
       throw error;
+    }
+  }
+
+  private async checkDailyLimit(receiver: User): Promise<void> {
+    try {
+      const startOfDay = new Date();
+      startOfDay.setHours(0, 0, 0, 0);
+
+      const tier = (receiver.subscriptionTier as keyof typeof DAILY_CALL_LIMITS) || SUBSCRIPTION_TIERS.FREE;
+      const limit = DAILY_CALL_LIMITS[tier];
+
+      const [result] = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(calls)
+        .where(
+          and(
+            eq(calls.receiverId, receiver.id),
+            gte(calls.createdAt, startOfDay)
+          )
+        );
+
+      if (Number(result.count) >= limit) {
+        const error = new Error(`Receiver has reached their daily ${tier} tier limit of ${limit} calls.`);
+        (error as any).statusCode = 429;
+        throw error;
+      }
+    } catch (error) {
+      if ((error as any).statusCode === 429) throw error;
+      logger.error('Error checking daily call limit:', error);
+      // In case of DB error, we might want to fail safe or fail closed. 
+      // For now, let's let the call through if counting fails, but log it.
     }
   }
 }

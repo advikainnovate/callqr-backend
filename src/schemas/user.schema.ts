@@ -24,6 +24,7 @@ export const updateProfileSchema = z.object({
   phoneNo: z.string().regex(/^\+?[\d\s-]{10,}$/).optional(),
   emergencyNo: z.string().optional(),
   vehicleType: z.enum(['two_wheeler', 'four_wheeler', 'public_vehicle']).optional(),
+  subscriptionTier: z.enum(['free', 'gold', 'platinum']).optional(),
 });
 
 export const changePasswordSchema = z.object({
