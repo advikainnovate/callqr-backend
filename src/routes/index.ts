@@ -4,6 +4,7 @@ import userRoutes from './user.routes';
 import qrCodeRoutes from './qrCode.routes';
 import callRoutes from './call.routes';
 import webrtcRoutes from './webrtc.routes';
+import reportRoutes from './report.routes';
 
 const router = Router();
 
@@ -18,5 +19,8 @@ router.use('/calls', callRoutes);
 
 // WebRTC routes
 router.use('/webrtc', webrtcRoutes);
+
+// Report routes
+router.use('/reports', reportRoutes);
 
 export default router;
