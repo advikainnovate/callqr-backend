@@ -29,7 +29,7 @@ export class WebRTCService {
 
   constructor(server: HTTPServer) {
     this.io = new SocketIOServer(server, {
-      path: '/callqr-backend/socket.io',
+      path: '/socket.io',
       perMessageDeflate: false, // Fix for Nginx RSV1 error
       cors: {
         origin: true, // Echoes back the request origin (perfect for credentials)
