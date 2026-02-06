@@ -5,7 +5,10 @@ import { v4 as uuidv4 } from 'uuid';
 import { logger } from '../utils';
 import { qrCodeService } from './qrCode.service';
 import { userService } from './user.service';
-import { SUBSCRIPTION_TIERS, DAILY_CALL_LIMITS } from '../constants/subscriptions';
+import {
+  SUBSCRIPTION_TIERS,
+  DAILY_CALL_LIMITS,
+} from '../constants/subscriptions';
 
 export class CallService {
   async initiateCall(
@@ -51,7 +54,9 @@ export class CallService {
       // Update QR code scan count
       await qrCodeService.updateScanCount(qrToken);
 
-      logger.info(`Call initiated: ${call.id} from ${callerId} to ${qrCode.userId}`);
+      logger.info(
+        `Call initiated: ${call.id} from ${callerId} to ${qrCode.userId}`
+      );
       return call;
     } catch (error) {
       logger.error('Error initiating call:', error);
@@ -118,9 +123,7 @@ export class CallService {
       const userCalls = await db
         .select()
         .from(calls)
-        .where(and(
-          eq(calls.callerId, userId)
-        ))
+        .where(and(eq(calls.callerId, userId)))
         .orderBy(desc(calls.createdAt))
         .limit(limit);
 
@@ -136,9 +139,7 @@ export class CallService {
       const receivedCalls = await db
         .select()
         .from(calls)
-        .where(and(
-          eq(calls.receiverId, userId)
-        ))
+        .where(and(eq(calls.receiverId, userId)))
         .orderBy(desc(calls.createdAt))
         .limit(limit);
 
@@ -154,10 +155,7 @@ export class CallService {
       const activeCalls = await db
         .select()
         .from(calls)
-        .where(and(
-          eq(calls.callerId, userId),
-          eq(calls.status, 'connected')
-        ))
+        .where(and(eq(calls.callerId, userId), eq(calls.status, 'connected')))
         .orderBy(desc(calls.createdAt));
 
       return activeCalls;
@@ -186,14 +184,17 @@ export class CallService {
       throw error;
     }
   }
-  async getCallHistory(userId: string, limit: number = 100): Promise<{
+  async getCallHistory(
+    userId: string,
+    limit: number = 100
+  ): Promise<{
     made: Call[];
     received: Call[];
   }> {
     try {
       const [made, received] = await Promise.all([
         this.getUserCalls(userId, limit),
-        this.getReceivedCalls(userId, limit)
+        this.getReceivedCalls(userId, limit),
       ]);
 
       return { made, received };
@@ -216,17 +217,16 @@ export class CallService {
       const startOfDay = new Date();
       startOfDay.setHours(0, 0, 0, 0);
 
-      const tier = (user.subscriptionTier as keyof typeof DAILY_CALL_LIMITS) || SUBSCRIPTION_TIERS.FREE;
+      const tier =
+        (user.subscriptionTier as keyof typeof DAILY_CALL_LIMITS) ||
+        SUBSCRIPTION_TIERS.FREE;
       const limit = DAILY_CALL_LIMITS[tier];
 
       const [result] = await db
         .select({ count: sql<number>`count(*)` })
         .from(calls)
         .where(
-          and(
-            eq(calls.receiverId, userId),
-            gte(calls.createdAt, startOfDay)
-          )
+          and(eq(calls.receiverId, userId), gte(calls.createdAt, startOfDay))
         );
 
       const used = Number(result.count);
@@ -247,7 +247,9 @@ export class CallService {
       const startOfDay = new Date();
       startOfDay.setHours(0, 0, 0, 0);
 
-      const tier = (receiver.subscriptionTier as keyof typeof DAILY_CALL_LIMITS) || SUBSCRIPTION_TIERS.FREE;
+      const tier =
+        (receiver.subscriptionTier as keyof typeof DAILY_CALL_LIMITS) ||
+        SUBSCRIPTION_TIERS.FREE;
       const limit = DAILY_CALL_LIMITS[tier];
 
       const [result] = await db
@@ -260,15 +262,15 @@ export class CallService {
           )
         );
 
-      if (Number(result.count) >= limit) {
-        const error = new Error(`Receiver has reached their daily ${tier} tier limit of ${limit} calls.`);
-        (error as any).statusCode = 429;
-        throw error;
-      }
+      // if (Number(result.count) >= limit) {
+      //   const error = new Error(`Receiver has reached their daily ${tier} tier limit of ${limit} calls.`);
+      //   (error as any).statusCode = 429;
+      //   throw error;
+      // }
     } catch (error) {
       if ((error as any).statusCode === 429) throw error;
       logger.error('Error checking daily call limit:', error);
-      // In case of DB error, we might want to fail safe or fail closed. 
+      // In case of DB error, we might want to fail safe or fail closed.
       // For now, let's let the call through if counting fails, but log it.
     }
   }
