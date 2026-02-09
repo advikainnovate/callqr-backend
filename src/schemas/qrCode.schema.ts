@@ -10,3 +10,7 @@ export const scanQRCodeSchema = z.object({
 
 export type CreateQRCodeInput = z.infer<typeof createQRCodeSchema>;
 export type ScanQRCodeInput = z.infer<typeof scanQRCodeSchema>;
+
+export const qrCodeIdSchema = z.object({
+  qrCodeId: z.string().uuid('Invalid QR code ID format'),
+});

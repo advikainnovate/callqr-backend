@@ -86,10 +86,7 @@ export const uuidSchema = z.object({
   id: z.string().uuid('Invalid ID format'),
 });
 
-export const qrCodeIdSchema = z.object({
-  qrCodeId: z.string().uuid('Invalid QR code ID format'),
-});
-
+// Token schema for QR tokens
 export const tokenSchema = z.object({
   token: z.string().min(1, 'Token is required').max(255, 'Token too long'),
 });

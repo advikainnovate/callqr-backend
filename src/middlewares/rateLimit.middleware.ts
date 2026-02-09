@@ -10,8 +10,8 @@ export const apiLimiter = (req: Request, res: any, next: any) => next();
 
 // Rate limiter for authentication endpoints
 export const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // Limit each IP to 5 auth attempts per 15 minutes
+  windowMs: 1 * 60 * 1000, // 1 minute
+  limit: 2000, // Limit each IP to 2000 auth attempts per minute
   message: {
     success: false,
     message: 'Too many authentication attempts, please try again later.',
