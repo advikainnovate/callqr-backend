@@ -1,337 +1,86 @@
-import { Request, Response, NextFunction } from 'express';
-import { z } from 'zod';
+import { Request, Response } from 'express';
 import { callService } from '../services/call.service';
-import { initiateCallSchema, updateCallStatusSchema } from '../schemas/call.schema';
-import { logger } from '../utils';
+import {
+  UnauthorizedError,
+  sendSuccessResponse
+} from '../utils';
 import { AuthenticatedRequest } from '../middlewares/auth.middleware';
 
 export class CallController {
-  async initiateCall(req: Request, res: Response, next: NextFunction) {
-    try {
-      const userId = (req as AuthenticatedRequest).user?.userId;
-      if (!userId) {
-        return res.status(401).json({
-          success: false,
-          message: 'Unauthorized',
-        });
-      }
+  async initiateCall(req: Request, res: Response) {
+    const userId = (req as AuthenticatedRequest).user?.userId;
+    if (!userId) throw new UnauthorizedError();
 
-      const validatedData = initiateCallSchema.parse(req.body);
+    const { qrToken, callType } = req.body;
+    const call = await callService.initiateCall(userId, qrToken, callType);
 
-      const call = await callService.initiateCall(
-        userId,
-        validatedData.qrToken,
-        validatedData.callType
-      );
-
-      logger.info(`Call initiated by user: ${userId}`);
-
-      res.status(201).json({
-        success: true,
-        message: 'Call initiated successfully',
-        data: {
-          call: {
-            id: call.id,
-            callerId: call.callerId,
-            receiverId: call.receiverId,
-            qrCodeId: call.qrCodeId,
-            status: call.status,
-            callType: call.callType,
-            startedAt: call.startedAt,
-            createdAt: call.createdAt,
-          },
-        },
-      });
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({
-          success: false,
-          message: 'Validation error',
-          errors: error.issues,
-        });
-      }
-
-      if (error instanceof Error) {
-        if (error.message === 'Invalid or expired QR code') {
-          return res.status(404).json({
-            success: false,
-            message: error.message,
-          });
-        }
-        if (error.message === 'QR code owner not found or inactive') {
-          return res.status(404).json({
-            success: false,
-            message: error.message,
-          });
-        }
-        if (error.message === 'Cannot call yourself') {
-          return res.status(400).json({
-            success: false,
-            message: error.message,
-          });
-        }
-      }
-
-      next(error);
-    }
+    sendSuccessResponse(res, 201, 'Call initiated successfully', { call });
   }
 
-  async updateCallStatus(req: Request, res: Response, next: NextFunction) {
-    try {
-      const userId = (req as AuthenticatedRequest).user?.userId;
-      const { callId } = req.params;
+  async updateCallStatus(req: Request, res: Response) {
+    const userId = (req as AuthenticatedRequest).user?.userId;
+    if (!userId) throw new UnauthorizedError();
 
-      if (!userId) {
-        return res.status(401).json({
-          success: false,
-          message: 'Unauthorized',
-        });
-      }
+    const { callId } = req.params;
+    const { status, duration } = req.body;
 
-      const validatedData = updateCallStatusSchema.parse(req.body);
+    const call = await callService.updateCallStatus(callId, userId, status, duration);
 
-      // Check if user is part of this call
-      const existingCall = await callService.getCallById(callId);
-      if (!existingCall) {
-        return res.status(404).json({
-          success: false,
-          message: 'Call not found',
-        });
-      }
-
-      if (existingCall.callerId !== userId && existingCall.receiverId !== userId) {
-        return res.status(403).json({
-          success: false,
-          message: 'You are not authorized to update this call',
-        });
-      }
-
-      const call = await callService.updateCallStatus(
-        callId,
-        validatedData.status,
-        validatedData.duration
-      );
-
-      if (!call) {
-        return res.status(404).json({
-          success: false,
-          message: 'Call not found',
-        });
-      }
-
-      logger.info(`Call status updated: ${callId} to ${validatedData.status}`);
-
-      res.json({
-        success: true,
-        message: 'Call status updated successfully',
-        data: {
-          call: {
-            id: call.id,
-            status: call.status,
-            duration: call.duration,
-            startedAt: call.startedAt,
-            endedAt: call.endedAt,
-            updatedAt: call.updatedAt,
-          },
-        },
-      });
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({
-          success: false,
-          message: 'Validation error',
-          errors: error.issues,
-        });
-      }
-      next(error);
-    }
+    sendSuccessResponse(res, 200, 'Call status updated successfully', { call });
   }
 
-  async getCallHistory(req: Request, res: Response, next: NextFunction) {
-    try {
-      const userId = (req as AuthenticatedRequest).user?.userId;
-      if (!userId) {
-        return res.status(401).json({
-          success: false,
-          message: 'Unauthorized',
-        });
-      }
+  async getCallHistory(req: Request, res: Response) {
+    const userId = (req as AuthenticatedRequest).user?.userId;
+    if (!userId) throw new UnauthorizedError();
 
-      const limit = parseInt(req.query.limit as string) || 50;
-      const callHistory = await callService.getCallHistory(userId, Math.min(limit, 100));
+    const limit = parseInt(req.query.limit as string) || 50;
+    const callHistory = await callService.getCallHistory(userId, Math.min(limit, 100));
 
-      res.json({
-        success: true,
-        data: {
-          calls: {
-            made: callHistory.made.map(call => ({
-              id: call.id,
-              receiverId: call.receiverId,
-              status: call.status,
-              callType: call.callType,
-              duration: call.duration,
-              startedAt: call.startedAt,
-              endedAt: call.endedAt,
-              createdAt: call.createdAt,
-            })),
-            received: callHistory.received.map(call => ({
-              id: call.id,
-              callerId: call.callerId,
-              status: call.status,
-              callType: call.callType,
-              duration: call.duration,
-              startedAt: call.startedAt,
-              endedAt: call.endedAt,
-              createdAt: call.createdAt,
-            })),
-          },
-        },
-      });
-    } catch (error) {
-      next(error);
-    }
+    sendSuccessResponse(res, 200, undefined, { calls: callHistory });
   }
 
-  async getActiveCalls(req: Request, res: Response, next: NextFunction) {
-    try {
-      const userId = (req as AuthenticatedRequest).user?.userId;
-      if (!userId) {
-        return res.status(401).json({
-          success: false,
-          message: 'Unauthorized',
-        });
-      }
+  async getActiveCalls(req: Request, res: Response) {
+    const userId = (req as AuthenticatedRequest).user?.userId;
+    if (!userId) throw new UnauthorizedError();
 
-      const activeCalls = await callService.getActiveCalls(userId);
+    const activeCalls = await callService.getActiveCalls(userId);
 
-      res.json({
-        success: true,
-        data: {
-          activeCalls: activeCalls.map(call => ({
-            id: call.id,
-            receiverId: call.receiverId,
-            callType: call.callType,
-            startedAt: call.startedAt,
-            createdAt: call.createdAt,
-          })),
-        },
-      });
-    } catch (error) {
-      next(error);
-    }
+    sendSuccessResponse(res, 200, undefined, { activeCalls });
   }
 
-  async endCall(req: Request, res: Response, next: NextFunction) {
-    try {
-      const userId = (req as AuthenticatedRequest).user?.userId;
-      const { callId } = req.params;
+  async endCall(req: Request, res: Response) {
+    const userId = (req as AuthenticatedRequest).user?.userId;
+    if (!userId) throw new UnauthorizedError();
 
-      if (!userId) {
-        return res.status(401).json({
-          success: false,
-          message: 'Unauthorized',
-        });
-      }
+    const { callId } = req.params;
+    await callService.endCall(callId, userId);
 
-      const success = await callService.endCall(callId, userId);
-
-      if (!success) {
-        return res.status(404).json({
-          success: false,
-          message: 'Call not found or you are not authorized to end this call',
-        });
-      }
-
-      logger.info(`Call ended: ${callId} by user: ${userId}`);
-
-      res.json({
-        success: true,
-        message: 'Call ended successfully',
-      });
-    } catch (error) {
-      if (error instanceof Error) {
-        if (error.message === 'User is not part of this call') {
-          return res.status(403).json({
-            success: false,
-            message: error.message,
-          });
-        }
-      }
-      next(error);
-    }
+    sendSuccessResponse(res, 200, 'Call ended successfully');
   }
 
-  async getCallDetails(req: Request, res: Response, next: NextFunction) {
-    try {
-      const userId = (req as AuthenticatedRequest).user?.userId;
-      const { callId } = req.params;
+  async getCallDetails(req: Request, res: Response) {
+    const userId = (req as AuthenticatedRequest).user?.userId;
+    if (!userId) throw new UnauthorizedError();
 
-      if (!userId) {
-        return res.status(401).json({
-          success: false,
-          message: 'Unauthorized',
-        });
-      }
+    const { callId } = req.params;
+    const call = await callService.getCallById(callId);
 
-      const call = await callService.getCallById(callId);
-      if (!call) {
-        return res.status(404).json({
-          success: false,
-          message: 'Call not found',
-        });
-      }
-
-      // Check if user is part of this call
-      if (call.callerId !== userId && call.receiverId !== userId) {
-        return res.status(403).json({
-          success: false,
-          message: 'You are not authorized to view this call',
-        });
-      }
-
-      res.json({
-        success: true,
-        data: {
-          call: {
-            id: call.id,
-            callerId: call.callerId,
-            receiverId: call.receiverId,
-            qrCodeId: call.qrCodeId,
-            status: call.status,
-            callType: call.callType,
-            duration: call.duration,
-            startedAt: call.startedAt,
-            endedAt: call.endedAt,
-            createdAt: call.createdAt,
-            updatedAt: call.updatedAt,
-          },
-        },
-      });
-    } catch (error) {
-      next(error);
+    // Authorization check (redundant but safe if getCallById doesn't check)
+    if (call.callerId !== userId && call.receiverId !== userId) {
+      const { ForbiddenError } = await import('../utils');
+      throw new ForbiddenError('You are not authorized to view this call');
     }
+
+    sendSuccessResponse(res, 200, undefined, { call });
   }
-  async getCallUsage(req: Request, res: Response, next: NextFunction) {
-    try {
-      const userId = (req as AuthenticatedRequest).user?.userId;
-      if (!userId) {
-        return res.status(401).json({
-          success: false,
-          message: 'Unauthorized',
-        });
-      }
 
-      const usage = await callService.getCallUsage(userId);
+  async getCallUsage(req: Request, res: Response) {
+    const userId = (req as AuthenticatedRequest).user?.userId;
+    if (!userId) throw new UnauthorizedError();
 
-      res.json({
-        success: true,
-        data: {
-          usage,
-        },
-      });
-    } catch (error) {
-      next(error);
-    }
+    const usage = await callService.getCallUsage(userId);
+
+    sendSuccessResponse(res, 200, undefined, { usage });
   }
 }
 

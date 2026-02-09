@@ -2,42 +2,41 @@ import { Router } from 'express';
 import { qrCodeController } from '../controllers/qrCode.controller';
 import { authenticateToken, AuthenticatedRequest } from '../middlewares/auth.middleware';
 import { validateRequest, validateParams } from '../middlewares/validation.middleware';
-import { qrScanLimiter, qrCreateLimiter } from '../middlewares/rateLimit.middleware';
-import { scanQRCodeSchema, createQRCodeSchema } from '../schemas/qrCode.schema';
-import { qrCodeIdSchema } from '../middlewares/validation.middleware';
+import { scanQRCodeSchema, createQRCodeSchema, qrCodeIdSchema } from '../schemas/qrCode.schema';
 import { Request, Response, NextFunction } from 'express';
+import { asyncHandler } from '../utils';
 
 const router = Router();
 
 // Public routes with rate limiting and validation
-router.post('/scan', 
+router.post('/scan',
   // qrScanLimiter, // Disabled for testing
   validateRequest(scanQRCodeSchema),
-  qrCodeController.scanQRCode
+  asyncHandler(qrCodeController.scanQRCode)
 );
 
-router.get('/image/:token', qrCodeController.getQRCodeImage);
+router.get('/image/:token', asyncHandler(qrCodeController.getQRCodeImage));
 
 // Protected routes (temporarily disabled for testing)
-router.post('/create', 
-  (req: Request, res: Response, next: NextFunction) => 
+router.post('/create',
+  (req: Request, res: Response, next: NextFunction) =>
     authenticateToken(req as AuthenticatedRequest, res, next),
   // qrCreateLimiter, // Disabled for testing
   validateRequest(createQRCodeSchema),
-  qrCodeController.createQRCode
+  asyncHandler(qrCodeController.createQRCode)
 );
 
-router.get('/my-codes', 
-  (req: Request, res: Response, next: NextFunction) => 
+router.get('/my-codes',
+  (req: Request, res: Response, next: NextFunction) =>
     authenticateToken(req as AuthenticatedRequest, res, next),
-  qrCodeController.getUserQRCodes
+  asyncHandler(qrCodeController.getUserQRCodes)
 );
 
-router.patch('/:qrCodeId/revoke', 
-  (req: Request, res: Response, next: NextFunction) => 
+router.patch('/:qrCodeId/revoke',
+  (req: Request, res: Response, next: NextFunction) =>
     authenticateToken(req as AuthenticatedRequest, res, next),
   validateParams(qrCodeIdSchema),
-  qrCodeController.revokeQRCode
+  asyncHandler(qrCodeController.revokeQRCode)
 );
 
 export default router;

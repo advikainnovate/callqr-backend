@@ -45,12 +45,12 @@ export class WebRTCService {
         { urls: process.env.STUN_SERVER || 'stun:stun.l.google.com:19302' },
         ...(process.env.TURN_SERVER
           ? [
-              {
-                urls: process.env.TURN_SERVER,
-                username: process.env.TURN_USERNAME,
-                credential: process.env.TURN_PASSWORD,
-              },
-            ]
+            {
+              urls: process.env.TURN_SERVER,
+              username: process.env.TURN_USERNAME,
+              credential: process.env.TURN_PASSWORD,
+            },
+          ]
           : []),
       ],
     };
@@ -197,7 +197,7 @@ export class WebRTCService {
         });
 
         // Update call status
-        await callService.updateCallStatus(callId, 'initiated');
+        await callService.updateCallStatus(callId, socket.userId!, 'initiated');
       } else {
         socket.emit('error', { message: 'Receiver is not online' });
       }
@@ -222,7 +222,7 @@ export class WebRTCService {
       }
 
       // Update call status
-      await callService.updateCallStatus(callId, 'connected');
+      await callService.updateCallStatus(callId, socket.userId!, 'connected');
 
       // Notify caller
       const callerSocketId = this.connectedUsers.get(call.callerId);
@@ -256,7 +256,7 @@ export class WebRTCService {
       }
 
       // Update call status
-      await callService.updateCallStatus(callId, 'failed');
+      await callService.updateCallStatus(callId, socket.userId!, 'failed');
 
       // Notify caller
       const callerSocketId = this.connectedUsers.get(call.callerId);
@@ -280,8 +280,8 @@ export class WebRTCService {
       const { callId } = data;
 
       // End the call
-      const success = await callService.endCall(callId, socket.userId!);
-      if (!success) {
+      const updatedCall = await callService.endCall(callId, socket.userId!);
+      if (!updatedCall) {
         socket.emit('error', { message: 'Failed to end call' });
         return;
       }

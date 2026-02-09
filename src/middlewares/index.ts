@@ -4,3 +4,6 @@ export * from './cors';
 export * from './logging';
 export * from './errorHandler';
 export * from './sanitizer';
+export * from './validation.middleware';
+export * from './auth.middleware';
+export * from './rateLimit.middleware';

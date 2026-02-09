@@ -1,50 +1,25 @@
-import { Request, Response, NextFunction } from 'express';
-import { z } from 'zod';
+import { Request, Response } from 'express';
 import { reportService } from '../services/report.service';
-import { createReportSchema } from '../schemas/report.schema';
-import { logger } from '../utils';
+import { sendSuccessResponse, UnauthorizedError } from '../utils';
+import { AuthenticatedRequest } from '../middlewares/auth.middleware';
 
 export class ReportController {
-    async createReport(req: Request, res: Response, next: NextFunction) {
-        try {
-            const userId = (req as any).user?.userId;
-            const validatedData = createReportSchema.parse(req.body);
+    async createReport(req: Request, res: Response) {
+        const userId = (req as AuthenticatedRequest).user?.userId;
+        if (!userId) throw new UnauthorizedError();
 
-            const report = await reportService.createReport(userId, validatedData);
+        const report = await reportService.createReport(userId, req.body);
 
-            res.status(201).json({
-                success: true,
-                message: 'Report submitted successfully',
-                data: {
-                    report,
-                },
-            });
-        } catch (error) {
-            if (error instanceof z.ZodError) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'Validation error',
-                    errors: error.issues,
-                });
-            }
-            next(error);
-        }
+        sendSuccessResponse(res, 201, 'Report submitted successfully', { report });
     }
 
-    async getMyReports(req: Request, res: Response, next: NextFunction) {
-        try {
-            const userId = (req as any).user?.userId;
-            const reports = await reportService.getUserReports(userId);
+    async getMyReports(req: Request, res: Response) {
+        const userId = (req as AuthenticatedRequest).user?.userId;
+        if (!userId) throw new UnauthorizedError();
 
-            res.json({
-                success: true,
-                data: {
-                    reports,
-                },
-            });
-        } catch (error) {
-            next(error);
-        }
+        const reports = await reportService.getUserReports(userId);
+
+        sendSuccessResponse(res, 200, undefined, { reports });
     }
 }
 

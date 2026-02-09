@@ -1,52 +1,24 @@
 import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
-import { logger } from '../utils';
+import { BadRequestError } from '../utils';
 
 export const validateRequest = (schema: z.ZodSchema) => {
   return (req: Request, res: Response, next: NextFunction) => {
     try {
-      if (req.body === undefined) {
-        return res.status(400).json({
-          success: false,
-          message: 'Validation error',
-          errors: [
-            {
-              field: '',
-              message:
-                'Request body is required (or could not be parsed). Ensure you send JSON with Content-Type: application/json.',
-              code: 'invalid_type',
-            },
-          ],
-        });
+      if (!req.body || Object.keys(req.body).length === 0) {
+        // Some routes might allow empty body, but Zod schema will catch it if required.
+        // But if it's strictly undefined/null, we might want to warn.
       }
 
       // Validate request body
       const validatedData = schema.parse(req.body);
-      
+
       // Replace request body with validated data
       req.body = validatedData;
-      
+
       next();
     } catch (error) {
-      if (error instanceof z.ZodError) {
-        logger.warn('Validation error:', error.issues);
-        
-        return res.status(400).json({
-          success: false,
-          message: 'Validation error',
-          errors: error.issues.map(issue => ({
-            field: issue.path.join('.'),
-            message: issue.message,
-            code: issue.code,
-          })),
-        });
-      }
-      
-      logger.error('Unexpected validation error:', error);
-      return res.status(500).json({
-        success: false,
-        message: 'Internal server error during validation',
-      });
+      next(error);
     }
   };
 };
@@ -56,31 +28,55 @@ export const validateParams = (schema: z.ZodSchema) => {
     try {
       // Validate request parameters
       const validatedData = schema.parse(req.params);
-      
+
       // Replace request params with validated data
       (req.params as any) = validatedData;
-      
+
       next();
     } catch (error) {
-      if (error instanceof z.ZodError) {
-        logger.warn('Parameter validation error:', error.issues);
-        
-        return res.status(400).json({
-          success: false,
-          message: 'Invalid parameters',
-          errors: error.issues.map(issue => ({
-            field: issue.path.join('.'),
-            message: issue.message,
-            code: issue.code,
-          })),
-        });
+      next(error);
+    }
+  };
+};
+
+export const validateQuery = (schema: z.ZodSchema) => {
+  return (req: Request, res: Response, next: NextFunction) => {
+    try {
+      // Validate query parameters
+      const validatedData = schema.parse(req.query);
+
+      // Replace request query with validated data
+      req.query = validatedData as any;
+
+      next();
+    } catch (error) {
+      next(error);
+    }
+  };
+};
+
+/**
+ * Combined validation middleware
+ */
+export const validate = (schemas: {
+  body?: z.ZodSchema;
+  params?: z.ZodSchema;
+  query?: z.ZodSchema;
+}) => {
+  return (req: Request, res: Response, next: NextFunction) => {
+    try {
+      if (schemas.params) {
+        (req.params as any) = schemas.params.parse(req.params);
       }
-      
-      logger.error('Unexpected parameter validation error:', error);
-      return res.status(500).json({
-        success: false,
-        message: 'Internal server error during parameter validation',
-      });
+      if (schemas.query) {
+        (req.query as any) = schemas.query.parse(req.query);
+      }
+      if (schemas.body) {
+        req.body = schemas.body.parse(req.body);
+      }
+      next();
+    } catch (error) {
+      next(error);
     }
   };
 };
@@ -90,10 +86,7 @@ export const uuidSchema = z.object({
   id: z.string().uuid('Invalid ID format'),
 });
 
-export const qrCodeIdSchema = z.object({
-  qrCodeId: z.string().uuid('Invalid QR code ID format'),
-});
-
+// Token schema for QR tokens
 export const tokenSchema = z.object({
   token: z.string().min(1, 'Token is required').max(255, 'Token too long'),
 });
