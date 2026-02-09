@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { appConfig } from '../config';
-import { logger } from '../utils';
+import { logger, UnauthorizedError, ForbiddenError } from '../utils';
 
 export interface AuthenticatedRequest extends Request {
   user?: {
@@ -15,34 +15,20 @@ export const authenticateToken = (
   res: Response,
   next: NextFunction
 ) => {
-  try {
-    const authHeader = req.headers.authorization;
-    const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+  const authHeader = req.headers.authorization;
+  const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
 
-    if (!token) {
-      return res.status(401).json({
-        success: false,
-        message: 'Access token required',
-      });
+  if (!token) {
+    throw new UnauthorizedError('Access token required');
+  }
+
+  jwt.verify(token, appConfig.jwt.secret, (err, decoded) => {
+    if (err) {
+      logger.warn('Invalid token attempt:', err.message);
+      return next(new ForbiddenError('Invalid or expired token'));
     }
 
-    jwt.verify(token, appConfig.jwt.secret, (err, decoded) => {
-      if (err) {
-        logger.warn('Invalid token attempt:', err.message);
-        return res.status(403).json({
-          success: false,
-          message: 'Invalid or expired token',
-        });
-      }
-
-      req.user = decoded as { userId: string; email: string };
-      next();
-    });
-  } catch (error) {
-    logger.error('Authentication middleware error:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Authentication error',
-    });
-  }
+    req.user = decoded as { userId: string; email: string };
+    next();
+  });
 };

@@ -7,5 +7,6 @@ export {
     UnauthorizedError,
     ForbiddenError,
     NotFoundError,
-    ConflictError
+    ConflictError,
+    TooManyRequestsError
 } from './ApiError';

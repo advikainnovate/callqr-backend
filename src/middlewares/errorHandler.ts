@@ -32,6 +32,13 @@ export const errorHandler = (
       message: issue.message,
       code: issue.code,
     }));
+
+    logger.warn('Validation error:', {
+      path: req.path,
+      method: req.method,
+      errors: details
+    });
+
     sendErrorResponse(res, 400, message, undefined, details);
     return;
   }
