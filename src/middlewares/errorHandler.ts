@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
+import { z } from 'zod'; // Import z for ZodError check
 import { logger } from '../utils';
-import ApiError, { NotFoundError } from '../utils/ApiError';
+import ApiError, { NotFoundError, BadRequestError } from '../utils/ApiError';
 import { error as errorMessages } from '../constants/messages';
 import { sendErrorResponse } from '../utils/responseHandler';
 import { appConfig } from '../config';
@@ -22,6 +23,18 @@ export const errorHandler = (
   next: NextFunction
 ) => {
   let error = err;
+
+  // Handle Zod validation errors
+  if (err instanceof z.ZodError) {
+    const message = 'Validation error';
+    const details = err.issues.map(issue => ({
+      field: issue.path.join('.'),
+      message: issue.message,
+      code: issue.code,
+    }));
+    sendErrorResponse(res, 400, message, undefined, details);
+    return;
+  }
 
   // If the error is not an instance of ApiError, it's an unexpected server error.
   // We convert it to a generic ApiError to handle it gracefully.

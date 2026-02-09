@@ -1,87 +1,32 @@
 import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
-import { logger } from '../utils';
+import { BadRequestError } from '../utils';
 
 export const validateRequest = (schema: z.ZodSchema) => {
   return (req: Request, res: Response, next: NextFunction) => {
-    try {
-      if (req.body === undefined) {
-        return res.status(400).json({
-          success: false,
-          message: 'Validation error',
-          errors: [
-            {
-              field: '',
-              message:
-                'Request body is required (or could not be parsed). Ensure you send JSON with Content-Type: application/json.',
-              code: 'invalid_type',
-            },
-          ],
-        });
-      }
-
-      // Validate request body
-      const validatedData = schema.parse(req.body);
-      
-      // Replace request body with validated data
-      req.body = validatedData;
-      
-      next();
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        logger.warn('Validation error:', error.issues);
-        
-        return res.status(400).json({
-          success: false,
-          message: 'Validation error',
-          errors: error.issues.map(issue => ({
-            field: issue.path.join('.'),
-            message: issue.message,
-            code: issue.code,
-          })),
-        });
-      }
-      
-      logger.error('Unexpected validation error:', error);
-      return res.status(500).json({
-        success: false,
-        message: 'Internal server error during validation',
-      });
+    if (req.body === undefined) {
+      throw new BadRequestError('Request body is required (or could not be parsed). Ensure you send JSON with Content-Type: application/json.');
     }
+
+    // Validate request body
+    const validatedData = schema.parse(req.body);
+
+    // Replace request body with validated data
+    req.body = validatedData;
+
+    next();
   };
 };
 
 export const validateParams = (schema: z.ZodSchema) => {
   return (req: Request, res: Response, next: NextFunction) => {
-    try {
-      // Validate request parameters
-      const validatedData = schema.parse(req.params);
-      
-      // Replace request params with validated data
-      (req.params as any) = validatedData;
-      
-      next();
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        logger.warn('Parameter validation error:', error.issues);
-        
-        return res.status(400).json({
-          success: false,
-          message: 'Invalid parameters',
-          errors: error.issues.map(issue => ({
-            field: issue.path.join('.'),
-            message: issue.message,
-            code: issue.code,
-          })),
-        });
-      }
-      
-      logger.error('Unexpected parameter validation error:', error);
-      return res.status(500).json({
-        success: false,
-        message: 'Internal server error during parameter validation',
-      });
-    }
+    // Validate request parameters
+    const validatedData = schema.parse(req.params);
+
+    // Replace request params with validated data
+    (req.params as any) = validatedData;
+
+    next();
   };
 };
 

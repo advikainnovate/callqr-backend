@@ -1,208 +1,139 @@
-import { Request, Response, NextFunction } from 'express';
-import { z } from 'zod';
+import { Request, Response } from 'express';
 import { qrCodeService } from '../services/qrCode.service';
 import { userService } from '../services/user.service';
-import { createQRCodeSchema, scanQRCodeSchema } from '../schemas/qrCode.schema';
-import { logger } from '../utils';
+import {
+  logger,
+  UnauthorizedError,
+  NotFoundError,
+  sendSuccessResponse
+} from '../utils';
 import { AuthenticatedRequest } from '../middlewares/auth.middleware';
 
 export class QRCodeController {
-  async createQRCode(req: Request, res: Response, next: NextFunction) {
-    try {
-      const userId = (req as AuthenticatedRequest).user?.userId;
-      if (!userId) {
-        return res.status(401).json({
-          success: false,
-          message: 'Unauthorized',
-        });
-      }
-
-      const validatedData = createQRCodeSchema.parse(req.body);
-      
-      // Create QR code
-      const qrCode = await qrCodeService.createQRCode(
-        userId,
-        validatedData.expiresAt ? new Date(validatedData.expiresAt) : undefined
-      );
-
-      // Generate QR code image
-      const qrCodeDataURL = await qrCodeService.generateQRCodeDataURL(qrCode.token);
-
-      logger.info(`QR code created for user: ${userId}`);
-
-      res.status(201).json({
-        success: true,
-        message: 'QR code created successfully',
-        data: {
-          qrCode: {
-            id: qrCode.id,
-            token: qrCode.token,
-            isActive: qrCode.isActive,
-            expiresAt: qrCode.expiresAt,
-            scanCount: qrCode.scanCount,
-            createdAt: qrCode.createdAt,
-          },
-          qrCodeDataURL,
-        },
-      });
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({
-          success: false,
-          message: 'Validation error',
-          errors: error.issues,
-        });
-      }
-      next(error);
+  async createQRCode(req: Request, res: Response) {
+    const userId = (req as AuthenticatedRequest).user?.userId;
+    if (!userId) {
+      throw new UnauthorizedError();
     }
+
+    const { expiresAt } = req.body;
+
+    // Create QR code
+    const qrCode = await qrCodeService.createQRCode(
+      userId,
+      expiresAt ? new Date(expiresAt) : undefined
+    );
+
+    // Generate QR code image
+    const qrCodeDataURL = await qrCodeService.generateQRCodeDataURL(qrCode.token);
+
+    logger.info(`QR code created for user: ${userId}`);
+
+    sendSuccessResponse(res, 201, 'QR code created successfully', {
+      qrCode: {
+        id: qrCode.id,
+        token: qrCode.token,
+        isActive: qrCode.isActive,
+        expiresAt: qrCode.expiresAt,
+        scanCount: qrCode.scanCount,
+        createdAt: qrCode.createdAt,
+      },
+      qrCodeDataURL,
+    });
   }
 
-  async scanQRCode(req: Request, res: Response, next: NextFunction) {
-    try {
-      const validatedData = scanQRCodeSchema.parse(req.body);
-      
-      // Validate QR code
-      const qrCode = await qrCodeService.validateQRCode(validatedData.token);
-      if (!qrCode) {
-        return res.status(404).json({
-          success: false,
-          message: 'Invalid or expired QR code',
-        });
-      }
+  async scanQRCode(req: Request, res: Response) {
+    const { token } = req.body;
 
-      // Get user profile for this QR code
-      const user = await userService.getUserById(qrCode.userId);
-      if (!user || !user.isActive) {
-        return res.status(404).json({
-          success: false,
-          message: 'QR code owner not found or inactive',
-        });
-      }
-
-      // Update scan count
-      await qrCodeService.updateScanCount(validatedData.token);
-
-      logger.info(`QR code scanned: ${qrCode.id}, user: ${user.id}`);
-
-      res.json({
-        success: true,
-        message: 'QR code scanned successfully',
-        data: {
-          qrCodeId: qrCode.id,
-          userId: qrCode.userId,
-          scanCount: qrCode.scanCount + 1,
-          user: {
-            id: user.id,
-            // Note: Only return non-sensitive user info for privacy
-            // No email, phone, or personal data exposed
-            isActive: user.isActive,
-            createdAt: user.createdAt,
-          },
-        },
-      });
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({
-          success: false,
-          message: 'Validation error',
-          errors: error.issues,
-        });
-      }
-      next(error);
+    // Validate QR code
+    const qrCode = await qrCodeService.validateQRCode(token);
+    if (!qrCode) {
+      throw new NotFoundError('Invalid or expired QR code');
     }
+
+    // Get user profile for this QR code
+    const user = await userService.getUserById(qrCode.userId);
+    if (!user || !user.isActive) {
+      throw new NotFoundError('QR code owner not found or inactive');
+    }
+
+    // Update scan count
+    await qrCodeService.updateScanCount(token);
+
+    logger.info(`QR code scanned: ${qrCode.id}, user: ${user.id}`);
+
+    sendSuccessResponse(res, 200, 'QR code scanned successfully', {
+      qrCodeId: qrCode.id,
+      userId: qrCode.userId,
+      scanCount: qrCode.scanCount + 1,
+      user: {
+        id: user.id,
+        // Note: Only return non-sensitive user info for privacy
+        // No email, phone, or personal data exposed
+        isActive: user.isActive,
+        createdAt: user.createdAt,
+      },
+    });
   }
 
-  async getUserQRCodes(req: Request, res: Response, next: NextFunction) {
-    try {
-      const userId = (req as AuthenticatedRequest).user?.userId;
-      if (!userId) {
-        return res.status(401).json({
-          success: false,
-          message: 'Unauthorized',
-        });
-      }
-
-      const qrCodes = await qrCodeService.getUserQRCodes(userId);
-
-      res.json({
-        success: true,
-        data: {
-          qrCodes: qrCodes.map(qr => ({
-            id: qr.id,
-            token: qr.token,
-            isActive: qr.isActive,
-            isRevoked: qr.isRevoked,
-            expiresAt: qr.expiresAt,
-            lastScannedAt: qr.lastScannedAt,
-            scanCount: qr.scanCount,
-            createdAt: qr.createdAt,
-            updatedAt: qr.updatedAt,
-          })),
-        },
-      });
-    } catch (error) {
-      next(error);
+  async getUserQRCodes(req: Request, res: Response) {
+    const userId = (req as AuthenticatedRequest).user?.userId;
+    if (!userId) {
+      throw new UnauthorizedError();
     }
+
+    const qrCodes = await qrCodeService.getUserQRCodes(userId);
+
+    sendSuccessResponse(res, 200, undefined, {
+      qrCodes: qrCodes.map(qr => ({
+        id: qr.id,
+        token: qr.token,
+        isActive: qr.isActive,
+        isRevoked: qr.isRevoked,
+        expiresAt: qr.expiresAt,
+        lastScannedAt: qr.lastScannedAt,
+        scanCount: qr.scanCount,
+        createdAt: qr.createdAt,
+        updatedAt: qr.updatedAt,
+      })),
+    });
   }
 
-  async revokeQRCode(req: Request, res: Response, next: NextFunction) {
-    try {
-      const userId = (req as AuthenticatedRequest).user?.userId;
-      const { qrCodeId } = req.params;
+  async revokeQRCode(req: Request, res: Response) {
+    const userId = (req as AuthenticatedRequest).user?.userId;
+    const { qrCodeId } = req.params;
 
-      if (!userId) {
-        return res.status(401).json({
-          success: false,
-          message: 'Unauthorized',
-        });
-      }
-
-      const success = await qrCodeService.revokeQRCode(qrCodeId, userId);
-      
-      if (!success) {
-        return res.status(404).json({
-          success: false,
-          message: 'QR code not found or you do not have permission to revoke it',
-        });
-      }
-
-      logger.info(`QR code revoked: ${qrCodeId} by user: ${userId}`);
-
-      res.json({
-        success: true,
-        message: 'QR code revoked successfully',
-      });
-    } catch (error) {
-      next(error);
+    if (!userId) {
+      throw new UnauthorizedError();
     }
+
+    const success = await qrCodeService.revokeQRCode(qrCodeId, userId);
+
+    if (!success) {
+      throw new NotFoundError('QR code not found or you do not have permission to revoke it');
+    }
+
+    logger.info(`QR code revoked: ${qrCodeId} by user: ${userId}`);
+
+    sendSuccessResponse(res, 200, 'QR code revoked successfully');
   }
 
-  async getQRCodeImage(req: Request, res: Response, next: NextFunction) {
-    try {
-      const { token } = req.params;
-      
-      // Validate QR code
-      const qrCode = await qrCodeService.validateQRCode(token);
-      if (!qrCode) {
-        return res.status(404).json({
-          success: false,
-          message: 'Invalid or expired QR code',
-        });
-      }
+  async getQRCodeImage(req: Request, res: Response) {
+    const { token } = req.params;
 
-      // Generate QR code image
-      const qrCodeDataURL = await qrCodeService.generateQRCodeDataURL(token);
-
-      // Return the image data URL
-      res.json({
-        success: true,
-        data: {
-          qrCodeDataURL,
-        },
-      });
-    } catch (error) {
-      next(error);
+    // Validate QR code
+    const qrCode = await qrCodeService.validateQRCode(token);
+    if (!qrCode) {
+      throw new NotFoundError('Invalid or expired QR code');
     }
+
+    // Generate QR code image
+    const qrCodeDataURL = await qrCodeService.generateQRCodeDataURL(token);
+
+    // Return the image data URL
+    sendSuccessResponse(res, 200, undefined, {
+      qrCodeDataURL,
+    });
   }
 }
 
