@@ -5,6 +5,7 @@ import { validateRequest } from '../middlewares/validation.middleware';
 import { authLimiter } from '../middlewares/rateLimit.middleware';
 import { registerUserSchema, loginUserSchema } from '../schemas/user.schema';
 import { Request, Response, NextFunction } from 'express';
+import { asyncHandler } from '../utils';
 
 const router = Router();
 
@@ -12,38 +13,38 @@ const router = Router();
 router.post('/register',
   authLimiter,
   validateRequest(registerUserSchema),
-  userController.register
+  asyncHandler(userController.register)
 );
 
 router.post('/login',
   authLimiter,
   validateRequest(loginUserSchema),
-  userController.login
+  asyncHandler(userController.login)
 );
 
 // Protected routes
 router.get('/profile',
   (req: Request, res: Response, next: NextFunction) =>
     authenticateToken(req as AuthenticatedRequest, res, next),
-  userController.getProfile
+  asyncHandler(userController.getProfile)
 );
 
 router.patch('/profile',
   (req: Request, res: Response, next: NextFunction) =>
     authenticateToken(req as AuthenticatedRequest, res, next),
-  userController.updateProfile
+  asyncHandler(userController.updateProfile)
 );
 
 router.post('/change-password',
   (req: Request, res: Response, next: NextFunction) =>
     authenticateToken(req as AuthenticatedRequest, res, next),
-  userController.changePassword
+  asyncHandler(userController.changePassword)
 );
 
 router.delete('/profile',
   (req: Request, res: Response, next: NextFunction) =>
     authenticateToken(req as AuthenticatedRequest, res, next),
-  userController.deleteAccount
+  asyncHandler(userController.deleteAccount)
 );
 
 export default router;

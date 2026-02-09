@@ -14,6 +14,7 @@ import {
   xssProtection,
 } from './middlewares/index';
 import routes from './routes/index';
+import { asyncHandler } from './utils';
 
 const app = express();
 
@@ -42,7 +43,7 @@ app.use(xssProtection);
 app.use(sanitizeInput);
 
 // Health Check Routes (outside /api prefix)
-app.get('/healthz', async (_, res) => {
+app.get('/healthz', asyncHandler(async (_, res) => {
   try {
     // Import database client for health check
     const { client } = await import('./db');
@@ -101,7 +102,7 @@ app.get('/healthz', async (_, res) => {
       details: error instanceof Error ? error.message : 'Unknown error',
     });
   }
-});
+}));
 
 // API Routes
 app.use('/api', routes);

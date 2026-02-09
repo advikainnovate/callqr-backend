@@ -4,6 +4,7 @@ import { authenticateToken, AuthenticatedRequest } from '../middlewares/auth.mid
 import { validateRequest, validateParams } from '../middlewares/validation.middleware';
 import { initiateCallSchema, updateCallStatusSchema, callIdSchema } from '../schemas/call.schema';
 import { Request, Response, NextFunction } from 'express';
+import { asyncHandler } from '../utils';
 
 const router = Router();
 
@@ -12,32 +13,32 @@ router.post('/initiate',
   (req: Request, res: Response, next: NextFunction) =>
     authenticateToken(req as AuthenticatedRequest, res, next),
   validateRequest(initiateCallSchema),
-  callController.initiateCall
+  asyncHandler(callController.initiateCall)
 );
 
 router.get('/history',
   (req: Request, res: Response, next: NextFunction) =>
     authenticateToken(req as AuthenticatedRequest, res, next),
-  callController.getCallHistory
+  asyncHandler(callController.getCallHistory)
 );
 
 router.get('/usage',
   (req: Request, res: Response, next: NextFunction) =>
     authenticateToken(req as AuthenticatedRequest, res, next),
-  callController.getCallUsage
+  asyncHandler(callController.getCallUsage)
 );
 
 router.get('/active',
   (req: Request, res: Response, next: NextFunction) =>
     authenticateToken(req as AuthenticatedRequest, res, next),
-  callController.getActiveCalls
+  asyncHandler(callController.getActiveCalls)
 );
 
 router.get('/:callId',
   (req: Request, res: Response, next: NextFunction) =>
     authenticateToken(req as AuthenticatedRequest, res, next),
   validateParams(callIdSchema),
-  callController.getCallDetails
+  asyncHandler(callController.getCallDetails)
 );
 
 router.patch('/:callId/status',
@@ -45,14 +46,14 @@ router.patch('/:callId/status',
     authenticateToken(req as AuthenticatedRequest, res, next),
   validateParams(callIdSchema),
   validateRequest(updateCallStatusSchema),
-  callController.updateCallStatus
+  asyncHandler(callController.updateCallStatus)
 );
 
 router.patch('/:callId/end',
   (req: Request, res: Response, next: NextFunction) =>
     authenticateToken(req as AuthenticatedRequest, res, next),
   validateParams(callIdSchema),
-  callController.endCall
+  asyncHandler(callController.endCall)
 );
 
 export default router;
