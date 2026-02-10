@@ -1,0 +1,43 @@
+meta {
+  name: Generate Token
+  type: http
+  seq: 2
+}
+
+script:pre-request {
+  // This is a manual step - you need to generate a JWT token
+  // Run: node scripts/generate-test-token.js {{userId}} {{testUsername}}
+  // Then paste the token in the environment variable 'authToken'
+  
+  console.log("Generate JWT token using:");
+  console.log(`node scripts/generate-test-token.js ${bru.getEnvVar("userId")} ${bru.getEnvVar("testUsername")}`);
+}
+
+tests {
+  test("Token should be set in environment", function() {
+    const token = bru.getEnvVar("authToken");
+    expect(token).to.be.a('string');
+    expect(token.length).to.be.greaterThan(0);
+  });
+}
+
+docs {
+  # Generate JWT Token
+  
+  Since the new schema doesn't include passwords, you need to manually generate a JWT token for testing.
+  
+  ## Steps:
+  
+  1. After registering a user, note the `userId`
+  2. Run the token generator script:
+     ```bash
+     node scripts/generate-test-token.js USER_ID USERNAME
+     ```
+  3. Copy the generated token
+  4. Set it in Bruno environment as `authToken`
+  
+  ## Example:
+  ```bash
+  node scripts/generate-test-token.js 123e4567-e89b-12d3-a456-426614174000 testuser
+  ```
+}

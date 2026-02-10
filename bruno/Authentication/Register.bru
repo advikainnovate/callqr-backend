@@ -1,5 +1,5 @@
 meta {
-  name: "User Registration"
+  name: Register
   type: http
   seq: 1
 }
@@ -22,10 +22,8 @@ script:pre-request {
 body:json {
   {
     "username": "{{testUsername}}",
-    "email": "{{testEmail}}",
-    "password": "securepassword123",
-    "phoneNo": "{{testPhone}}",
-    "vehicleType": "four_wheeler"
+    "phone": "{{testPhone}}",
+    "email": "{{testEmail}}"
   }
 }
 
@@ -33,11 +31,11 @@ tests {
   test("Should register user successfully", function() {
     expect(res.status).to.equal(201);
     expect(res.body.success).to.be.true;
-    expect(res.body.data.user.email).to.be.a('string');
-    expect(res.body.data.token).to.be.a('string');
+    expect(res.body.data.id).to.be.a('string');
+    expect(res.body.data.username).to.equal(env.testUsername);
+    expect(res.body.data.status).to.equal('active');
     
-    // Store token for subsequent tests
-    bru.setEnvVar("authToken", res.body.data.token);
-    bru.setEnvVar("userId", res.body.data.user.id);
+    // Store user ID for subsequent tests
+    bru.setEnvVar("userId", res.body.data.id);
   });
 }

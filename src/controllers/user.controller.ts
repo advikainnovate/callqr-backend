@@ -1,130 +1,123 @@
-import { Request, Response } from 'express';
+import { Response } from 'express';
 import { userService } from '../services/user.service';
-import {
-  logger,
-  UnauthorizedError,
-  sendSuccessResponse
-} from '../utils';
-import jwt from 'jsonwebtoken';
-import { appConfig } from '../config';
-import { qrCodeService } from '../services/qrCode.service';
 import { AuthenticatedRequest } from '../middlewares/auth.middleware';
+import { asyncHandler } from '../utils';
+import { sendSuccessResponse } from '../utils/responseHandler';
 
 export class UserController {
-  async register(req: Request, res: Response) {
-    const user = await userService.register(req.body);
+  createUser = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const { username, phone, email } = req.body;
+    const user = await userService.createUser({ username, phone, email });
 
-    // Generate JWT token
-    const token = jwt.sign(
-      { userId: user.id, email: user.email },
-      appConfig.jwt.secret,
-      { expiresIn: '7d' }
-    );
-
-    // Automatically create a permanent QR code for the new user
-    try {
-      await qrCodeService.createQRCode(user.id);
-      logger.info(`Automatic QR code created for new user: ${user.id}`);
-    } catch (qrError) {
-      logger.error(`Failed to auto-create QR code for user ${user.id}:`, qrError);
-    }
-
-    sendSuccessResponse(res, 201, 'User registered successfully', {
-      user: {
-        id: user.id,
-        username: user.username,
-        email: user.email,
-        phoneNo: user.phoneNo,
-        vehicleType: user.vehicleType,
-        isActive: user.isActive,
-        createdAt: user.createdAt,
-      },
-      token,
+    sendSuccessResponse(res, 201, 'User created successfully', {
+      id: user.id,
+      username: user.username,
+      status: user.status,
+      createdAt: user.createdAt,
     });
-  }
+  });
 
-  async login(req: Request, res: Response) {
-    const user = await userService.login(req.body);
-
-    const token = jwt.sign(
-      { userId: user.id, email: user.email },
-      appConfig.jwt.secret,
-      { expiresIn: '7d' }
-    );
-
-    logger.info(`User logged in successfully: ${user.id}`);
-
-    sendSuccessResponse(res, 200, 'Login successful', {
-      user: {
-        id: user.id,
-        username: user.username,
-        email: user.email,
-        phoneNo: user.phoneNo,
-        vehicleType: user.vehicleType,
-        isActive: user.isActive,
-        createdAt: user.createdAt,
-      },
-      token,
-    });
-  }
-
-  async getProfile(req: Request, res: Response) {
-    const userId = (req as AuthenticatedRequest).user?.userId;
-    if (!userId) throw new UnauthorizedError();
-
+  getUser = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const { userId } = req.params;
     const user = await userService.getUserById(userId);
 
-    sendSuccessResponse(res, 200, undefined, {
-      user: {
-        id: user.id,
-        username: user.username,
-        email: user.email,
-        phoneNo: user.phoneNo,
-        emergencyNo: user.emergencyNo,
-        vehicleType: user.vehicleType,
-        isActive: user.isActive,
-        createdAt: user.createdAt,
-      },
+    sendSuccessResponse(res, 200, 'User retrieved successfully', {
+      id: user.id,
+      username: user.username,
+      status: user.status,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
     });
-  }
+  });
 
-  async updateProfile(req: Request, res: Response) {
-    const userId = (req as AuthenticatedRequest).user?.userId;
-    if (!userId) throw new UnauthorizedError();
+  getProfile = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const userId = req.user!.userId;
+    const user = await userService.getUserById(userId);
 
-    const updatedUser = await userService.updateProfile(userId, req.body);
-
-    sendSuccessResponse(res, 200, 'Profile updated successfully', {
-      user: {
-        id: updatedUser.id,
-        username: updatedUser.username,
-        email: updatedUser.email,
-        phoneNo: updatedUser.phoneNo,
-        emergencyNo: updatedUser.emergencyNo,
-        vehicleType: updatedUser.vehicleType,
-        isActive: updatedUser.isActive,
-      },
+    sendSuccessResponse(res, 200, 'Profile retrieved successfully', {
+      id: user.id,
+      username: user.username,
+      status: user.status,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
     });
-  }
+  });
 
-  async changePassword(req: Request, res: Response) {
-    const userId = (req as AuthenticatedRequest).user?.userId;
-    if (!userId) throw new UnauthorizedError();
+  updateUser = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const { userId } = req.params;
+    const updateData = req.body;
 
-    const { currentPassword, newPassword } = req.body;
-    await userService.changePassword(userId, currentPassword, newPassword);
+    const user = await userService.updateUser(userId, updateData);
 
-    sendSuccessResponse(res, 200, 'Password updated successfully');
-  }
+    sendSuccessResponse(res, 200, 'User updated successfully', {
+      id: user.id,
+      username: user.username,
+      status: user.status,
+      updatedAt: user.updatedAt,
+    });
+  });
 
-  async deleteAccount(req: Request, res: Response) {
-    const userId = (req as AuthenticatedRequest).user?.userId;
-    if (!userId) throw new UnauthorizedError();
+  blockUser = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const { userId } = req.params;
+    const user = await userService.blockUser(userId);
 
-    await userService.deactivateUser(userId);
+    sendSuccessResponse(res, 200, 'User blocked successfully', {
+      id: user.id,
+      status: user.status,
+    });
+  });
 
-    sendSuccessResponse(res, 200, 'Account deactivated successfully');
-  }
+  deleteUser = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const { userId } = req.params;
+    const user = await userService.deleteUser(userId);
+
+    sendSuccessResponse(res, 200, 'User deleted successfully', {
+      id: user.id,
+      status: user.status,
+    });
+  });
+
+  activateUser = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const { userId } = req.params;
+    const user = await userService.activateUser(userId);
+
+    sendSuccessResponse(res, 200, 'User activated successfully', {
+      id: user.id,
+      status: user.status,
+    });
+  });
+
+  verifyPhone = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const { phone } = req.body;
+    const user = await userService.verifyPhone(phone);
+
+    if (user) {
+      sendSuccessResponse(res, 200, 'Phone verified', {
+        exists: true,
+        userId: user.id,
+      });
+    } else {
+      sendSuccessResponse(res, 200, 'Phone not found', {
+        exists: false,
+      });
+    }
+  });
+
+  verifyEmail = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const { email } = req.body;
+    const user = await userService.verifyEmail(email);
+
+    if (user) {
+      sendSuccessResponse(res, 200, 'Email verified', {
+        exists: true,
+        userId: user.id,
+      });
+    } else {
+      sendSuccessResponse(res, 200, 'Email not found', {
+        exists: false,
+      });
+    }
+  });
 }
 
 export const userController = new UserController();

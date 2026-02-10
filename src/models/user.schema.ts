@@ -1,16 +1,11 @@
-import { pgTable, serial, text, boolean, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { pgTable, text, timestamp, uuid, varchar } from 'drizzle-orm/pg-core';
 
 export const users = pgTable('users', {
   id: uuid('id').primaryKey().defaultRandom(),
   username: text('username').notNull().unique(),
-  email: text('email').notNull().unique(),
-  passwordHash: text('password_hash').notNull(),
-  phoneNo: text('phone_no').notNull().unique(),
-  emergencyNo: text('emergency_no'),
-  vehicleType: text('vehicle_type', { enum: ['two_wheeler', 'four_wheeler', 'public_vehicle'] }),
-  isDeleted: boolean('is_deleted').default(false),
-  isActive: boolean('is_active').default(true),
-  subscriptionTier: text('subscription_tier', { enum: ['free', 'gold', 'platinum'] }).default('free'),
+  phoneHash: text('phone_hash'),
+  emailHash: text('email_hash'),
+  status: varchar('status', { length: 20 }).notNull().default('active'), // active, blocked, deleted
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });

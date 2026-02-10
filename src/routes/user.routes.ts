@@ -1,50 +1,42 @@
 import { Router } from 'express';
 import { userController } from '../controllers/user.controller';
-import { authenticateToken, AuthenticatedRequest } from '../middlewares/auth.middleware';
-import { validateRequest } from '../middlewares/validation.middleware';
-import { authLimiter } from '../middlewares/rateLimit.middleware';
-import { registerUserSchema, loginUserSchema } from '../schemas/user.schema';
-import { Request, Response, NextFunction } from 'express';
-import { asyncHandler } from '../utils';
+import { authenticateToken } from '../middlewares/auth.middleware';
+import { validate } from '../middlewares/validate';
+import {
+  createUserSchema,
+  updateUserSchema,
+  getUserSchema,
+  verifyPhoneSchema,
+  verifyEmailSchema,
+} from '../schemas/user.schema';
 
 const router = Router();
 
-// Public routes with rate limiting and validation
-router.post('/register',
-  authLimiter,
-  validateRequest(registerUserSchema),
-  asyncHandler(userController.register)
-);
+// Create user (register)
+router.post('/register', validate(createUserSchema), userController.createUser);
 
-router.post('/login',
-  authLimiter,
-  validateRequest(loginUserSchema),
-  asyncHandler(userController.login)
-);
+// Get current user profile
+router.get('/profile', authenticateToken, userController.getProfile);
 
-// Protected routes
-router.get('/profile',
-  (req: Request, res: Response, next: NextFunction) =>
-    authenticateToken(req as AuthenticatedRequest, res, next),
-  asyncHandler(userController.getProfile)
-);
+// Get user by ID
+router.get('/:userId', authenticateToken, validate(getUserSchema), userController.getUser);
 
-router.patch('/profile',
-  (req: Request, res: Response, next: NextFunction) =>
-    authenticateToken(req as AuthenticatedRequest, res, next),
-  asyncHandler(userController.updateProfile)
-);
+// Update user
+router.patch('/:userId', authenticateToken, validate(updateUserSchema), userController.updateUser);
 
-router.post('/change-password',
-  (req: Request, res: Response, next: NextFunction) =>
-    authenticateToken(req as AuthenticatedRequest, res, next),
-  asyncHandler(userController.changePassword)
-);
+// Block user (admin only - you may want to add admin middleware)
+router.patch('/:userId/block', authenticateToken, validate(getUserSchema), userController.blockUser);
 
-router.delete('/profile',
-  (req: Request, res: Response, next: NextFunction) =>
-    authenticateToken(req as AuthenticatedRequest, res, next),
-  asyncHandler(userController.deleteAccount)
-);
+// Delete user (soft delete)
+router.delete('/:userId', authenticateToken, validate(getUserSchema), userController.deleteUser);
+
+// Activate user
+router.patch('/:userId/activate', authenticateToken, validate(getUserSchema), userController.activateUser);
+
+// Verify phone
+router.post('/verify/phone', validate(verifyPhoneSchema), userController.verifyPhone);
+
+// Verify email
+router.post('/verify/email', validate(verifyEmailSchema), userController.verifyEmail);
 
 export default router;

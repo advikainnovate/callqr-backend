@@ -1,7 +1,7 @@
 meta {
-  name: "Create QR Code"
+  name: Create
   type: http
-  seq: 4
+  seq: 1
 }
 
 post {
@@ -15,22 +15,19 @@ auth:bearer {
 }
 
 body:json {
-  {
-    
-  }
+  {}
 }
 
 tests {
   test("Should create QR code successfully", function() {
     expect(res.status).to.equal(201);
     expect(res.body.success).to.be.true;
-    expect(res.body.data.qrCode.id).to.be.a('string');
-    expect(res.body.data.qrCode.token).to.be.a('string');
-    expect(res.body.data.qrCode.isActive).to.be.true;
-    expect(res.body.data.qrCodeDataURL).to.be.a('string');
+    expect(res.body.data.id).to.be.a('string');
+    expect(res.body.data.token).to.be.a('string');
+    expect(res.body.data.status).to.equal('unassigned');
     
-    // Store QR token for subsequent tests
-    bru.setEnvVar("qrToken", res.body.data.qrCode.token);
-    bru.setEnvVar("qrCodeId", res.body.data.qrCode.id);
+    // Store QR token and ID for subsequent tests
+    bru.setEnvVar("qrToken", res.body.data.token);
+    bru.setEnvVar("qrCodeId", res.body.data.id);
   });
 }

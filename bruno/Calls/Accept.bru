@@ -1,0 +1,23 @@
+meta {
+  name: Accept
+  type: http
+  seq: 3
+}
+
+patch {
+  url: {{baseUrl}}/api/calls/{{callId}}/accept
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+tests {
+  test("Should accept call successfully", function() {
+    expect(res.status).to.equal(200);
+    expect(res.body.success).to.be.true;
+    expect(res.body.data.status).to.equal('ringing');
+  });
+}

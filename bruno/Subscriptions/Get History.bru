@@ -1,0 +1,23 @@
+meta {
+  name: Get History
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/api/subscriptions/history
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+tests {
+  test("Should get subscription history successfully", function() {
+    expect(res.status).to.equal(200);
+    expect(res.body.success).to.be.true;
+    expect(res.body.data.subscriptions).to.be.an('array');
+  });
+}

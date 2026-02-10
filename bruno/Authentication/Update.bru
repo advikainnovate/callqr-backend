@@ -1,33 +1,29 @@
 meta {
-  name: "Update Profile"
+  name: Update
   type: http
   seq: 4
 }
 
 patch {
-  url: {{baseUrl}}/api/users/profile
+  url: {{baseUrl}}/api/users/{{userId}}
   body: json
-  auth: none
+  auth: bearer
 }
 
-headers {
-  Authorization: Bearer {{authToken}}
+auth:bearer {
+  token: {{authToken}}
 }
 
 body:json {
   {
-    "username": "johndoe_updated",
-    "phoneNo": "+19876543210",
-    "emergencyNo": "+1122334455",
-    "vehicleType": "two_wheeler",
-    "subscriptionTier": "gold"
+    "username": "updated_{{testUsername}}"
   }
 }
 
 tests {
-  test("Should update profile successfully", function() {
+  test("Should update user successfully", function() {
     expect(res.status).to.equal(200);
     expect(res.body.success).to.be.true;
-    expect(res.body.data.user.username).to.equal("johndoe_updated");
+    expect(res.body.data.username).to.include('updated_');
   });
 }

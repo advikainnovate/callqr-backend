@@ -1,5 +1,5 @@
 meta {
-  name: "Create Report"
+  name: Create Report
   type: http
   seq: 1
 }
@@ -7,26 +7,26 @@ meta {
 post {
   url: {{baseUrl}}/api/reports
   body: json
-  auth: bearer
-}
-
-auth:bearer {
-  token: {{authToken}}
+  auth: none
 }
 
 body:json {
   {
-    "type": "bug",
-    "subject": "App crashes on start",
-    "description": "The application terminates immediately after opening on iOS 17."
+    "description": "Test bug report - something is not working correctly. This is a detailed description of the issue.",
+    "severity": "medium"
   }
 }
 
 tests {
-  test("Should submit report successfully", function() {
+  test("Should create bug report successfully", function() {
     expect(res.status).to.equal(201);
     expect(res.body.success).to.be.true;
-    expect(res.body.data.report.type).to.equal("bug");
-    expect(res.body.data.report.status).to.equal("pending");
+    expect(res.body.data.id).to.be.a('string');
+    expect(res.body.data.description).to.be.a('string');
+    expect(res.body.data.severity).to.equal('medium');
+    expect(res.body.data.status).to.equal('open');
+    
+    // Store report ID
+    bru.setEnvVar("reportId", res.body.data.id);
   });
 }

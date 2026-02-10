@@ -1,87 +1,137 @@
-import { Request, Response } from 'express';
-import { callService } from '../services/call.service';
-import {
-  UnauthorizedError,
-  sendSuccessResponse
-} from '../utils';
+import { Response } from 'express';
+import { callSessionService } from '../services/callSession.service';
+import { subscriptionService } from '../services/subscription.service';
 import { AuthenticatedRequest } from '../middlewares/auth.middleware';
+import { asyncHandler } from '../utils';
+import { sendSuccessResponse } from '../utils/responseHandler';
 
 export class CallController {
-  async initiateCall(req: Request, res: Response) {
-    const userId = (req as AuthenticatedRequest).user?.userId;
-    if (!userId) throw new UnauthorizedError();
+  initiateCall = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const callerId = req.user!.userId;
+    const { qrToken } = req.body;
 
-    const { qrToken, callType } = req.body;
-    const call = await callService.initiateCall(userId, qrToken, callType);
+    const callSession = await callSessionService.initiateCall(callerId, qrToken);
 
-    sendSuccessResponse(res, 201, 'Call initiated successfully', { call });
-  }
+    sendSuccessResponse(res, 201, 'Call initiated successfully', {
+      callId: callSession.id,
+      callerId: callSession.callerId,
+      receiverId: callSession.receiverId,
+      status: callSession.status,
+      startedAt: callSession.startedAt,
+    });
+  });
 
-  async updateCallStatus(req: Request, res: Response) {
-    const userId = (req as AuthenticatedRequest).user?.userId;
-    if (!userId) throw new UnauthorizedError();
-
+  getCallSession = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const { callId } = req.params;
-    const { status, duration } = req.body;
+    const callSession = await callSessionService.getCallSessionById(callId);
 
-    const call = await callService.updateCallStatus(callId, userId, status, duration);
+    sendSuccessResponse(res, 200, 'Call session retrieved successfully', {
+      id: callSession.id,
+      callerId: callSession.callerId,
+      receiverId: callSession.receiverId,
+      qrId: callSession.qrId,
+      status: callSession.status,
+      endedReason: callSession.endedReason,
+      startedAt: callSession.startedAt,
+      endedAt: callSession.endedAt,
+    });
+  });
 
-    sendSuccessResponse(res, 200, 'Call status updated successfully', { call });
-  }
-
-  async getCallHistory(req: Request, res: Response) {
-    const userId = (req as AuthenticatedRequest).user?.userId;
-    if (!userId) throw new UnauthorizedError();
-
-    const limit = parseInt(req.query.limit as string) || 50;
-    const callHistory = await callService.getCallHistory(userId, Math.min(limit, 100));
-
-    sendSuccessResponse(res, 200, undefined, { calls: callHistory });
-  }
-
-  async getActiveCalls(req: Request, res: Response) {
-    const userId = (req as AuthenticatedRequest).user?.userId;
-    if (!userId) throw new UnauthorizedError();
-
-    const activeCalls = await callService.getActiveCalls(userId);
-
-    sendSuccessResponse(res, 200, undefined, { activeCalls });
-  }
-
-  async endCall(req: Request, res: Response) {
-    const userId = (req as AuthenticatedRequest).user?.userId;
-    if (!userId) throw new UnauthorizedError();
-
+  updateCallStatus = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const { callId } = req.params;
-    await callService.endCall(callId, userId);
+    const userId = req.user!.userId;
+    const { status, endedReason } = req.body;
 
-    sendSuccessResponse(res, 200, 'Call ended successfully');
-  }
+    const callSession = await callSessionService.updateCallStatus(callId, userId, status, endedReason);
 
-  async getCallDetails(req: Request, res: Response) {
-    const userId = (req as AuthenticatedRequest).user?.userId;
-    if (!userId) throw new UnauthorizedError();
+    sendSuccessResponse(res, 200, 'Call status updated successfully', {
+      id: callSession.id,
+      status: callSession.status,
+      endedReason: callSession.endedReason,
+      endedAt: callSession.endedAt,
+    });
+  });
 
+  endCall = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const { callId } = req.params;
-    const call = await callService.getCallById(callId);
+    const userId = req.user!.userId;
+    const { reason } = req.body;
 
-    // Authorization check (redundant but safe if getCallById doesn't check)
-    if (call.callerId !== userId && call.receiverId !== userId) {
-      const { ForbiddenError } = await import('../utils');
-      throw new ForbiddenError('You are not authorized to view this call');
-    }
+    const callSession = await callSessionService.endCall(callId, userId, reason);
 
-    sendSuccessResponse(res, 200, undefined, { call });
-  }
+    sendSuccessResponse(res, 200, 'Call ended successfully', {
+      id: callSession.id,
+      status: callSession.status,
+      endedReason: callSession.endedReason,
+      endedAt: callSession.endedAt,
+    });
+  });
 
-  async getCallUsage(req: Request, res: Response) {
-    const userId = (req as AuthenticatedRequest).user?.userId;
-    if (!userId) throw new UnauthorizedError();
+  acceptCall = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const { callId } = req.params;
+    const userId = req.user!.userId;
 
-    const usage = await callService.getCallUsage(userId);
+    const callSession = await callSessionService.acceptCall(callId, userId);
 
-    sendSuccessResponse(res, 200, undefined, { usage });
-  }
+    sendSuccessResponse(res, 200, 'Call accepted successfully', {
+      id: callSession.id,
+      status: callSession.status,
+    });
+  });
+
+  rejectCall = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const { callId } = req.params;
+    const userId = req.user!.userId;
+
+    const callSession = await callSessionService.rejectCall(callId, userId);
+
+    sendSuccessResponse(res, 200, 'Call rejected successfully', {
+      id: callSession.id,
+      status: callSession.status,
+      endedReason: callSession.endedReason,
+    });
+  });
+
+  getCallHistory = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const userId = req.user!.userId;
+    const limit = req.query.limit ? parseInt(req.query.limit as string) : 50;
+
+    const callHistory = await callSessionService.getUserCallHistory(userId, limit);
+
+    sendSuccessResponse(res, 200, 'Call history retrieved successfully', {
+      calls: callHistory.map((call) => ({
+        id: call.id,
+        callerId: call.callerId,
+        receiverId: call.receiverId,
+        status: call.status,
+        endedReason: call.endedReason,
+        startedAt: call.startedAt,
+        endedAt: call.endedAt,
+      })),
+    });
+  });
+
+  getActiveCalls = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const userId = req.user!.userId;
+    const activeCalls = await callSessionService.getActiveCalls(userId);
+
+    sendSuccessResponse(res, 200, 'Active calls retrieved successfully', {
+      calls: activeCalls.map((call) => ({
+        id: call.id,
+        callerId: call.callerId,
+        receiverId: call.receiverId,
+        status: call.status,
+        startedAt: call.startedAt,
+      })),
+    });
+  });
+
+  getCallUsage = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const userId = req.user!.userId;
+    const usage = await subscriptionService.getCallUsage(userId);
+
+    sendSuccessResponse(res, 200, 'Call usage retrieved successfully', usage);
+  });
 }
 
 export const callController = new CallController();

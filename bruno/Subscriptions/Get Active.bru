@@ -1,0 +1,24 @@
+meta {
+  name: Get Active
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/subscriptions/active
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+tests {
+  test("Should get active subscription successfully", function() {
+    expect(res.status).to.equal(200);
+    expect(res.body.success).to.be.true;
+    expect(res.body.data.plan).to.be.a('string');
+    expect(res.body.data.status).to.equal('active');
+  });
+}

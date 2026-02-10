@@ -1,42 +1,44 @@
 import { Router } from 'express';
 import { qrCodeController } from '../controllers/qrCode.controller';
-import { authenticateToken, AuthenticatedRequest } from '../middlewares/auth.middleware';
-import { validateRequest, validateParams } from '../middlewares/validation.middleware';
-import { scanQRCodeSchema, createQRCodeSchema, qrCodeIdSchema } from '../schemas/qrCode.schema';
-import { Request, Response, NextFunction } from 'express';
-import { asyncHandler } from '../utils';
+import { authenticateToken } from '../middlewares/auth.middleware';
+import { validate } from '../middlewares/validate';
+import {
+  createQRCodeSchema,
+  assignQRCodeSchema,
+  scanQRCodeSchema,
+  revokeQRCodeSchema,
+  disableQRCodeSchema,
+  reactivateQRCodeSchema,
+  getQRCodeImageSchema,
+} from '../schemas/qrCode.schema';
 
 const router = Router();
 
-// Public routes with rate limiting and validation
-router.post('/scan',
-  // qrScanLimiter, // Disabled for testing
-  validateRequest(scanQRCodeSchema),
-  asyncHandler(qrCodeController.scanQRCode)
-);
+// Create QR code
+router.post('/create', authenticateToken, validate(createQRCodeSchema), qrCodeController.createQRCode);
 
-router.get('/image/:token', asyncHandler(qrCodeController.getQRCodeImage));
+// Assign QR code to user
+router.post('/:qrCodeId/assign', authenticateToken, validate(assignQRCodeSchema), qrCodeController.assignQRCode);
 
-// Protected routes (temporarily disabled for testing)
-router.post('/create',
-  (req: Request, res: Response, next: NextFunction) =>
-    authenticateToken(req as AuthenticatedRequest, res, next),
-  // qrCreateLimiter, // Disabled for testing
-  validateRequest(createQRCodeSchema),
-  asyncHandler(qrCodeController.createQRCode)
-);
+// Scan QR code
+router.post('/scan', validate(scanQRCodeSchema), qrCodeController.scanQRCode);
 
-router.get('/my-codes',
-  (req: Request, res: Response, next: NextFunction) =>
-    authenticateToken(req as AuthenticatedRequest, res, next),
-  asyncHandler(qrCodeController.getUserQRCodes)
-);
+// Get my QR codes
+router.get('/my-codes', authenticateToken, qrCodeController.getMyQRCodes);
 
-router.patch('/:qrCodeId/revoke',
-  (req: Request, res: Response, next: NextFunction) =>
-    authenticateToken(req as AuthenticatedRequest, res, next),
-  validateParams(qrCodeIdSchema),
-  asyncHandler(qrCodeController.revokeQRCode)
-);
+// Get unassigned QR codes (admin only - you may want to add admin middleware)
+router.get('/unassigned', authenticateToken, qrCodeController.getUnassignedQRCodes);
+
+// Revoke QR code
+router.patch('/:qrCodeId/revoke', authenticateToken, validate(revokeQRCodeSchema), qrCodeController.revokeQRCode);
+
+// Disable QR code
+router.patch('/:qrCodeId/disable', authenticateToken, validate(disableQRCodeSchema), qrCodeController.disableQRCode);
+
+// Reactivate QR code
+router.patch('/:qrCodeId/reactivate', authenticateToken, validate(reactivateQRCodeSchema), qrCodeController.reactivateQRCode);
+
+// Get QR code image
+router.get('/image/:token', validate(getQRCodeImageSchema), qrCodeController.getQRCodeImage);
 
 export default router;
