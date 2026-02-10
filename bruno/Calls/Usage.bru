@@ -1,11 +1,11 @@
 meta {
-  name: "Get Call Usage"
+  name: Usage
   type: http
-  seq: 12
+  seq: 9
 }
 
 get {
-  url: {{baseUrl}}/api/calls/usage
+  url: {{baseUrl}}/api/calls/usage/stats
   body: none
   auth: bearer
 }
@@ -18,10 +18,9 @@ tests {
   test("Should get call usage successfully", function() {
     expect(res.status).to.equal(200);
     expect(res.body.success).to.be.true;
-    expect(res.body.data.usage).to.be.an('object');
-    expect(res.body.data.usage.used).to.be.a('number');
-    expect(res.body.data.usage.limit).to.be.a('number');
-    expect(res.body.data.usage.tier).to.be.a('string');
-    expect(res.body.data.usage.remaining).to.be.a('number');
+    expect(res.body.data.used).to.be.a('number');
+    expect(res.body.data.limit).to.be.a('number');
+    expect(res.body.data.plan).to.be.a('string');
+    expect(res.body.data.remaining).to.be.a('number');
   });
 }

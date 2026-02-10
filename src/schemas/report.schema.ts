@@ -1,11 +1,44 @@
 import { z } from 'zod';
 
-export const createReportSchema = z.object({
-    type: z.enum(['bug', 'complaint', 'feature_request', 'other'], {
-        error: "Type must be one of: bug, complaint, feature_request, other"
-    }),
-    subject: z.string().min(5, 'Subject must be at least 5 characters').max(255),
-    description: z.string().min(10, 'Description must be at least 10 characters'),
+export const createBugReportSchema = z.object({
+  body: z.object({
+    description: z.string().min(10).max(5000),
+    severity: z.enum(['low', 'medium', 'high', 'critical']).default('medium'),
+  }),
 });
 
-export type CreateReportInput = z.infer<typeof createReportSchema>;
+export const getBugReportSchema = z.object({
+  params: z.object({
+    reportId: z.string().uuid(),
+  }),
+});
+
+export const updateBugReportStatusSchema = z.object({
+  body: z.object({
+    status: z.enum(['open', 'in_progress', 'resolved']),
+  }),
+  params: z.object({
+    reportId: z.string().uuid(),
+  }),
+});
+
+export const updateBugReportSeveritySchema = z.object({
+  body: z.object({
+    severity: z.enum(['low', 'medium', 'high', 'critical']),
+  }),
+  params: z.object({
+    reportId: z.string().uuid(),
+  }),
+});
+
+export const getBugReportsBySeveritySchema = z.object({
+  params: z.object({
+    severity: z.enum(['low', 'medium', 'high', 'critical']),
+  }),
+});
+
+export const getBugReportsByStatusSchema = z.object({
+  params: z.object({
+    status: z.enum(['open', 'in_progress', 'resolved']),
+  }),
+});

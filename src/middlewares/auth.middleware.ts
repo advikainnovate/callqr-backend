@@ -6,7 +6,7 @@ import { logger, UnauthorizedError, ForbiddenError } from '../utils';
 export interface AuthenticatedRequest extends Request {
   user?: {
     userId: string;
-    email: string;
+    username: string;
   };
 }
 
@@ -28,7 +28,7 @@ export const authenticateToken = (
       return next(new ForbiddenError('Invalid or expired token'));
     }
 
-    req.user = decoded as { userId: string; email: string };
+    req.user = decoded as { userId: string; username: string };
     next();
   });
 };

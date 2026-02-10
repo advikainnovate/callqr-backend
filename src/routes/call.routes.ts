@@ -1,59 +1,44 @@
 import { Router } from 'express';
 import { callController } from '../controllers/call.controller';
-import { authenticateToken, AuthenticatedRequest } from '../middlewares/auth.middleware';
-import { validateRequest, validateParams } from '../middlewares/validation.middleware';
-import { initiateCallSchema, updateCallStatusSchema, callIdSchema } from '../schemas/call.schema';
-import { Request, Response, NextFunction } from 'express';
-import { asyncHandler } from '../utils';
+import { authenticateToken } from '../middlewares/auth.middleware';
+import { validate } from '../middlewares/validate';
+import {
+  initiateCallSchema,
+  updateCallStatusSchema,
+  getCallSessionSchema,
+  endCallSchema,
+  acceptCallSchema,
+  rejectCallSchema,
+  getCallHistorySchema,
+} from '../schemas/call.schema';
 
 const router = Router();
 
-// All call routes are protected (temporarily disabled for testing)
-router.post('/initiate',
-  (req: Request, res: Response, next: NextFunction) =>
-    authenticateToken(req as AuthenticatedRequest, res, next),
-  validateRequest(initiateCallSchema),
-  asyncHandler(callController.initiateCall)
-);
+// Initiate a call
+router.post('/initiate', authenticateToken, validate(initiateCallSchema), callController.initiateCall);
 
-router.get('/history',
-  (req: Request, res: Response, next: NextFunction) =>
-    authenticateToken(req as AuthenticatedRequest, res, next),
-  asyncHandler(callController.getCallHistory)
-);
+// Get call session details
+router.get('/:callId', authenticateToken, validate(getCallSessionSchema), callController.getCallSession);
 
-router.get('/usage',
-  (req: Request, res: Response, next: NextFunction) =>
-    authenticateToken(req as AuthenticatedRequest, res, next),
-  asyncHandler(callController.getCallUsage)
-);
+// Update call status
+router.patch('/:callId/status', authenticateToken, validate(updateCallStatusSchema), callController.updateCallStatus);
 
-router.get('/active',
-  (req: Request, res: Response, next: NextFunction) =>
-    authenticateToken(req as AuthenticatedRequest, res, next),
-  asyncHandler(callController.getActiveCalls)
-);
+// End call
+router.patch('/:callId/end', authenticateToken, validate(endCallSchema), callController.endCall);
 
-router.get('/:callId',
-  (req: Request, res: Response, next: NextFunction) =>
-    authenticateToken(req as AuthenticatedRequest, res, next),
-  validateParams(callIdSchema),
-  asyncHandler(callController.getCallDetails)
-);
+// Accept call
+router.patch('/:callId/accept', authenticateToken, validate(acceptCallSchema), callController.acceptCall);
 
-router.patch('/:callId/status',
-  (req: Request, res: Response, next: NextFunction) =>
-    authenticateToken(req as AuthenticatedRequest, res, next),
-  validateParams(callIdSchema),
-  validateRequest(updateCallStatusSchema),
-  asyncHandler(callController.updateCallStatus)
-);
+// Reject call
+router.patch('/:callId/reject', authenticateToken, validate(rejectCallSchema), callController.rejectCall);
 
-router.patch('/:callId/end',
-  (req: Request, res: Response, next: NextFunction) =>
-    authenticateToken(req as AuthenticatedRequest, res, next),
-  validateParams(callIdSchema),
-  asyncHandler(callController.endCall)
-);
+// Get call history
+router.get('/history/all', authenticateToken, validate(getCallHistorySchema), callController.getCallHistory);
+
+// Get active calls
+router.get('/active/list', authenticateToken, callController.getActiveCalls);
+
+// Get call usage
+router.get('/usage/stats', authenticateToken, callController.getCallUsage);
 
 export default router;

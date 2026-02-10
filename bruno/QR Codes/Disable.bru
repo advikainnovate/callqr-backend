@@ -1,0 +1,23 @@
+meta {
+  name: Disable
+  type: http
+  seq: 7
+}
+
+patch {
+  url: {{baseUrl}}/api/qr-codes/{{qrCodeId}}/disable
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+tests {
+  test("Should disable QR code successfully", function() {
+    expect(res.status).to.equal(200);
+    expect(res.body.success).to.be.true;
+    expect(res.body.data.status).to.equal('disabled');
+  });
+}

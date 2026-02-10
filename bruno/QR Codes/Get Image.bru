@@ -1,7 +1,7 @@
 meta {
-  name: "Get QR Code Image"
+  name: Get Image
   type: http
-  seq: 6
+  seq: 5
 }
 
 get {
@@ -11,8 +11,10 @@ get {
 }
 
 tests {
-  test("Should return QR code image", function() {
+  test("Should get QR code image successfully", function() {
     expect(res.status).to.equal(200);
-    expect(res.headers['content-type']).to.include('image/');
+    expect(res.body.success).to.be.true;
+    expect(res.body.data.image).to.be.a('string');
+    expect(res.body.data.image).to.include('data:image');
   });
 }

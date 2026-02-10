@@ -1,16 +1,14 @@
 import { pgTable, text, timestamp, uuid, varchar } from 'drizzle-orm/pg-core';
 import { users } from './user.schema';
 
-export const reports = pgTable('reports', {
-    id: uuid('id').primaryKey().defaultRandom(),
-    userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-    type: varchar('type', { length: 50 }).notNull(), // 'bug', 'complaint', 'feature_request', 'other'
-    subject: text('subject').notNull(),
-    description: text('description').notNull(),
-    status: varchar('status', { length: 50 }).notNull().default('pending'), // 'pending', 'in_progress', 'resolved', 'closed'
-    createdAt: timestamp('created_at').defaultNow(),
-    updatedAt: timestamp('updated_at').defaultNow(),
+export const bugReports = pgTable('bug_reports', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').references(() => users.id, { onDelete: 'set null' }),
+  description: text('description').notNull(),
+  severity: varchar('severity', { length: 20 }).notNull().default('medium'), // low, medium, high, critical
+  status: varchar('status', { length: 20 }).notNull().default('open'), // open, in_progress, resolved
+  createdAt: timestamp('created_at').defaultNow(),
 });
 
-export type Report = typeof reports.$inferSelect;
-export type NewReport = typeof reports.$inferInsert;
+export type BugReport = typeof bugReports.$inferSelect;
+export type NewBugReport = typeof bugReports.$inferInsert;

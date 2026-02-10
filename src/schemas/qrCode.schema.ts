@@ -1,16 +1,50 @@
 import { z } from 'zod';
 
 export const createQRCodeSchema = z.object({
-  expiresAt: z.string().datetime().optional(),
+  body: z.object({}).optional(),
+});
+
+export const assignQRCodeSchema = z.object({
+  body: z.object({
+    userId: z.string().uuid(),
+  }),
+  params: z.object({
+    qrCodeId: z.string().uuid(),
+  }),
 });
 
 export const scanQRCodeSchema = z.object({
-  token: z.string().min(1, 'Token is required'),
+  body: z.object({
+    token: z.string().length(64),
+  }),
 });
 
-export type CreateQRCodeInput = z.infer<typeof createQRCodeSchema>;
-export type ScanQRCodeInput = z.infer<typeof scanQRCodeSchema>;
+export const getQRCodeByTokenSchema = z.object({
+  params: z.object({
+    token: z.string().length(64),
+  }),
+});
 
-export const qrCodeIdSchema = z.object({
-  qrCodeId: z.string().uuid('Invalid QR code ID format'),
+export const revokeQRCodeSchema = z.object({
+  params: z.object({
+    qrCodeId: z.string().uuid(),
+  }),
+});
+
+export const disableQRCodeSchema = z.object({
+  params: z.object({
+    qrCodeId: z.string().uuid(),
+  }),
+});
+
+export const reactivateQRCodeSchema = z.object({
+  params: z.object({
+    qrCodeId: z.string().uuid(),
+  }),
+});
+
+export const getQRCodeImageSchema = z.object({
+  params: z.object({
+    token: z.string().length(64),
+  }),
 });

@@ -1,18 +1,50 @@
 import { z } from 'zod';
 
 export const initiateCallSchema = z.object({
-  qrToken: z.string().min(1, 'QR token is required'),
-  callType: z.enum(['webrtc', 'twilio']).default('webrtc'),
+  body: z.object({
+    qrToken: z.string().length(64),
+  }),
 });
 
 export const updateCallStatusSchema = z.object({
-  status: z.enum(['initiated', 'connected', 'ended', 'failed']),
-  duration: z.number().int().min(0).optional(),
+  body: z.object({
+    status: z.enum(['initiated', 'ringing', 'connected', 'ended', 'failed']),
+    endedReason: z.enum(['busy', 'rejected', 'timeout', 'error']).optional(),
+  }),
+  params: z.object({
+    callId: z.string().uuid(),
+  }),
 });
 
-export const callIdSchema = z.object({
-  callId: z.string().uuid('Invalid call ID format'),
+export const getCallSessionSchema = z.object({
+  params: z.object({
+    callId: z.string().uuid(),
+  }),
 });
 
-export type InitiateCallInput = z.infer<typeof initiateCallSchema>;
-export type UpdateCallStatusInput = z.infer<typeof updateCallStatusSchema>;
+export const endCallSchema = z.object({
+  body: z.object({
+    reason: z.enum(['busy', 'rejected', 'timeout', 'error']).optional(),
+  }),
+  params: z.object({
+    callId: z.string().uuid(),
+  }),
+});
+
+export const acceptCallSchema = z.object({
+  params: z.object({
+    callId: z.string().uuid(),
+  }),
+});
+
+export const rejectCallSchema = z.object({
+  params: z.object({
+    callId: z.string().uuid(),
+  }),
+});
+
+export const getCallHistorySchema = z.object({
+  query: z.object({
+    limit: z.string().transform(Number).optional(),
+  }),
+});

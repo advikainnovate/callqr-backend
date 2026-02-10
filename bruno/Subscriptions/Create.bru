@@ -1,0 +1,35 @@
+meta {
+  name: Create
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/subscriptions
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+body:json {
+  {
+    "userId": "{{userId}}",
+    "plan": "pro"
+  }
+}
+
+tests {
+  test("Should create subscription successfully", function() {
+    expect(res.status).to.equal(201);
+    expect(res.body.success).to.be.true;
+    expect(res.body.data.userId).to.equal(env.userId);
+    expect(res.body.data.plan).to.equal('pro');
+    expect(res.body.data.status).to.equal('active');
+    
+    // Store subscription ID
+    bru.setEnvVar("subscriptionId", res.body.data.id);
+  });
+}

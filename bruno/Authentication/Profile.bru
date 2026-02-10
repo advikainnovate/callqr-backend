@@ -1,5 +1,5 @@
 meta {
-  name: "Get User Profile"
+  name: Profile
   type: http
   seq: 3
 }
@@ -7,15 +7,19 @@ meta {
 get {
   url: {{baseUrl}}/api/users/profile
   body: none
-  auth: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
 }
 
 tests {
   test("Should get user profile successfully", function() {
     expect(res.status).to.equal(200);
     expect(res.body.success).to.be.true;
-    expect(res.body.data.user.email).to.be.a('string');
-    expect(res.body.data.user.id).to.be.a('string');
-    expect(res.body.data.user.isActive).to.be.true;
+    expect(res.body.data.id).to.be.a('string');
+    expect(res.body.data.username).to.be.a('string');
+    expect(res.body.data.status).to.equal('active');
   });
 }

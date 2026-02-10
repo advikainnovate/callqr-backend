@@ -1,72 +1,122 @@
-import { Request, Response } from 'express';
+import { Response } from 'express';
 import { qrCodeService } from '../services/qrCode.service';
-import {
-  UnauthorizedError,
-  sendSuccessResponse
-} from '../utils';
 import { AuthenticatedRequest } from '../middlewares/auth.middleware';
+import { asyncHandler } from '../utils';
+import { sendSuccessResponse } from '../utils/responseHandler';
 
 export class QRCodeController {
-  async createQRCode(req: Request, res: Response) {
-    const userId = (req as AuthenticatedRequest).user?.userId;
-    if (!userId) throw new UnauthorizedError();
-
-    const { expiresAt } = req.body;
-    const qrCode = await qrCodeService.createQRCode(
-      userId,
-      expiresAt ? new Date(expiresAt) : undefined
-    );
-
-    const qrCodeDataURL = await qrCodeService.generateQRCodeDataURL(qrCode.token);
+  createQRCode = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const qrCode = await qrCodeService.createQRCode();
 
     sendSuccessResponse(res, 201, 'QR code created successfully', {
-      qrCode,
-      qrCodeDataURL,
+      id: qrCode.id,
+      token: qrCode.token,
+      status: qrCode.status,
+      createdAt: qrCode.createdAt,
     });
-  }
+  });
 
-  async scanQRCode(req: Request, res: Response) {
+  assignQRCode = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const { qrCodeId } = req.params;
+    const { userId } = req.body;
+
+    const qrCode = await qrCodeService.assignQRCode(qrCodeId, userId);
+
+    sendSuccessResponse(res, 200, 'QR code assigned successfully', {
+      id: qrCode.id,
+      token: qrCode.token,
+      assignedUserId: qrCode.assignedUserId,
+      status: qrCode.status,
+      assignedAt: qrCode.assignedAt,
+    });
+  });
+
+  scanQRCode = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const { token } = req.body;
-    const { qrCode, user } = await qrCodeService.scanQRCode(token);
+    const result = await qrCodeService.scanQRCode(token);
 
     sendSuccessResponse(res, 200, 'QR code scanned successfully', {
-      qrCodeId: qrCode.id,
-      userId: qrCode.userId,
-      scanCount: qrCode.scanCount + 1,
-      user: {
-        id: user.id,
-        isActive: user.isActive,
-        createdAt: user.createdAt,
+      qrCode: {
+        id: result.qrCode.id,
+        status: result.qrCode.status,
       },
+      user: result.user,
     });
-  }
+  });
 
-  async getUserQRCodes(req: Request, res: Response) {
-    const userId = (req as AuthenticatedRequest).user?.userId;
-    if (!userId) throw new UnauthorizedError();
-
+  getMyQRCodes = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const userId = req.user!.userId;
     const qrCodes = await qrCodeService.getUserQRCodes(userId);
 
-    sendSuccessResponse(res, 200, undefined, { qrCodes });
-  }
+    sendSuccessResponse(res, 200, 'QR codes retrieved successfully', {
+      qrCodes: qrCodes.map((qr) => ({
+        id: qr.id,
+        token: qr.token,
+        status: qr.status,
+        assignedAt: qr.assignedAt,
+        createdAt: qr.createdAt,
+      })),
+    });
+  });
 
-  async revokeQRCode(req: Request, res: Response) {
-    const userId = (req as AuthenticatedRequest).user?.userId;
-    if (!userId) throw new UnauthorizedError();
+  getUnassignedQRCodes = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const limit = req.query.limit ? parseInt(req.query.limit as string) : 100;
+    const qrCodes = await qrCodeService.getUnassignedQRCodes(limit);
 
+    sendSuccessResponse(res, 200, 'Unassigned QR codes retrieved successfully', {
+      qrCodes: qrCodes.map((qr) => ({
+        id: qr.id,
+        token: qr.token,
+        status: qr.status,
+        createdAt: qr.createdAt,
+      })),
+    });
+  });
+
+  revokeQRCode = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const { qrCodeId } = req.params;
-    await qrCodeService.revokeQRCode(qrCodeId, userId);
+    const userId = req.user!.userId;
 
-    sendSuccessResponse(res, 200, 'QR code revoked successfully');
-  }
+    const qrCode = await qrCodeService.revokeQRCode(qrCodeId, userId);
 
-  async getQRCodeImage(req: Request, res: Response) {
+    sendSuccessResponse(res, 200, 'QR code revoked successfully', {
+      id: qrCode.id,
+      status: qrCode.status,
+    });
+  });
+
+  disableQRCode = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const { qrCodeId } = req.params;
+    const userId = req.user!.userId;
+
+    const qrCode = await qrCodeService.disableQRCode(qrCodeId, userId);
+
+    sendSuccessResponse(res, 200, 'QR code disabled successfully', {
+      id: qrCode.id,
+      status: qrCode.status,
+    });
+  });
+
+  reactivateQRCode = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const { qrCodeId } = req.params;
+    const userId = req.user!.userId;
+
+    const qrCode = await qrCodeService.reactivateQRCode(qrCodeId, userId);
+
+    sendSuccessResponse(res, 200, 'QR code reactivated successfully', {
+      id: qrCode.id,
+      status: qrCode.status,
+    });
+  });
+
+  getQRCodeImage = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const { token } = req.params;
-    await qrCodeService.validateQRCode(token);
-    const qrCodeDataURL = await qrCodeService.generateQRCodeDataURL(token);
+    const dataURL = await qrCodeService.generateQRCodeImage(token);
 
-    sendSuccessResponse(res, 200, undefined, { qrCodeDataURL });
-  }
+    sendSuccessResponse(res, 200, 'QR code image generated successfully', {
+      image: dataURL,
+    });
+  });
 }
 
 export const qrCodeController = new QRCodeController();

@@ -1,11 +1,11 @@
 meta {
-  name: "Get Active Calls"
+  name: List Active
   type: http
-  seq: 6
+  seq: 8
 }
 
 get {
-  url: {{baseUrl}}/api/calls/active
+  url: {{baseUrl}}/api/calls/active/list
   body: none
   auth: bearer
 }
@@ -15,9 +15,9 @@ auth:bearer {
 }
 
 tests {
-  test("Should get active calls", function() {
+  test("Should list active calls successfully", function() {
     expect(res.status).to.equal(200);
     expect(res.body.success).to.be.true;
-    expect(res.body.data.activeCalls).to.be.an('array');
+    expect(res.body.data.calls).to.be.an('array');
   });
 }

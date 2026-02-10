@@ -1,26 +1,27 @@
 # Privacy-Preserving QR-Based Calling System
 
-A secure, privacy-focused calling system where users can initiate WebRTC calls by scanning QR codes without exposing personal information like phone numbers, names, or email addresses.
+A secure, privacy-focused calling system where users can initiate WebRTC calls by scanning QR codes without exposing personal information.
 
 ## 🚀 Features
 
 ### Core Functionality
-- **Privacy-Preserving**: QR codes contain only secure tokens, no personal data
+- **Privacy-Preserving**: Phone/email are hashed, QR codes contain only secure tokens
 - **WebRTC Calling**: In-app voice/video calls with real-time signaling
 - **Secure Authentication**: JWT-based user authentication
-- **QR Code Management**: Create, scan, revoke QR codes with expiration
-- **Call Routing**: Automatic call setup through secure token mapping
+- **QR Code Lifecycle**: Create, assign, scan, revoke, disable, or reactivate QR codes
+- **Call Session Management**: Detailed call status tracking with reason codes
 - **Real-time Communication**: Socket.IO for instant call signaling
-- **Subscription Tiers**: Managed daily call limits (Free, Gold, Platinum)
-- **Reporting System**: Submit and track bug reports or complaints
+- **Subscription Management**: Three tiers with daily call limits (Free, Pro, Enterprise)
+- **Bug Reporting**: Submit and track bug reports (anonymous supported)
 
 ### Security Features
 - **Rate Limiting**: Prevent abuse with intelligent rate limiting
 - **Input Validation**: Comprehensive request validation with Zod
-- **Token Security**: Cryptographically secure QR tokens
+- **Token Security**: Cryptographically secure QR tokens (64-char hex)
 - **Authentication**: JWT tokens with proper expiration
 - **CORS Protection**: Configurable cross-origin security
 - **Security Headers**: Helmet.js for security best practices
+- **Data Privacy**: Phone and email stored as SHA-256 hashes
 
 ## 🏗️ Architecture
 
@@ -31,9 +32,10 @@ A secure, privacy-focused calling system where users can initiate WebRTC calls b
 │ - QR Scanner    │◄──►│ - Express.js    │◄──►│                 │
 │ - WebRTC Client │    │ - Socket.IO     │    │ - Users         │
 │ - Auth Manager  │    │ - JWT Auth      │    │ - QR Codes      │
-└─────────────────┘    │ - Rate Limiting │    │ - Calls         │
-                       │ - Validation    │    └─────────────────┘
-                       └─────────────────┘
+└─────────────────┘    │ - Rate Limiting │    │ - Call Sessions │
+                       │ - Validation    │    │ - Subscriptions │
+                       └─────────────────┘    │ - Bug Reports   │
+                                              └─────────────────┘
 ```
 
 ## 📋 Prerequisites
@@ -88,8 +90,11 @@ RATE_LIMIT_MAX_REQUESTS=100
 # Setup database (creates if doesn't exist)
 node scripts/setup-database.js
 
-# Then run migrations
+# Push schema to database
 npm run db:push
+
+# Verify schema
+node scripts/verify-schema.js
 ```
 
 ### 4. Start the Server
@@ -119,38 +124,80 @@ transports: ['websocket']
 
 ### Complete Testing Flow
 1. **Register** → Create test user
-2. **Login** → Get authentication token
-3. **Create QR** → Generate scannable QR code
-4. **Scan QR** → Get privacy-preserving profile
-5. **Initiate Call** → Start WebRTC signaling
-6. **Get Config** → Fetch STUN/TURN servers
+2. **Generate Token** → Create JWT token manually (see below)
+3. **Create QR** → Generate unassigned QR code
+4. **Assign QR** → Assign QR code to user
+5. **Scan QR** → Get privacy-preserving profile
+6. **Create Subscription** → Set up user subscription
+7. **Initiate Call** → Start WebRTC signaling
+8. **Get Config** → Fetch STUN/TURN servers
+
+### Generate JWT Token for Testing
+Since the new schema doesn't use passwords, generate tokens manually:
+
+```bash
+# After registering a user, generate a token
+node scripts/generate-test-token.js USER_ID USERNAME
+
+# Example
+node scripts/generate-test-token.js 123e4567-e89b-12d3-a456-426614174000 testuser
+```
+
+Copy the generated token and use it in your API requests.
 
 ## 📱 API Endpoints
 
-### Authentication
+### Authentication & Users
 - `POST /api/users/register` - Register new account
-- `POST /api/users/login` - User login
-- `GET /api/users/profile` - Get current session profile
+- `GET /api/users/profile` - Get current user profile
+- `GET /api/users/:userId` - Get user by ID
+- `PATCH /api/users/:userId` - Update user
+- `PATCH /api/users/:userId/block` - Block user (admin)
+- `DELETE /api/users/:userId` - Delete user (soft delete)
+- `PATCH /api/users/:userId/activate` - Activate user
+- `POST /api/users/verify/phone` - Verify phone exists
+- `POST /api/users/verify/email` - Verify email exists
 
 ### QR Code Management
-- `POST /api/qr-codes/create` - Generate a new encrypted QR token
-- `POST /api/qr-codes/scan` - Map token to User ID (privacy-safe)
-- `GET /api/qr-codes/my-codes` - List all your active/revoked codes
-- `GET /api/qr-codes/image/{token}` - Get a scannable PNG image of a token
-- `PATCH /api/qr-codes/{qrCodeId}/revoke` - Disable a specific QR code
+- `POST /api/qr-codes/create` - Generate a new unassigned QR code
+- `POST /api/qr-codes/:qrCodeId/assign` - Assign QR code to user
+- `POST /api/qr-codes/scan` - Scan QR code and get user info
+- `GET /api/qr-codes/my-codes` - List all your QR codes
+- `GET /api/qr-codes/unassigned` - List unassigned QR codes (admin)
+- `GET /api/qr-codes/image/:token` - Get QR code image (PNG)
+- `PATCH /api/qr-codes/:qrCodeId/revoke` - Revoke QR code
+- `PATCH /api/qr-codes/:qrCodeId/disable` - Disable QR code
+- `PATCH /api/qr-codes/:qrCodeId/reactivate` - Reactivate QR code
 
-### Call Management
+### Call Session Management
 - `POST /api/calls/initiate` - Start a call session
-- `GET /api/calls/{callId}` - View call status/logs
-- `GET /api/calls/history` - User's call log
-- `GET /api/calls/active` - Currently running calls
-- `PATCH /api/calls/{callId}/status` - Update session status
-- `PATCH /api/calls/{callId}/end` - Terminate call
-- `GET /api/calls/usage` - Get daily call consumption and limits
+- `GET /api/calls/:callId` - View call session details
+- `PATCH /api/calls/:callId/accept` - Accept incoming call
+- `PATCH /api/calls/:callId/reject` - Reject incoming call
+- `PATCH /api/calls/:callId/status` - Update call status
+- `PATCH /api/calls/:callId/end` - Terminate call
+- `GET /api/calls/history/all` - Get call history
+- `GET /api/calls/active/list` - Get currently active calls
+- `GET /api/calls/usage/stats` - Get daily call usage
 
-### Reports & Feedback
-- `POST /api/reports` - Submit a bug report or complaint
-- `GET /api/reports/my-reports` - List reports submitted by the user
+### Subscription Management
+- `POST /api/subscriptions` - Create subscription (admin)
+- `GET /api/subscriptions/active` - Get active subscription
+- `GET /api/subscriptions/history` - Get subscription history
+- `GET /api/subscriptions/plan` - Get current plan
+- `GET /api/subscriptions/usage` - Get call usage stats
+- `POST /api/subscriptions/upgrade` - Upgrade subscription plan
+- `DELETE /api/subscriptions/:subscriptionId` - Cancel subscription
+
+### Bug Reports
+- `POST /api/reports` - Submit a bug report (anonymous OK)
+- `GET /api/reports/:reportId` - Get bug report details
+- `GET /api/reports/my/all` - List my bug reports
+- `GET /api/reports/admin/all` - List all bug reports (admin)
+- `PATCH /api/reports/:reportId/status` - Update report status (admin)
+- `PATCH /api/reports/:reportId/severity` - Update severity (admin)
+- `GET /api/reports/severity/:severity` - Get reports by severity (admin)
+- `GET /api/reports/status/:status` - Get reports by status (admin)
 
 ### WebRTC Configuration
 - `GET /api/webrtc/config` - Fetches dynamic ICE (STUN/TURN) servers
@@ -217,61 +264,74 @@ socket.emit('end-call', { callId: 'CALL_ID' });
 ## 📊 Database Schema
 
 ### Users Table
-- `id` (UUID) - Primary key
-- `email` (TEXT) - Unique email address
-- `isActive` (BOOLEAN) - Account status
-- `subscriptionTier` (TEXT) - User tier (free, gold, platinum)
-- `isDeleted` (BOOLEAN) - Soft delete flag
-- `createdAt` (TIMESTAMP) - Registration time
-- `updatedAt` (TIMESTAMP) - Last update time
+```sql
+- id (uuid, pk)
+- username (text, unique)
+- phone_hash (text, nullable) -- SHA-256 hash
+- email_hash (text, nullable) -- SHA-256 hash
+- status (varchar) -- active, blocked, deleted
+- created_at (timestamp)
+- updated_at (timestamp)
+```
 
 ### QR Codes Table
-- `id` (UUID) - Primary key
-- `userId` (UUID) - Foreign key to users
-- `token` (VARCHAR) - Secure unique token (64-char hex)
-- `isActive` (BOOLEAN) - QR code status
-- `isRevoked` (BOOLEAN) - Revocation status
-- `expiresAt` (TIMESTAMP) - Optional expiration
-- `lastScannedAt` (TIMESTAMP) - Last scan time
-- `scanCount` (INTEGER) - Usage analytics
-- `createdAt` (TIMESTAMP) - Creation time
-- `updatedAt` (TIMESTAMP) - Last update time
+```sql
+- id (uuid, pk)
+- token (varchar, unique, indexed) -- 64-char hex
+- assigned_user_id (uuid, fk → users.id, nullable)
+- status (varchar) -- unassigned, active, disabled, revoked
+- created_at (timestamp)
+- assigned_at (timestamp, nullable)
+```
 
-### Calls Table
-- `id` (UUID) - Primary key
-- `callerId` (UUID) - Who initiated
-- `receiverId` (UUID) - Who received
-- `qrCodeId` (UUID) - QR code used
-- `status` (VARCHAR) - Call status (initiated, connected, ended, failed)
-- `callType` (VARCHAR) - webrtc
-- `duration` (INTEGER) - Call duration in seconds
-- `startedAt` (TIMESTAMP) - Call start time
-- `endedAt` (TIMESTAMP) - Call end time
-- `createdAt` (TIMESTAMP) - Creation time
-- `updatedAt` (TIMESTAMP) - Last update time
+### Call Sessions Table
+```sql
+- id (uuid, pk)
+- caller_id (uuid, fk → users.id)
+- receiver_id (uuid, fk → users.id)
+- qr_id (uuid, fk → qr_codes.id)
+- status (varchar) -- initiated, ringing, connected, ended, failed
+- ended_reason (varchar, nullable) -- busy, rejected, timeout, error
+- started_at (timestamp)
+- ended_at (timestamp, nullable)
+```
 
-### Reports Table
-- `id` (UUID) - Primary key
-- `userId` (UUID) - Foreign key to users
-- `type` (VARCHAR) - bug, complaint, feature_request, other
-- `subject` (TEXT) - Short summary
-- `description` (TEXT) - Full details
-- `status` (VARCHAR) - pending, in_progress, resolved, closed
-- `createdAt` (TIMESTAMP) - Submission time
+### Subscriptions Table
+```sql
+- id (uuid, pk)
+- user_id (uuid, fk → users.id)
+- plan (varchar) -- free, pro, enterprise
+- status (varchar) -- active, expired, canceled
+- started_at (timestamp)
+- expires_at (timestamp, nullable)
+- created_at (timestamp)
+```
+
+### Bug Reports Table
+```sql
+- id (uuid, pk)
+- user_id (uuid, fk → users.id, nullable) -- Allows anonymous reports
+- description (text)
+- severity (varchar) -- low, medium, high, critical
+- status (varchar) -- open, in_progress, resolved
+- created_at (timestamp)
+```
 
 ## 🔒 Security Features
 
 ### Privacy Protection
+- Phone and email are hashed using SHA-256 (not stored in plain text)
 - QR codes contain only secure tokens, no personal data
 - Tokens are cryptographically generated (32 bytes, hex encoded)
 - User information is never exposed in QR codes
-- QR scan returns only non-sensitive user data (id, isActive, createdAt)
+- QR scan returns only non-sensitive user data (id, username, status)
 
 ### Authentication & Authorization
 - JWT-based authentication with configurable expiration
 - Socket.IO connections require valid JWT tokens
 - All protected endpoints validate user authentication
 - Rate limiting prevents brute force attacks
+- User status management (active, blocked, deleted)
 
 ### Input Validation & Security
 - All inputs validated with Zod schemas
@@ -279,6 +339,20 @@ socket.emit('end-call', { callId: 'CALL_ID' });
 - XSS protection headers via Helmet.js
 - CORS configuration for cross-origin security
 - Request body sanitization
+
+## 📈 Subscription Tiers
+
+| Tier | Daily Call Limit | Features |
+|------|-----------------|----------|
+| Free | 20 calls/day | Basic features |
+| Pro | 80 calls/day | Enhanced features |
+| Enterprise | 200 calls/day | Full features |
+
+Subscription management includes:
+- Plan upgrades/downgrades
+- Subscription history tracking
+- Automatic expiration handling
+- Usage statistics and monitoring
 
 ## 🚀 Deployment
 
@@ -340,6 +414,19 @@ npm run db:generate  # Generate database migrations
 npm run db:migrate   # Run database migrations
 npm run db:push      # Push schema to database
 npm run db:studio    # Open Drizzle Studio
+npm run db:reset     # Reset database (drops all tables)
+```
+
+### Utility Scripts
+```bash
+# Verify database schema
+node scripts/verify-schema.js
+
+# Generate JWT token for testing
+node scripts/generate-test-token.js USER_ID USERNAME
+
+# Setup database
+node scripts/setup-database.js
 ```
 
 ### Project Structure
@@ -347,13 +434,48 @@ npm run db:studio    # Open Drizzle Studio
 src/
 ├── controllers/     # API endpoint handlers
 ├── services/        # Business logic
-├── models/          # Database schemas
+│   ├── user.service.ts
+│   ├── qrCode.service.ts
+│   ├── callSession.service.ts
+│   ├── subscription.service.ts
+│   ├── bugReport.service.ts
+│   └── webrtc.service.ts
+├── models/          # Database schemas (Drizzle)
+│   ├── user.schema.ts
+│   ├── qrCode.schema.ts
+│   ├── call.schema.ts
+│   ├── subscription.schema.ts
+│   └── report.schema.ts
 ├── routes/          # API routes
-├── middleware/      # Express middleware
+├── middlewares/     # Express middleware
 ├── schemas/         # Zod validation schemas
 ├── config/          # Configuration files
 ├── utils/           # Utility functions
 └── types/           # TypeScript type definitions
+```
+
+## 🆘 Troubleshooting
+
+### Server won't start
+```bash
+# Check database connection
+node scripts/verify-schema.js
+
+# Check for TypeScript errors
+npm run build
+```
+
+### Database errors
+```bash
+# Reset and recreate database
+npm run db:reset
+npm run db:push
+```
+
+### JWT errors
+```bash
+# Generate a new test token
+node scripts/generate-test-token.js USER_ID USERNAME
 ```
 
 ## 📄 License

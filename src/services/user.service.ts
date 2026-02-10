@@ -1,77 +1,48 @@
-import { eq, or, and, ne } from 'drizzle-orm';
+import { eq, or } from 'drizzle-orm';
 import { db } from '../db';
 import { users, type NewUser, type User } from '../models';
 import { v4 as uuidv4 } from 'uuid';
-import { logger, ConflictError, UnauthorizedError, NotFoundError } from '../utils';
-import bcrypt from 'bcrypt';
+import { logger, ConflictError, NotFoundError, BadRequestError } from '../utils';
+import crypto from 'crypto';
 
 export class UserService {
-  async register(userData: any): Promise<User> {
-    // Check for uniqueness
+  private hashData(data: string): string {
+    return crypto.createHash('sha256').update(data).digest('hex');
+  }
+
+  async createUser(userData: {
+    username: string;
+    phone?: string;
+    email?: string;
+  }): Promise<User> {
+    // Check if username already exists
     const existingUser = await db
       .select()
       .from(users)
-      .where(
-        or(
-          eq(users.email, userData.email),
-          eq(users.username, userData.username),
-          eq(users.phoneNo, userData.phoneNo)
-        )
-      )
+      .where(eq(users.username, userData.username))
       .limit(1);
 
     if (existingUser.length > 0) {
-      const user = existingUser[0];
-      let field = 'User';
-      if (user.email === userData.email) field = 'Email';
-      else if (user.username === userData.username) field = 'Username';
-      else if (user.phoneNo === userData.phoneNo) field = 'Phone number';
-
-      throw new ConflictError(`${field} already exists`);
+      throw new ConflictError('Username already exists');
     }
 
-    // Hash password
-    const hashedPassword = await bcrypt.hash(userData.password, 10);
+    // Hash phone and email if provided
+    const phoneHash = userData.phone ? this.hashData(userData.phone) : null;
+    const emailHash = userData.email ? this.hashData(userData.email) : null;
 
     // Create new user
-    const { password, ...userToCreate } = userData;
     const [user] = await db
       .insert(users)
       .values({
-        ...userToCreate,
         id: uuidv4(),
-        passwordHash: hashedPassword,
+        username: userData.username,
+        phoneHash,
+        emailHash,
+        status: 'active',
       })
       .returning();
 
-    logger.info(`User registered successfully: ${user.id}`);
-    return user;
-  }
-
-  async login(loginData: { email?: string; username?: string; password: string }): Promise<User> {
-    let user: User | undefined;
-
-    if (loginData.email) {
-      user = (await db.select().from(users).where(eq(users.email, loginData.email)).limit(1))[0];
-    } else if (loginData.username) {
-      user = (await db.select().from(users).where(eq(users.username, loginData.username)).limit(1))[0];
-    }
-
-    if (!user) {
-      throw new UnauthorizedError('Invalid credentials');
-    }
-
-    // Verify password
-    const isPasswordValid = await bcrypt.compare(loginData.password, user.passwordHash);
-    if (!isPasswordValid) {
-      throw new UnauthorizedError('Invalid credentials');
-    }
-
-    // Check if user is active
-    if (!user.isActive) {
-      throw new UnauthorizedError('Account is deactivated');
-    }
-
+    logger.info(`User created successfully: ${user.id}`);
     return user;
   }
 
@@ -89,33 +60,51 @@ export class UserService {
     return user;
   }
 
-  async updateProfile(userId: string, updateData: any): Promise<User> {
-    // If updating unique fields, check for collisions
-    if (updateData.email || updateData.username || updateData.phoneNo) {
-      const conditions = [];
-      if (updateData.email) conditions.push(eq(users.email, updateData.email));
-      if (updateData.username) conditions.push(eq(users.username, updateData.username));
-      if (updateData.phoneNo) conditions.push(eq(users.phoneNo, updateData.phoneNo));
+  async getUserByUsername(username: string): Promise<User | null> {
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.username, username))
+      .limit(1);
 
-      const collision = await db
+    return user || null;
+  }
+
+  async updateUser(
+    userId: string,
+    updateData: {
+      username?: string;
+      phone?: string;
+      email?: string;
+      status?: 'active' | 'blocked' | 'deleted';
+    }
+  ): Promise<User> {
+    // Check if username is being changed and if it's already taken
+    if (updateData.username) {
+      const existingUser = await db
         .select()
         .from(users)
-        .where(
-          and(
-            ne(users.id, userId),
-            or(...conditions)
-          )
-        )
+        .where(eq(users.username, updateData.username))
         .limit(1);
 
-      if (collision.length > 0) {
-        throw new ConflictError('One of the provided unique fields (email, username, or phone) is already taken');
+      if (existingUser.length > 0 && existingUser[0].id !== userId) {
+        throw new ConflictError('Username already exists');
       }
     }
 
+    // Prepare update data
+    const updatePayload: Partial<NewUser> = {
+      updatedAt: new Date(),
+    };
+
+    if (updateData.username) updatePayload.username = updateData.username;
+    if (updateData.phone) updatePayload.phoneHash = this.hashData(updateData.phone);
+    if (updateData.email) updatePayload.emailHash = this.hashData(updateData.email);
+    if (updateData.status) updatePayload.status = updateData.status;
+
     const [updatedUser] = await db
       .update(users)
-      .set({ ...updateData, updatedAt: new Date() })
+      .set(updatePayload)
       .where(eq(users.id, userId))
       .returning();
 
@@ -123,52 +112,46 @@ export class UserService {
       throw new NotFoundError('User not found');
     }
 
+    logger.info(`User updated: ${userId}`);
     return updatedUser;
   }
 
-  async changePassword(userId: string, currentPassword: string, newPassword: string): Promise<void> {
+  async blockUser(userId: string): Promise<User> {
+    return this.updateUser(userId, { status: 'blocked' });
+  }
+
+  async deleteUser(userId: string): Promise<User> {
+    return this.updateUser(userId, { status: 'deleted' });
+  }
+
+  async activateUser(userId: string): Promise<User> {
+    return this.updateUser(userId, { status: 'active' });
+  }
+
+  async isUserActive(userId: string): Promise<boolean> {
     const user = await this.getUserById(userId);
-
-    // Verify current password
-    const isPasswordValid = await bcrypt.compare(currentPassword, user.passwordHash);
-    if (!isPasswordValid) {
-      throw new UnauthorizedError('Incorrect current password');
-    }
-
-    // Hash new password
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
-
-    await db
-      .update(users)
-      .set({ passwordHash: hashedPassword, updatedAt: new Date() })
-      .where(eq(users.id, userId));
+    return user.status === 'active';
   }
 
-  async deactivateUser(id: string): Promise<void> {
+  async verifyPhone(phone: string): Promise<User | null> {
+    const phoneHash = this.hashData(phone);
     const [user] = await db
-      .update(users)
-      .set({ isActive: false, updatedAt: new Date() })
-      .where(eq(users.id, id))
-      .returning();
+      .select()
+      .from(users)
+      .where(eq(users.phoneHash, phoneHash))
+      .limit(1);
 
-    if (!user) {
-      throw new NotFoundError('User not found');
-    }
-  }
-
-  // Basic fetchers kept for internal use or other services if needed
-  async getUserByEmail(email: string): Promise<User | null> {
-    const [user] = await db.select().from(users).where(eq(users.email, email)).limit(1);
     return user || null;
   }
 
-  async getUserByUsername(username: string): Promise<User | null> {
-    const [user] = await db.select().from(users).where(eq(users.username, username)).limit(1);
-    return user || null;
-  }
+  async verifyEmail(email: string): Promise<User | null> {
+    const emailHash = this.hashData(email);
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.emailHash, emailHash))
+      .limit(1);
 
-  async getUserByPhone(phoneNo: string): Promise<User | null> {
-    const [user] = await db.select().from(users).where(eq(users.phoneNo, phoneNo)).limit(1);
     return user || null;
   }
 }

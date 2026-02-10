@@ -3,7 +3,7 @@ import { Server as HTTPServer } from 'http';
 import jwt from 'jsonwebtoken';
 import { appConfig } from '../config';
 import { logger } from '../utils';
-import { callService } from './call.service';
+import { callSessionService } from './callSession.service';
 import { userService } from './user.service';
 
 interface AuthenticatedSocket extends Socket {
@@ -71,12 +71,12 @@ export class WebRTCService {
         const decoded = jwt.verify(token, appConfig.jwt.secret) as any;
         const user = await userService.getUserById(decoded.userId);
 
-        if (!user || !user.isActive) {
+        if (!user || user.status !== 'active') {
           return next(new Error('Invalid user'));
         }
 
         socket.userId = user.id;
-        socket.email = user.email;
+        socket.email = user.username; // Using username instead of email
         next();
       } catch (error) {
         logger.warn('Socket authentication failed:', error);
@@ -141,7 +141,7 @@ export class WebRTCService {
       const { callId, targetUserId, data: signalData } = data;
 
       // Verify user is part of the call
-      const call = await callService.getCallById(callId);
+      const call = await callSessionService.getCallSessionById(callId);
       if (
         !call ||
         (call.callerId !== socket.userId && call.receiverId !== socket.userId)
@@ -181,7 +181,7 @@ export class WebRTCService {
       const { callId } = data;
 
       // Verify call and get details
-      const call = await callService.getCallById(callId);
+      const call = await callSessionService.getCallSessionById(callId);
       if (!call || call.callerId !== socket.userId) {
         socket.emit('error', { message: 'Unauthorized to initiate this call' });
         return;
@@ -193,11 +193,10 @@ export class WebRTCService {
         this.io.to(receiverSocketId).emit('incoming-call', {
           callId: call.id,
           callerId: call.callerId,
-          callType: call.callType,
         });
 
         // Update call status
-        await callService.updateCallStatus(callId, socket.userId!, 'initiated');
+        await callSessionService.updateCallStatus(callId, socket.userId!, 'ringing');
       } else {
         socket.emit('error', { message: 'Receiver is not online' });
       }
@@ -215,14 +214,14 @@ export class WebRTCService {
       const { callId } = data;
 
       // Verify call and get details
-      const call = await callService.getCallById(callId);
+      const call = await callSessionService.getCallSessionById(callId);
       if (!call || call.receiverId !== socket.userId) {
         socket.emit('error', { message: 'Unauthorized to accept this call' });
         return;
       }
 
       // Update call status
-      await callService.updateCallStatus(callId, socket.userId!, 'connected');
+      await callSessionService.updateCallStatus(callId, socket.userId!, 'connected');
 
       // Notify caller
       const callerSocketId = this.connectedUsers.get(call.callerId);
@@ -249,14 +248,14 @@ export class WebRTCService {
       const { callId } = data;
 
       // Verify call and get details
-      const call = await callService.getCallById(callId);
+      const call = await callSessionService.getCallSessionById(callId);
       if (!call || call.receiverId !== socket.userId) {
         socket.emit('error', { message: 'Unauthorized to reject this call' });
         return;
       }
 
       // Update call status
-      await callService.updateCallStatus(callId, socket.userId!, 'failed');
+      await callSessionService.rejectCall(callId, socket.userId!);
 
       // Notify caller
       const callerSocketId = this.connectedUsers.get(call.callerId);
@@ -280,14 +279,14 @@ export class WebRTCService {
       const { callId } = data;
 
       // End the call
-      const updatedCall = await callService.endCall(callId, socket.userId!);
+      const updatedCall = await callSessionService.endCall(callId, socket.userId!);
       if (!updatedCall) {
         socket.emit('error', { message: 'Failed to end call' });
         return;
       }
 
       // Get call details to notify other participant
-      const call = await callService.getCallById(callId);
+      const call = await callSessionService.getCallSessionById(callId);
       if (call) {
         const otherUserId =
           call.callerId === socket.userId ? call.receiverId : call.callerId;

@@ -1,0 +1,24 @@
+meta {
+  name: Reject
+  type: http
+  seq: 4
+}
+
+patch {
+  url: {{baseUrl}}/api/calls/{{callId}}/reject
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+tests {
+  test("Should reject call successfully", function() {
+    expect(res.status).to.equal(200);
+    expect(res.body.success).to.be.true;
+    expect(res.body.data.status).to.equal('failed');
+    expect(res.body.data.endedReason).to.equal('rejected');
+  });
+}

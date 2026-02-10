@@ -1,13 +1,13 @@
-export const SUBSCRIPTION_TIERS = {
+export const SUBSCRIPTION_PLANS = {
     FREE: 'free',
-    GOLD: 'gold',
-    PLATINUM: 'platinum',
+    PRO: 'pro',
+    ENTERPRISE: 'enterprise',
 } as const;
 
-export type SubscriptionTier = (typeof SUBSCRIPTION_TIERS)[keyof typeof SUBSCRIPTION_TIERS];
+export type SubscriptionPlan = (typeof SUBSCRIPTION_PLANS)[keyof typeof SUBSCRIPTION_PLANS];
 
-export const DAILY_CALL_LIMITS: Record<SubscriptionTier, number> = {
-    [SUBSCRIPTION_TIERS.FREE]: 20,
-    [SUBSCRIPTION_TIERS.GOLD]: 80,
-    [SUBSCRIPTION_TIERS.PLATINUM]: 200,
+export const DAILY_CALL_LIMITS: Record<SubscriptionPlan, number> = {
+    [SUBSCRIPTION_PLANS.FREE]: 20,
+    [SUBSCRIPTION_PLANS.PRO]: 80,
+    [SUBSCRIPTION_PLANS.ENTERPRISE]: 200,
 };

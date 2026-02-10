@@ -1,12 +1,12 @@
 meta {
-  name: "End Call"
+  name: End
   type: http
-  seq: 10
+  seq: 6
 }
 
 patch {
   url: {{baseUrl}}/api/calls/{{callId}}/end
-  body: none
+  body: json
   auth: bearer
 }
 
@@ -14,10 +14,17 @@ auth:bearer {
   token: {{authToken}}
 }
 
+body:json {
+  {
+    "reason": "timeout"
+  }
+}
+
 tests {
   test("Should end call successfully", function() {
     expect(res.status).to.equal(200);
     expect(res.body.success).to.be.true;
-    expect(res.body.message).to.equal('Call ended successfully');
+    expect(res.body.data.status).to.equal('ended');
+    expect(res.body.data.endedAt).to.be.a('string');
   });
 }

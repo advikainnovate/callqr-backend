@@ -1,7 +1,7 @@
 meta {
-  name: "Revoke QR Code"
+  name: Revoke
   type: http
-  seq: 12
+  seq: 6
 }
 
 patch {
@@ -18,6 +18,6 @@ tests {
   test("Should revoke QR code successfully", function() {
     expect(res.status).to.equal(200);
     expect(res.body.success).to.be.true;
-    expect(res.body.message).to.equal('QR code revoked successfully');
+    expect(res.body.data.status).to.equal('revoked');
   });
 }

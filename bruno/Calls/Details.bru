@@ -1,13 +1,13 @@
 meta {
-  name: "Get Call Details"
+  name: Details
   type: http
-  seq: 8
+  seq: 2
 }
 
 get {
-  url: "{{baseUrl}}/api/calls/{{callId}}"
-  auth: bearer
+  url: {{baseUrl}}/api/calls/{{callId}}
   body: none
+  auth: bearer
 }
 
 auth:bearer {
@@ -18,10 +18,7 @@ tests {
   test("Should get call details successfully", function() {
     expect(res.status).to.equal(200);
     expect(res.body.success).to.be.true;
-    expect(res.body.data.call.id).to.equal(env.callId);
-    expect(res.body.data.call.callerId).to.be.a('string');
-    expect(res.body.data.call.receiverId).to.be.a('string');
-    expect(res.body.data.call.status).to.be.a('string');
-    expect(res.body.data.call.callType).to.equal('webrtc');
+    expect(res.body.data.id).to.equal(env.callId);
+    expect(res.body.data.status).to.be.a('string');
   });
 }

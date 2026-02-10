@@ -5,6 +5,7 @@ import qrCodeRoutes from './qrCode.routes';
 import callRoutes from './call.routes';
 import webrtcRoutes from './webrtc.routes';
 import reportRoutes from './report.routes';
+import subscriptionRoutes from './subscription.routes';
 
 const router = Router();
 
@@ -22,5 +23,8 @@ router.use('/webrtc', webrtcRoutes);
 
 // Report routes
 router.use('/reports', reportRoutes);
+
+// Subscription routes
+router.use('/subscriptions', subscriptionRoutes);
 
 export default router;
