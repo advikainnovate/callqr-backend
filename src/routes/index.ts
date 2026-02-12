@@ -6,6 +6,8 @@ import callRoutes from './call.routes';
 import webrtcRoutes from './webrtc.routes';
 import reportRoutes from './report.routes';
 import subscriptionRoutes from './subscription.routes';
+import chatSessionRoutes from './chatSession.routes';
+import messageRoutes from './message.routes';
 
 const router = Router();
 
@@ -26,5 +28,11 @@ router.use('/reports', reportRoutes);
 
 // Subscription routes
 router.use('/subscriptions', subscriptionRoutes);
+
+// Chat session routes
+router.use('/chat-sessions', chatSessionRoutes);
+
+// Message routes
+router.use('/messages', messageRoutes);
 
 export default router;

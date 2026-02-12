@@ -2,16 +2,22 @@
 
 A secure, privacy-focused calling system where users can initiate WebRTC calls by scanning QR codes without exposing personal information.
 
+## 📖 Documentation
+
+- **[Frontend Integration Guide](FRONTEND_README.md)** - Complete guide for connecting your frontend 📱
+- **[API Documentation](http://localhost:4000/api-docs)** - Live Swagger docs 🔍
+
 ## 🚀 Features
 
 ### Core Functionality
 - **Privacy-Preserving**: Phone/email are hashed, QR codes contain only secure tokens
 - **WebRTC Calling**: In-app voice/video calls with real-time signaling
+- **Real-time Chat**: Text messaging with typing indicators and read receipts
 - **Secure Authentication**: JWT-based user authentication
 - **QR Code Lifecycle**: Create, assign, scan, revoke, disable, or reactivate QR codes
-- **Call Session Management**: Detailed call status tracking with reason codes
-- **Real-time Communication**: Socket.IO for instant call signaling
-- **Subscription Management**: Three tiers with daily call limits (Free, Pro, Enterprise)
+- **Call & Chat Session Management**: Detailed status tracking with reason codes
+- **Real-time Communication**: Socket.IO for instant signaling and messaging
+- **Subscription Management**: Three tiers with daily limits (Free, Pro, Enterprise)
 - **Bug Reporting**: Submit and track bug reports (anonymous supported)
 
 ### Security Features
@@ -31,10 +37,12 @@ A secure, privacy-focused calling system where users can initiate WebRTC calls b
 │                 │    │                 │    │     Database     │
 │ - QR Scanner    │◄──►│ - Express.js    │◄──►│                 │
 │ - WebRTC Client │    │ - Socket.IO     │    │ - Users         │
-│ - Auth Manager  │    │ - JWT Auth      │    │ - QR Codes      │
-└─────────────────┘    │ - Rate Limiting │    │ - Call Sessions │
-                       │ - Validation    │    │ - Subscriptions │
-                       └─────────────────┘    │ - Bug Reports   │
+│ - Chat Client   │    │ - JWT Auth      │    │ - QR Codes      │
+│ - Auth Manager  │    │ - Rate Limiting │    │ - Call Sessions │
+└─────────────────┘    │ - Validation    │    │ - Chat Sessions │
+                       └─────────────────┘    │ - Messages      │
+                                              │ - Subscriptions │
+                                              │ - Bug Reports   │
                                               └─────────────────┘
 ```
 
@@ -130,7 +138,24 @@ transports: ['websocket']
 5. **Scan QR** → Get privacy-preserving profile
 6. **Create Subscription** → Set up user subscription
 7. **Initiate Call** → Start WebRTC signaling
-8. **Get Config** → Fetch STUN/TURN servers
+8. **Initiate Chat** → Start chat session via QR scan
+9. **Send Messages** → Exchange messages with typing indicators
+10. **Get Config** → Fetch STUN/TURN servers
+
+### Chat Feature Workflow
+After scanning a QR code, users can choose to either call or chat:
+
+1. **Scan QR Code** → `POST /api/qr-codes/scan` with token
+2. **Choose Action**:
+   - **Call**: `POST /api/calls/initiate` → WebRTC signaling
+   - **Chat**: `POST /api/chat-sessions/initiate` → Start chat
+3. **Chat Flow**:
+   - Join chat room via Socket.IO: `socket.emit('join-chat', { chatSessionId })`
+   - Send messages: `POST /api/messages/send` → `socket.emit('chat-message')`
+   - Receive messages: `socket.on('new-message')`
+   - Typing indicators: `socket.emit('typing-start')` / `socket.emit('typing-stop')`
+   - Mark as read: `PATCH /api/messages/:messageId/read` → `socket.emit('message-read')`
+   - End chat: `PATCH /api/chat-sessions/:chatSessionId/end`
 
 ### Generate JWT Token for Testing
 Since the new schema doesn't use passwords, generate tokens manually:
@@ -199,6 +224,23 @@ Copy the generated token and use it in your API requests.
 - `GET /api/reports/severity/:severity` - Get reports by severity (admin)
 - `GET /api/reports/status/:status` - Get reports by status (admin)
 
+### Chat Management
+- `POST /api/chat-sessions/initiate` - Start a chat session via QR scan
+- `GET /api/chat-sessions/:chatSessionId` - Get chat session details
+- `GET /api/chat-sessions/my-chats` - List all your chat sessions
+- `GET /api/chat-sessions/active` - List active chat sessions
+- `PATCH /api/chat-sessions/:chatSessionId/end` - End chat session
+- `PATCH /api/chat-sessions/:chatSessionId/block` - Block chat session
+
+### Message Management
+- `POST /api/messages/send` - Send a message in chat
+- `GET /api/messages/:chatSessionId` - Get messages in chat (paginated)
+- `PATCH /api/messages/:messageId/read` - Mark message as read
+- `PATCH /api/messages/:chatSessionId/read-all` - Mark all messages as read
+- `DELETE /api/messages/:messageId` - Delete your message
+- `GET /api/messages/unread-count` - Get total unread message count
+- `GET /api/messages/:chatSessionId/search` - Search messages in chat
+
 ### WebRTC Configuration
 - `GET /api/webrtc/config` - Fetches dynamic ICE (STUN/TURN) servers
 
@@ -261,6 +303,55 @@ socket.emit('reject-call', { callId: 'CALL_ID' });
 socket.emit('end-call', { callId: 'CALL_ID' });
 ```
 
+### Chat Events
+```javascript
+// Join chat room
+socket.emit('join-chat', { chatSessionId: 'CHAT_ID' });
+
+// Send message (after creating via API)
+socket.emit('chat-message', { 
+  chatSessionId: 'CHAT_ID', 
+  messageId: 'MESSAGE_ID' 
+});
+
+// Typing indicators
+socket.emit('typing-start', { chatSessionId: 'CHAT_ID' });
+socket.emit('typing-stop', { chatSessionId: 'CHAT_ID' });
+
+// Mark message as read
+socket.emit('message-read', { 
+  chatSessionId: 'CHAT_ID', 
+  messageId: 'MESSAGE_ID' 
+});
+
+// Leave chat room
+socket.emit('leave-chat', { chatSessionId: 'CHAT_ID' });
+
+// Listen for new messages
+socket.on('new-message', (data) => {
+  console.log('New message:', data.messageId, data.senderId);
+});
+
+// Listen for typing indicators
+socket.on('user-typing', (data) => {
+  console.log('User typing:', data.userId);
+});
+
+socket.on('user-stopped-typing', (data) => {
+  console.log('User stopped typing:', data.userId);
+});
+
+// Listen for read receipts
+socket.on('message-read', (data) => {
+  console.log('Message read:', data.messageId, data.readBy);
+});
+
+// Listen for message delivery confirmation
+socket.on('message-delivered', (data) => {
+  console.log('Message delivered:', data.messageId);
+});
+```
+
 ## 📊 Database Schema
 
 ### Users Table
@@ -317,6 +408,32 @@ socket.emit('end-call', { callId: 'CALL_ID' });
 - created_at (timestamp)
 ```
 
+### Chat Sessions Table
+```sql
+- id (uuid, pk)
+- participant1_id (uuid, fk → users.id)
+- participant2_id (uuid, fk → users.id)
+- qr_id (uuid, fk → qr_codes.id)
+- status (varchar) -- active, ended, blocked
+- started_at (timestamp)
+- ended_at (timestamp, nullable)
+- last_message_at (timestamp, nullable)
+- created_at (timestamp)
+```
+
+### Messages Table
+```sql
+- id (uuid, pk)
+- chat_session_id (uuid, fk → chat_sessions.id)
+- sender_id (uuid, fk → users.id)
+- message_type (varchar) -- text, image, file, system
+- content (text)
+- is_read (boolean)
+- is_deleted (boolean)
+- sent_at (timestamp)
+- read_at (timestamp, nullable)
+```
+
 ## 🔒 Security Features
 
 ### Privacy Protection
@@ -342,17 +459,18 @@ socket.emit('end-call', { callId: 'CALL_ID' });
 
 ## 📈 Subscription Tiers
 
-| Tier | Daily Call Limit | Features |
-|------|-----------------|----------|
-| Free | 20 calls/day | Basic features |
-| Pro | 80 calls/day | Enhanced features |
-| Enterprise | 200 calls/day | Full features |
+| Tier | Daily Call Limit | Daily Message Limit | Active Chats | Features |
+|------|-----------------|---------------------|--------------|----------|
+| Free | 20 calls/day | 100 messages/day | 5 active | Basic features |
+| Pro | 80 calls/day | 500 messages/day | 20 active | Enhanced features |
+| Enterprise | 200 calls/day | Unlimited | Unlimited | Full features |
 
 Subscription management includes:
 - Plan upgrades/downgrades
 - Subscription history tracking
 - Automatic expiration handling
 - Usage statistics and monitoring
+- Call and message limit enforcement
 
 ## 🚀 Deployment
 
@@ -437,6 +555,8 @@ src/
 │   ├── user.service.ts
 │   ├── qrCode.service.ts
 │   ├── callSession.service.ts
+│   ├── chatSession.service.ts
+│   ├── message.service.ts
 │   ├── subscription.service.ts
 │   ├── bugReport.service.ts
 │   └── webrtc.service.ts
@@ -444,6 +564,8 @@ src/
 │   ├── user.schema.ts
 │   ├── qrCode.schema.ts
 │   ├── call.schema.ts
+│   ├── chatSession.schema.ts
+│   ├── message.schema.ts
 │   ├── subscription.schema.ts
 │   └── report.schema.ts
 ├── routes/          # API routes

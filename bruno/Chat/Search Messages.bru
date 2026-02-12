@@ -1,0 +1,23 @@
+meta {
+  name: Search Messages
+  type: http
+  seq: 13
+}
+
+get {
+  url: {{baseUrl}}/api/messages/:chatSessionId/search?query=hello
+  body: none
+  auth: bearer
+}
+
+params:path {
+  chatSessionId: your-chat-session-id
+}
+
+params:query {
+  query: hello
+}
+
+auth:bearer {
+  token: {{authToken}}
+}

@@ -1,0 +1,19 @@
+meta {
+  name: Get My Chats
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/api/chat-sessions/my-chats?limit=50
+  body: none
+  auth: bearer
+}
+
+params:query {
+  limit: 50
+}
+
+auth:bearer {
+  token: {{authToken}}
+}

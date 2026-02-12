@@ -1,0 +1,15 @@
+meta {
+  name: Get Active Chats
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/api/chat-sessions/active
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}

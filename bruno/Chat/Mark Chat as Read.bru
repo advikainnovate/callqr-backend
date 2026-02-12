@@ -1,0 +1,19 @@
+meta {
+  name: Mark Chat as Read
+  type: http
+  seq: 10
+}
+
+patch {
+  url: {{baseUrl}}/api/messages/:chatSessionId/read-all
+  body: none
+  auth: bearer
+}
+
+params:path {
+  chatSessionId: your-chat-session-id
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
