@@ -125,6 +125,31 @@ export class WebRTCService {
         await this.handleCallEnd(socket, data);
       });
 
+      // Chat event handlers
+      socket.on('join-chat', async (data: { chatSessionId: string }) => {
+        await this.handleJoinChat(socket, data);
+      });
+
+      socket.on('leave-chat', async (data: { chatSessionId: string }) => {
+        await this.handleLeaveChat(socket, data);
+      });
+
+      socket.on('chat-message', async (data: { chatSessionId: string; messageId: string }) => {
+        await this.handleChatMessage(socket, data);
+      });
+
+      socket.on('typing-start', async (data: { chatSessionId: string }) => {
+        await this.handleTypingStart(socket, data);
+      });
+
+      socket.on('typing-stop', async (data: { chatSessionId: string }) => {
+        await this.handleTypingStop(socket, data);
+      });
+
+      socket.on('message-read', async (data: { chatSessionId: string; messageId: string }) => {
+        await this.handleMessageRead(socket, data);
+      });
+
       // Handle disconnection
       socket.on('disconnect', () => {
         logger.info(`User disconnected from WebRTC: ${userId}`);
@@ -304,6 +329,124 @@ export class WebRTCService {
     } catch (error) {
       logger.error('Error handling call end:', error);
       socket.emit('error', { message: 'Failed to end call' });
+    }
+  }
+
+  // Chat event handlers
+  private async handleJoinChat(
+    socket: AuthenticatedSocket,
+    data: { chatSessionId: string }
+  ) {
+    try {
+      const { chatSessionId } = data;
+      
+      // Join the chat room
+      socket.join(`chat:${chatSessionId}`);
+      logger.info(`User ${socket.userId} joined chat room: ${chatSessionId}`);
+      
+      socket.emit('chat-joined', { chatSessionId });
+    } catch (error) {
+      logger.error('Error joining chat:', error);
+      socket.emit('error', { message: 'Failed to join chat' });
+    }
+  }
+
+  private async handleLeaveChat(
+    socket: AuthenticatedSocket,
+    data: { chatSessionId: string }
+  ) {
+    try {
+      const { chatSessionId } = data;
+      
+      // Leave the chat room
+      socket.leave(`chat:${chatSessionId}`);
+      logger.info(`User ${socket.userId} left chat room: ${chatSessionId}`);
+      
+      socket.emit('chat-left', { chatSessionId });
+    } catch (error) {
+      logger.error('Error leaving chat:', error);
+      socket.emit('error', { message: 'Failed to leave chat' });
+    }
+  }
+
+  private async handleChatMessage(
+    socket: AuthenticatedSocket,
+    data: { chatSessionId: string; messageId: string }
+  ) {
+    try {
+      const { chatSessionId, messageId } = data;
+      
+      // Broadcast new message to chat room (except sender)
+      socket.to(`chat:${chatSessionId}`).emit('new-message', {
+        chatSessionId,
+        messageId,
+        senderId: socket.userId,
+      });
+      
+      // Confirm delivery to sender
+      socket.emit('message-delivered', {
+        chatSessionId,
+        messageId,
+      });
+      
+      logger.info(`Message ${messageId} sent in chat ${chatSessionId}`);
+    } catch (error) {
+      logger.error('Error handling chat message:', error);
+      socket.emit('error', { message: 'Failed to send message' });
+    }
+  }
+
+  private async handleTypingStart(
+    socket: AuthenticatedSocket,
+    data: { chatSessionId: string }
+  ) {
+    try {
+      const { chatSessionId } = data;
+      
+      // Broadcast typing indicator to chat room (except sender)
+      socket.to(`chat:${chatSessionId}`).emit('user-typing', {
+        chatSessionId,
+        userId: socket.userId,
+      });
+    } catch (error) {
+      logger.error('Error handling typing start:', error);
+    }
+  }
+
+  private async handleTypingStop(
+    socket: AuthenticatedSocket,
+    data: { chatSessionId: string }
+  ) {
+    try {
+      const { chatSessionId } = data;
+      
+      // Broadcast typing stop to chat room (except sender)
+      socket.to(`chat:${chatSessionId}`).emit('user-stopped-typing', {
+        chatSessionId,
+        userId: socket.userId,
+      });
+    } catch (error) {
+      logger.error('Error handling typing stop:', error);
+    }
+  }
+
+  private async handleMessageRead(
+    socket: AuthenticatedSocket,
+    data: { chatSessionId: string; messageId: string }
+  ) {
+    try {
+      const { chatSessionId, messageId } = data;
+      
+      // Broadcast read receipt to chat room (except sender)
+      socket.to(`chat:${chatSessionId}`).emit('message-read', {
+        chatSessionId,
+        messageId,
+        readBy: socket.userId,
+      });
+      
+      logger.info(`Message ${messageId} read by ${socket.userId}`);
+    } catch (error) {
+      logger.error('Error handling message read:', error);
     }
   }
 

@@ -1,0 +1,19 @@
+meta {
+  name: End Chat
+  type: http
+  seq: 5
+}
+
+patch {
+  url: {{baseUrl}}/api/chat-sessions/:chatSessionId/end
+  body: none
+  auth: bearer
+}
+
+params:path {
+  chatSessionId: your-chat-session-id
+}
+
+auth:bearer {
+  token: {{authToken}}
+}

@@ -1,0 +1,19 @@
+meta {
+  name: Block Chat
+  type: http
+  seq: 6
+}
+
+patch {
+  url: {{baseUrl}}/api/chat-sessions/:chatSessionId/block
+  body: none
+  auth: bearer
+}
+
+params:path {
+  chatSessionId: your-chat-session-id
+}
+
+auth:bearer {
+  token: {{authToken}}
+}

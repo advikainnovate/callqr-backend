@@ -1,0 +1,21 @@
+meta {
+  name: Initiate Chat
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/chat-sessions/initiate
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+body:json {
+  {
+    "qrToken": "your-qr-token-here"
+  }
+}

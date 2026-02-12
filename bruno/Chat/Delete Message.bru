@@ -1,0 +1,19 @@
+meta {
+  name: Delete Message
+  type: http
+  seq: 11
+}
+
+delete {
+  url: {{baseUrl}}/api/messages/:messageId
+  body: none
+  auth: bearer
+}
+
+params:path {
+  messageId: your-message-id
+}
+
+auth:bearer {
+  token: {{authToken}}
+}

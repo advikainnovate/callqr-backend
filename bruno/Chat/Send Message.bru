@@ -1,0 +1,23 @@
+meta {
+  name: Send Message
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{baseUrl}}/api/messages/send
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+body:json {
+  {
+    "chatSessionId": "your-chat-session-id",
+    "content": "Hello! This is a test message.",
+    "messageType": "text"
+  }
+}

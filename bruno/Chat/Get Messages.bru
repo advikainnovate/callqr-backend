@@ -1,0 +1,24 @@
+meta {
+  name: Get Messages
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{baseUrl}}/api/messages/:chatSessionId?limit=50&offset=0
+  body: none
+  auth: bearer
+}
+
+params:path {
+  chatSessionId: your-chat-session-id
+}
+
+params:query {
+  limit: 50
+  offset: 0
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
