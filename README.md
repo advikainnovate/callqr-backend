@@ -184,8 +184,10 @@ Copy the generated token and use it in your API requests.
 - `POST /api/users/verify/email` - Verify email exists
 
 ### QR Code Management
-- `POST /api/qr-codes/create` - Generate a new unassigned QR code
-- `POST /api/qr-codes/:qrCodeId/assign` - Assign QR code to user
+- `POST /api/qr-codes/create` - Generate a new unassigned QR code (admin)
+- `POST /api/qr-codes/bulk-create` - Bulk generate QR codes (admin, 1-1000)
+- `POST /api/qr-codes/claim` - Claim an unassigned QR code (user)
+- `POST /api/qr-codes/:qrCodeId/assign` - Assign QR code to user (admin)
 - `POST /api/qr-codes/scan` - Scan QR code and get user info
 - `GET /api/qr-codes/my-codes` - List all your QR codes
 - `GET /api/qr-codes/unassigned` - List unassigned QR codes (admin)
@@ -368,7 +370,8 @@ socket.on('message-delivered', (data) => {
 ### QR Codes Table
 ```sql
 - id (uuid, pk)
-- token (varchar, unique, indexed) -- 64-char hex
+- token (varchar, unique, indexed) -- 64-char hex for QR image
+- human_token (varchar, unique, indexed) -- Human-readable (e.g., QR-K9F7-M2QX)
 - assigned_user_id (uuid, fk → users.id, nullable)
 - status (varchar) -- unassigned, active, disabled, revoked
 - created_at (timestamp)
@@ -542,6 +545,9 @@ node scripts/verify-schema.js
 
 # Generate JWT token for testing
 node scripts/generate-test-token.js USER_ID USERNAME
+
+# Bulk generate QR codes (1-1000)
+node scripts/generate-qr-codes.js 100
 
 # Setup database
 node scripts/setup-database.js

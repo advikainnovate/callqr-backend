@@ -4,6 +4,21 @@ export const createQRCodeSchema = z.object({
   body: z.object({}).optional(),
 });
 
+export const bulkCreateQRCodeSchema = z.object({
+  body: z.object({
+    count: z.number().int().min(1).max(1000),
+  }),
+});
+
+export const claimQRCodeSchema = z.object({
+  body: z.object({
+    token: z.string().length(64).optional(),
+    humanToken: z.string().regex(/^QR-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$/i).optional(),
+  }).refine(data => data.token || data.humanToken, {
+    message: 'Either token or humanToken must be provided',
+  }),
+});
+
 export const assignQRCodeSchema = z.object({
   body: z.object({
     userId: z.string().uuid(),
@@ -15,7 +30,10 @@ export const assignQRCodeSchema = z.object({
 
 export const scanQRCodeSchema = z.object({
   body: z.object({
-    token: z.string().length(64),
+    token: z.string().length(64).optional(),
+    humanToken: z.string().regex(/^QR-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$/i).optional(),
+  }).refine(data => data.token || data.humanToken, {
+    message: 'Either token or humanToken must be provided',
   }),
 });
 

@@ -12,20 +12,136 @@ export class QRCodeService {
     return crypto.randomBytes(32).toString('hex');
   }
 
+  private generateHumanToken(): string {
+    // Character set excluding confusing characters (0, O, 1, I, L)
+    const chars = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
+    let token = 'QR-';
+    
+    // Generate first group (4 chars)
+    for (let i = 0; i < 4; i++) {
+      token += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    
+    token += '-';
+    
+    // Generate second group (4 chars)
+    for (let i = 0; i < 4; i++) {
+      token += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    
+    return token;
+  }
+
+  private async ensureUniqueHumanToken(): Promise<string> {
+    let attempts = 0;
+    const maxAttempts = 10;
+    
+    while (attempts < maxAttempts) {
+      const humanToken = this.generateHumanToken();
+      
+      // Check if token already exists
+      const [existing] = await db
+        .select()
+        .from(qrCodes)
+        .where(eq(qrCodes.humanToken, humanToken))
+        .limit(1);
+      
+      if (!existing) {
+        return humanToken;
+      }
+      
+      attempts++;
+    }
+    
+    throw new Error('Failed to generate unique human token');
+  }
+
   async createQRCode(): Promise<QRCodeType> {
     const token = this.generateSecureToken();
+    const humanToken = await this.ensureUniqueHumanToken();
 
     const [qrCode] = await db
       .insert(qrCodes)
       .values({
         id: uuidv4(),
         token,
+        humanToken,
         status: 'unassigned',
       })
       .returning();
 
-    logger.info(`QR code created: ${qrCode.id}`);
+    logger.info(`QR code created: ${qrCode.id} (${qrCode.humanToken})`);
     return qrCode;
+  }
+
+  async bulkCreateQRCodes(count: number): Promise<QRCodeType[]> {
+    if (count < 1 || count > 1000) {
+      throw new BadRequestError('Count must be between 1 and 1000');
+    }
+
+    const qrCodes: QRCodeType[] = [];
+    
+    for (let i = 0; i < count; i++) {
+      const qrCode = await this.createQRCode();
+      qrCodes.push(qrCode);
+    }
+
+    logger.info(`Bulk created ${count} QR codes`);
+    return qrCodes;
+  }
+
+  async claimQRCode(userId: string, token?: string, humanToken?: string): Promise<QRCodeType> {
+    if (!token && !humanToken) {
+      throw new BadRequestError('Either token or humanToken must be provided');
+    }
+
+    // Verify user exists and is active
+    const user = await userService.getUserById(userId);
+    if (user.status !== 'active') {
+      throw new BadRequestError('Cannot claim QR code with inactive account');
+    }
+
+    // Find QR code by token or humanToken
+    let qrCode: QRCodeType | undefined;
+    
+    if (humanToken) {
+      const normalizedHumanToken = humanToken.toUpperCase().trim();
+      const [found] = await db
+        .select()
+        .from(qrCodes)
+        .where(eq(qrCodes.humanToken, normalizedHumanToken))
+        .limit(1);
+      qrCode = found;
+    } else if (token) {
+      const [found] = await db
+        .select()
+        .from(qrCodes)
+        .where(eq(qrCodes.token, token))
+        .limit(1);
+      qrCode = found;
+    }
+
+    if (!qrCode) {
+      throw new NotFoundError('QR code not found');
+    }
+
+    if (qrCode.status !== 'unassigned') {
+      throw new BadRequestError('QR code is already claimed or not available');
+    }
+
+    // Claim the QR code
+    const [claimedQR] = await db
+      .update(qrCodes)
+      .set({
+        assignedUserId: userId,
+        status: 'active',
+        assignedAt: new Date(),
+      })
+      .where(eq(qrCodes.id, qrCode.id))
+      .returning();
+
+    logger.info(`QR code ${qrCode.humanToken} claimed by user ${userId}`);
+    return claimedQR;
   }
 
   async assignQRCode(qrCodeId: string, userId: string): Promise<QRCodeType> {
@@ -79,6 +195,22 @@ export class QRCodeService {
     return qrCode;
   }
 
+  async getQRCodeByHumanToken(humanToken: string): Promise<QRCodeType> {
+    const normalizedToken = humanToken.toUpperCase().trim();
+    
+    const [qrCode] = await db
+      .select()
+      .from(qrCodes)
+      .where(eq(qrCodes.humanToken, normalizedToken))
+      .limit(1);
+
+    if (!qrCode) {
+      throw new NotFoundError('QR code not found');
+    }
+
+    return qrCode;
+  }
+
   async getQRCodeById(qrCodeId: string): Promise<QRCodeType> {
     const [qrCode] = await db
       .select()
@@ -108,8 +240,34 @@ export class QRCodeService {
       .limit(limit);
   }
 
-  async scanQRCode(token: string): Promise<{ qrCode: QRCodeType; user: any }> {
-    const qrCode = await this.validateQRCode(token);
+  async scanQRCode(token?: string, humanToken?: string): Promise<{ qrCode: QRCodeType; user: any }> {
+    if (!token && !humanToken) {
+      throw new BadRequestError('Either token or humanToken must be provided');
+    }
+
+    let qrCode: QRCodeType;
+    
+    if (humanToken) {
+      qrCode = await this.getQRCodeByHumanToken(humanToken);
+    } else {
+      qrCode = await this.getQRCodeByToken(token!);
+    }
+
+    // If QR code is unassigned, return it with status
+    if (qrCode.status === 'unassigned') {
+      return {
+        qrCode: {
+          ...qrCode,
+          assignedUserId: null,
+        },
+        user: null,
+      };
+    }
+
+    // Validate QR code is active
+    if (qrCode.status !== 'active') {
+      throw new BadRequestError('QR code is not active');
+    }
 
     if (!qrCode.assignedUserId) {
       throw new BadRequestError('QR code is not assigned to any user');
@@ -121,7 +279,7 @@ export class QRCodeService {
       throw new BadRequestError('QR code owner is not active');
     }
 
-    logger.info(`QR code scanned: ${qrCode.id} by user ${qrCode.assignedUserId}`);
+    logger.info(`QR code scanned: ${qrCode.humanToken} (owner: ${qrCode.assignedUserId})`);
 
     return {
       qrCode,
