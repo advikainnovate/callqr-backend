@@ -462,4 +462,26 @@ export class WebRTCService {
   public getICEConfiguration(): ICEConfiguration {
     return this.iceConfig;
   }
+
+  /**
+   * Gracefully shutdown Socket.IO server
+   * Closes all active connections and cleans up resources
+   */
+  public async shutdown(): Promise<void> {
+    return new Promise((resolve) => {
+      logger.info('Shutting down Socket.IO server...');
+      
+      // Disconnect all connected clients
+      this.io.sockets.sockets.forEach((socket) => {
+        socket.disconnect(true);
+      });
+      
+      // Close the Socket.IO server
+      this.io.close(() => {
+        logger.info('Socket.IO server closed successfully');
+        this.connectedUsers.clear();
+        resolve();
+      });
+    });
+  }
 }

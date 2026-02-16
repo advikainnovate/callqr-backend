@@ -3,6 +3,7 @@ import { db } from '../db';
 import { callSessions, type NewCallSession, type CallSession } from '../models';
 import { v4 as uuidv4 } from 'uuid';
 import { logger, NotFoundError, BadRequestError, ForbiddenError } from '../utils';
+import { validateStatusTransition, CALL_STATUS_TRANSITIONS } from '../utils/statusTransitions';
 import { qrCodeService } from './qrCode.service';
 import { userService } from './user.service';
 import { subscriptionService } from './subscription.service';
@@ -59,6 +60,9 @@ export class CallSessionService {
     if (existingCall.callerId !== userId && existingCall.receiverId !== userId) {
       throw new ForbiddenError('You do not have permission to update this call');
     }
+
+    // Validate status transition
+    validateStatusTransition(existingCall.status, status, CALL_STATUS_TRANSITIONS, 'Call');
 
     const updateData: Partial<NewCallSession> = {
       status,

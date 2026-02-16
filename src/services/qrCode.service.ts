@@ -3,6 +3,7 @@ import { db } from '../db';
 import { qrCodes, type NewQRCode, type QRCode as QRCodeType } from '../models';
 import { v4 as uuidv4 } from 'uuid';
 import { logger, NotFoundError, BadRequestError, ConflictError } from '../utils';
+import { validateStatusTransition, QR_STATUS_TRANSITIONS } from '../utils/statusTransitions';
 import crypto from 'crypto';
 import * as QRCode from 'qrcode';
 import { userService } from './user.service';
@@ -56,9 +57,16 @@ export class QRCodeService {
     throw new Error('Failed to generate unique human token');
   }
 
-  async createQRCode(): Promise<QRCodeType> {
+  async createQRCode(expiryDays?: number): Promise<QRCodeType> {
     const token = this.generateSecureToken();
     const humanToken = await this.ensureUniqueHumanToken();
+
+    // Calculate expiration if specified
+    let expiresAt: Date | null = null;
+    if (expiryDays && expiryDays > 0) {
+      expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + expiryDays);
+    }
 
     const [qrCode] = await db
       .insert(qrCodes)
@@ -67,10 +75,11 @@ export class QRCodeService {
         token,
         humanToken,
         status: 'unassigned',
+        expiresAt,
       })
       .returning();
 
-    logger.info(`QR code created: ${qrCode.id} (${qrCode.humanToken})`);
+    logger.info(`QR code created: ${qrCode.id} (${qrCode.humanToken})`, { expiresAt });
     return qrCode;
   }
 
@@ -292,55 +301,67 @@ export class QRCodeService {
     };
   }
 
-  async revokeQRCode(qrCodeId: string, userId: string): Promise<QRCodeType> {
-    const [qrCode] = await db
-      .update(qrCodes)
-      .set({
-        status: 'revoked',
-      })
-      .where(and(eq(qrCodes.id, qrCodeId), eq(qrCodes.assignedUserId, userId)))
-      .returning();
-
-    if (!qrCode) {
-      throw new NotFoundError('QR code not found or you do not have permission to revoke it');
-    }
-
-    logger.info(`QR code revoked: ${qrCodeId}`);
-    return qrCode;
-  }
-
   async disableQRCode(qrCodeId: string, userId: string): Promise<QRCodeType> {
-    const [qrCode] = await db
-      .update(qrCodes)
-      .set({
-        status: 'disabled',
-      })
-      .where(and(eq(qrCodes.id, qrCodeId), eq(qrCodes.assignedUserId, userId)))
-      .returning();
-
-    if (!qrCode) {
-      throw new NotFoundError('QR code not found or you do not have permission to disable it');
+    const qrCode = await this.getQRCodeById(qrCodeId);
+    
+    // Validate ownership
+    if (qrCode.assignedUserId !== userId) {
+      throw new BadRequestError('You do not have permission to disable this QR code');
     }
+
+    // Validate status transition
+    validateStatusTransition(qrCode.status, 'disabled', QR_STATUS_TRANSITIONS, 'QR Code');
+
+    const [updatedQR] = await db
+      .update(qrCodes)
+      .set({ status: 'disabled' })
+      .where(eq(qrCodes.id, qrCodeId))
+      .returning();
 
     logger.info(`QR code disabled: ${qrCodeId}`);
-    return qrCode;
+    return updatedQR;
   }
 
   async reactivateQRCode(qrCodeId: string, userId: string): Promise<QRCodeType> {
-    const [qrCode] = await db
-      .update(qrCodes)
-      .set({
-        status: 'active',
-      })
-      .where(and(eq(qrCodes.id, qrCodeId), eq(qrCodes.assignedUserId, userId)))
-      .returning();
-
-    if (!qrCode) {
-      throw new NotFoundError('QR code not found or you do not have permission to reactivate it');
+    const qrCode = await this.getQRCodeById(qrCodeId);
+    
+    // Validate ownership
+    if (qrCode.assignedUserId !== userId) {
+      throw new BadRequestError('You do not have permission to reactivate this QR code');
     }
 
+    // Validate status transition
+    validateStatusTransition(qrCode.status, 'active', QR_STATUS_TRANSITIONS, 'QR Code');
+
+    const [updatedQR] = await db
+      .update(qrCodes)
+      .set({ status: 'active' })
+      .where(eq(qrCodes.id, qrCodeId))
+      .returning();
+
     logger.info(`QR code reactivated: ${qrCodeId}`);
-    return qrCode;
+    return updatedQR;
+  }
+
+  async revokeQRCode(qrCodeId: string, userId: string): Promise<QRCodeType> {
+    const qrCode = await this.getQRCodeById(qrCodeId);
+    
+    // Validate ownership
+    if (qrCode.assignedUserId !== userId) {
+      throw new BadRequestError('You do not have permission to revoke this QR code');
+    }
+
+    // Validate status transition
+    validateStatusTransition(qrCode.status, 'revoked', QR_STATUS_TRANSITIONS, 'QR Code');
+
+    const [updatedQR] = await db
+      .update(qrCodes)
+      .set({ status: 'revoked' })
+      .where(eq(qrCodes.id, qrCodeId))
+      .returning();
+
+    logger.info(`QR code revoked: ${qrCodeId}`);
+    return updatedQR;
   }
 
   async validateQRCode(token: string): Promise<QRCodeType> {
@@ -352,6 +373,11 @@ export class QRCodeService {
 
     if (!qrCode) {
       throw new NotFoundError('Invalid, revoked, or disabled QR code');
+    }
+
+    // Check if QR code has expired
+    if (qrCode.expiresAt && qrCode.expiresAt < new Date()) {
+      throw new BadRequestError('QR code has expired');
     }
 
     return qrCode;

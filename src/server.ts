@@ -96,7 +96,7 @@ const checkServices = async () => {
 const gracefulShutdown = async (signal: string) => {
   logger.info(`Received ${signal}. Initiating graceful shutdown...`);
 
-  // Close the HTTP server
+  // Close the HTTP server (stops accepting new connections)
   httpServer.close(async (err: any) => {
     if (err) {
       logger.error('Error closing HTTP server:', err);
@@ -104,12 +104,23 @@ const gracefulShutdown = async (signal: string) => {
     }
     logger.info('HTTP server closed.');
 
-    // Close Database connection
-    await client.end();
-    logger.info('Database connection closed.');
+    try {
+      // Close Socket.IO connections gracefully
+      if (webrtcService) {
+        await webrtcService.shutdown();
+        logger.info('Socket.IO connections closed.');
+      }
 
-    logger.info('Application gracefully shut down.');
-    process.exit(0);
+      // Close Database connection
+      await client.end();
+      logger.info('Database connection closed.');
+
+      logger.info('Application gracefully shut down.');
+      process.exit(0);
+    } catch (error) {
+      logger.error('Error during graceful shutdown:', error);
+      process.exit(1);
+    }
   });
 
   // Force close if server hasn't exited within a timeout

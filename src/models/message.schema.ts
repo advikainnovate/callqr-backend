@@ -1,4 +1,4 @@
-import { pgTable, timestamp, uuid, varchar, text, boolean } from 'drizzle-orm/pg-core';
+import { pgTable, timestamp, uuid, varchar, text, boolean, index } from 'drizzle-orm/pg-core';
 import { users } from './user.schema';
 import { chatSessions } from './chatSession.schema';
 
@@ -13,7 +13,12 @@ export const messages = pgTable('messages', {
   sentAt: timestamp('sent_at').defaultNow(),
   readAt: timestamp('read_at'),
   createdAt: timestamp('created_at').defaultNow(),
-});
+}, (table) => ({
+  chatSessionIdIdx: index('messages_chat_session_id_idx').on(table.chatSessionId),
+  senderIdIdx: index('messages_sender_id_idx').on(table.senderId),
+  sentAtIdx: index('messages_sent_at_idx').on(table.sentAt),
+  isReadIdx: index('messages_is_read_idx').on(table.isRead),
+}));
 
 export type Message = typeof messages.$inferSelect;
 export type NewMessage = typeof messages.$inferInsert;

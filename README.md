@@ -5,6 +5,7 @@ A secure, privacy-focused calling system where users can initiate WebRTC calls b
 ## 📖 Documentation
 
 - **[Frontend Integration Guide](FRONTEND_README.md)** - Complete guide for connecting your frontend 📱
+- **[Deployment Guide](DEPLOYMENT.md)** - Production deployment, load balancing, and sticky sessions 🚀
 - **[API Documentation](http://localhost:4000/api-docs)** - Live Swagger docs 🔍
 
 ## 🎯 Complete User Workflow
@@ -72,21 +73,26 @@ GET /api/admin/monitoring/active-calls → Real-time monitoring
 - **Privacy-Preserving**: Phone/email are hashed, QR codes contain only secure tokens
 - **WebRTC Calling**: In-app voice/video calls with real-time signaling
 - **Real-time Chat**: Text messaging with typing indicators and read receipts
-- **Secure Authentication**: JWT-based user authentication
+- **Secure Authentication**: JWT-based user authentication with bcrypt password hashing
 - **QR Code Lifecycle**: Create, assign, scan, revoke, disable, or reactivate QR codes
 - **Call & Chat Session Management**: Detailed status tracking with reason codes
 - **Real-time Communication**: Socket.IO for instant signaling and messaging
 - **Subscription Management**: Three tiers with daily limits (Free, Pro, Enterprise)
 - **Bug Reporting**: Submit and track bug reports (anonymous supported)
+- **Audit Logging**: Comprehensive security event logging for compliance
 
 ### Security Features
 - **Rate Limiting**: Prevent abuse with intelligent rate limiting
 - **Input Validation**: Comprehensive request validation with Zod
 - **Token Security**: Cryptographically secure QR tokens (64-char hex)
-- **Authentication**: JWT tokens with proper expiration
+- **Authentication**: JWT tokens with proper expiration and strength validation
+- **Password Security**: Bcrypt hashing with format validation
 - **CORS Protection**: Configurable cross-origin security
 - **Security Headers**: Helmet.js for security best practices
 - **Data Privacy**: Phone and email stored as SHA-256 hashes
+- **Audit Trail**: All security events logged with IP and user agent
+- **Admin Protection**: Role-based access control for admin endpoints
+- **Transaction Support**: Database transactions for data integrity
 
 ## 🏗️ Architecture
 
@@ -135,7 +141,12 @@ NODE_ENV=development
 DATABASE_URL=postgres://username:password@localhost:5432/qr_calling_db
 
 # Security
+# IMPORTANT: JWT_SECRET must be at least 32 characters long
+# Generate a secure secret: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 JWT_SECRET=your-super-secret-jwt-key-min-32-chars
+
+# IMPORTANT: ENCRYPTION_KEY must be exactly 64 hex characters (32 bytes)
+# Generate: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ENCRYPTION_KEY=your-32-byte-encryption-key-hex-encoded
 
 # Admin Configuration
@@ -197,7 +208,18 @@ ADMIN_USER_IDS=your-user-id-here
 node scripts/generate-qr-codes.js 100
 ```
 
-### 5. Multi-Process Deployment (PM2)
+### 5. Production Deployment
+
+For production deployment with load balancing and sticky sessions, see the [Deployment Guide](DEPLOYMENT.md).
+
+Key considerations:
+- **Sticky Sessions**: Required for Socket.IO in cluster/load-balanced environments
+- **WebSocket Transport**: Use `transports: ['websocket']` on both client and server
+- **Security**: Ensure JWT_SECRET is at least 32 characters and ENCRYPTION_KEY is 64 hex characters
+- **Graceful Shutdown**: Application handles SIGTERM/SIGINT properly
+- **Audit Logging**: All security events are logged to database
+
+### 6. Multi-Process Deployment (PM2)
 In production environments (like a PM2 cluster), Socket.IO **must** be configured to use `websocket` transport exclusively to avoid session ID mismatches across different worker processes.
 
 ```env
@@ -542,6 +564,20 @@ socket.on('message-delivered', (data) => {
 - is_deleted (boolean)
 - sent_at (timestamp)
 - read_at (timestamp, nullable)
+```
+
+### Audit Logs Table
+```sql
+- id (uuid, pk)
+- user_id (uuid, fk → users.id, nullable)
+- action (varchar) -- login, logout, password_change, admin_action, etc.
+- resource (varchar, nullable) -- user, qr_code, call, chat, etc.
+- resource_id (uuid, nullable) -- ID of affected resource
+- ip_address (varchar, nullable) -- IPv4 or IPv6
+- user_agent (text, nullable)
+- status (varchar) -- success, failure, error
+- details (jsonb, nullable) -- Additional context
+- created_at (timestamp)
 ```
 
 ## 🔒 Security Features

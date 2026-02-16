@@ -1,4 +1,4 @@
-import { pgTable, timestamp, uuid, varchar } from 'drizzle-orm/pg-core';
+import { pgTable, timestamp, uuid, varchar, index } from 'drizzle-orm/pg-core';
 import { users } from './user.schema';
 import { qrCodes } from './qrCode.schema';
 
@@ -11,7 +11,13 @@ export const callSessions = pgTable('call_sessions', {
   endedReason: varchar('ended_reason', { length: 50 }), // busy, rejected, timeout, error
   startedAt: timestamp('started_at').defaultNow(),
   endedAt: timestamp('ended_at'),
-});
+}, (table) => ({
+  callerIdIdx: index('call_sessions_caller_id_idx').on(table.callerId),
+  receiverIdIdx: index('call_sessions_receiver_id_idx').on(table.receiverId),
+  qrIdIdx: index('call_sessions_qr_id_idx').on(table.qrId),
+  statusIdx: index('call_sessions_status_idx').on(table.status),
+  startedAtIdx: index('call_sessions_started_at_idx').on(table.startedAt),
+}));
 
 export type CallSession = typeof callSessions.$inferSelect;
 export type NewCallSession = typeof callSessions.$inferInsert;

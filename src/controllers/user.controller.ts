@@ -57,11 +57,13 @@ export class UserController {
 
   deleteUser = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const { userId } = req.params;
-    const user = await userService.deleteUser(userId);
+    const { reason, recoveryDays } = req.body;
+    await userService.deleteUser(userId, req.user?.userId, reason, recoveryDays);
 
     sendSuccessResponse(res, 200, 'User deleted successfully', {
-      id: user.id,
-      status: user.status,
+      userId,
+      status: 'deleted',
+      message: 'User can be recovered within the recovery period',
     });
   });
 

@@ -31,10 +31,39 @@ const config = {
 // Freeze the config object to make it immutable
 export const appConfig = Object.freeze(config);
 
+// Export environment-specific configurations
+export { currentEnv, getEnvironmentConfig } from './environments';
+
+// ==================== SECURITY VALIDATIONS ====================
+
+// Validate JWT secret strength (minimum 32 characters)
+if (appConfig.jwt.secret.length < 32) {
+  console.error(
+    'ERROR: JWT_SECRET must be at least 32 characters long for security. Please set a stronger secret in your .env file.'
+  );
+  process.exit(1);
+}
+
+// Warn if using default JWT secret in production
+if (appConfig.env === 'production' && appConfig.jwt.secret === 'supersecretjwtkey') {
+  console.error(
+    'ERROR: Default JWT_SECRET detected in production! Please set a secure JWT_SECRET in your .env file.'
+  );
+  process.exit(1);
+}
+
 // Validate encryption key length (should be 64 hex chars = 32 bytes)
 if (appConfig.encryptionKey.length !== 64) {
   console.error(
     'ERROR: ENCRYPTION_KEY must be a 32-byte string (64 hex characters). Please set it in your .env file.'
+  );
+  process.exit(1);
+}
+
+// Warn if using default encryption key in production
+if (appConfig.env === 'production' && appConfig.encryptionKey === 'thisisasecretkeyfor32byteslong!') {
+  console.error(
+    'ERROR: Default ENCRYPTION_KEY detected in production! Please set a secure ENCRYPTION_KEY in your .env file.'
   );
   process.exit(1);
 }
