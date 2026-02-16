@@ -1,0 +1,34 @@
+meta {
+  name: Get Call History
+  type: http
+  seq: 12
+}
+
+get {
+  url: {{baseUrl}}/api/admin/calls?limit=50&offset=0
+  body: none
+  auth: bearer
+}
+
+params:query {
+  limit: 50
+  offset: 0
+  ~status: connected
+  ~userId: user-id-here
+  ~startDate: 2024-01-01
+  ~endDate: 2024-12-31
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+docs {
+  Get call history with filters:
+  - status: initiated, ringing, connected, ended, failed
+  - userId: filter by specific user
+  - startDate: filter from date
+  - endDate: filter to date
+  - limit: results per page
+  - offset: pagination offset
+}

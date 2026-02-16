@@ -11,8 +11,41 @@ export class QRCodeController {
     sendSuccessResponse(res, 201, 'QR code created successfully', {
       id: qrCode.id,
       token: qrCode.token,
+      humanToken: qrCode.humanToken,
       status: qrCode.status,
       createdAt: qrCode.createdAt,
+    });
+  });
+
+  bulkCreateQRCodes = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const { count } = req.body;
+    const qrCodes = await qrCodeService.bulkCreateQRCodes(count);
+
+    sendSuccessResponse(res, 201, `${count} QR codes created successfully`, {
+      count: qrCodes.length,
+      qrCodes: qrCodes.map((qr) => ({
+        id: qr.id,
+        token: qr.token,
+        humanToken: qr.humanToken,
+        status: qr.status,
+        createdAt: qr.createdAt,
+      })),
+    });
+  });
+
+  claimQRCode = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const userId = req.user!.userId;
+    const { token, humanToken } = req.body;
+
+    const qrCode = await qrCodeService.claimQRCode(userId, token, humanToken);
+
+    sendSuccessResponse(res, 200, 'QR code claimed successfully', {
+      id: qrCode.id,
+      token: qrCode.token,
+      humanToken: qrCode.humanToken,
+      assignedUserId: qrCode.assignedUserId,
+      status: qrCode.status,
+      assignedAt: qrCode.assignedAt,
     });
   });
 
@@ -32,12 +65,13 @@ export class QRCodeController {
   });
 
   scanQRCode = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
-    const { token } = req.body;
-    const result = await qrCodeService.scanQRCode(token);
+    const { token, humanToken } = req.body;
+    const result = await qrCodeService.scanQRCode(token, humanToken);
 
     sendSuccessResponse(res, 200, 'QR code scanned successfully', {
       qrCode: {
         id: result.qrCode.id,
+        humanToken: result.qrCode.humanToken,
         status: result.qrCode.status,
       },
       user: result.user,
@@ -52,6 +86,7 @@ export class QRCodeController {
       qrCodes: qrCodes.map((qr) => ({
         id: qr.id,
         token: qr.token,
+        humanToken: qr.humanToken,
         status: qr.status,
         assignedAt: qr.assignedAt,
         createdAt: qr.createdAt,
@@ -67,6 +102,7 @@ export class QRCodeController {
       qrCodes: qrCodes.map((qr) => ({
         id: qr.id,
         token: qr.token,
+        humanToken: qr.humanToken,
         status: qr.status,
         createdAt: qr.createdAt,
       })),

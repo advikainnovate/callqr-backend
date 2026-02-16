@@ -1,0 +1,27 @@
+meta {
+  name: Get Chat Details
+  type: http
+  seq: 15
+}
+
+get {
+  url: {{baseUrl}}/api/admin/chats/:chatId
+  body: none
+  auth: bearer
+}
+
+params:path {
+  chatId: chat-id-here
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+docs {
+  Get detailed chat information:
+  - Chat details
+  - Participant info
+  - QR code used
+  - Message count
+}

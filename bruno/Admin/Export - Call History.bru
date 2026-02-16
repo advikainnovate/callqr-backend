@@ -1,0 +1,31 @@
+meta {
+  name: Export - Call History
+  type: http
+  seq: 29
+}
+
+get {
+  url: {{baseUrl}}/api/admin/export/call-history
+  body: none
+  auth: bearer
+}
+
+params:query {
+  ~startDate: 2024-01-01
+  ~endDate: 2024-12-31
+  ~status: ended
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+docs {
+  Export call history to JSON file
+  Optional filters:
+  - startDate: YYYY-MM-DD
+  - endDate: YYYY-MM-DD
+  - status: initiated, ringing, connected, ended, failed
+  
+  Downloads as: call-history-export.json
+}

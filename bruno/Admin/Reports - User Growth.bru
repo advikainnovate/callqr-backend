@@ -1,0 +1,26 @@
+meta {
+  name: Reports - User Growth
+  type: http
+  seq: 31
+}
+
+get {
+  url: {{baseUrl}}/api/admin/reports/user-growth?days=30
+  body: none
+  auth: bearer
+}
+
+params:query {
+  days: 30
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+docs {
+  Generate user growth report for specified period:
+  - Total users
+  - New users in period
+  - Daily growth breakdown
+}

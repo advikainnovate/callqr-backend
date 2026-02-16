@@ -8,6 +8,7 @@ import reportRoutes from './report.routes';
 import subscriptionRoutes from './subscription.routes';
 import chatSessionRoutes from './chatSession.routes';
 import messageRoutes from './message.routes';
+import adminRoutes from './admin.routes';
 
 const router = Router();
 
@@ -34,5 +35,8 @@ router.use('/chat-sessions', chatSessionRoutes);
 
 // Message routes
 router.use('/messages', messageRoutes);
+
+// Admin routes
+router.use('/admin', adminRoutes);
 
 export default router;

@@ -1,0 +1,25 @@
+meta {
+  name: Bulk Create
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/qr-codes/bulk-create
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+body:json {
+  {
+    "count": 10
+  }
+}
+
+docs {
+  Bulk creates multiple unassigned QR codes (1-1000). Each gets a unique human-readable token.
+}

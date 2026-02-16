@@ -1,0 +1,20 @@
+meta {
+  name: Monitoring - Active Calls
+  type: http
+  seq: 23
+}
+
+get {
+  url: {{baseUrl}}/api/admin/monitoring/active-calls
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+docs {
+  Get list of currently active calls (initiated, ringing, connected)
+  Includes caller, receiver, and call duration
+}

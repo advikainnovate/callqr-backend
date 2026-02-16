@@ -1,0 +1,21 @@
+meta {
+  name: Bug Reports - Stats
+  type: http
+  seq: 20
+}
+
+get {
+  url: {{baseUrl}}/api/admin/bug-reports/stats
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+docs {
+  Get bug report statistics:
+  - Reports by status (open, in_progress, resolved)
+  - Reports by severity (low, medium, high, critical)
+}

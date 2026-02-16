@@ -1,0 +1,31 @@
+meta {
+  name: Export - Chat History
+  type: http
+  seq: 30
+}
+
+get {
+  url: {{baseUrl}}/api/admin/export/chat-history
+  body: none
+  auth: bearer
+}
+
+params:query {
+  ~startDate: 2024-01-01
+  ~endDate: 2024-12-31
+  ~status: ended
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+docs {
+  Export chat history to JSON file
+  Optional filters:
+  - startDate: YYYY-MM-DD
+  - endDate: YYYY-MM-DD
+  - status: active, ended, blocked
+  
+  Downloads as: chat-history-export.json
+}

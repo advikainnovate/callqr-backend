@@ -4,6 +4,8 @@ import { authenticateToken } from '../middlewares/auth.middleware';
 import { validate } from '../middlewares/validate';
 import {
   createQRCodeSchema,
+  bulkCreateQRCodeSchema,
+  claimQRCodeSchema,
   assignQRCodeSchema,
   scanQRCodeSchema,
   revokeQRCodeSchema,
@@ -14,10 +16,16 @@ import {
 
 const router = Router();
 
-// Create QR code
+// Create single QR code (admin)
 router.post('/create', authenticateToken, validate(createQRCodeSchema), qrCodeController.createQRCode);
 
-// Assign QR code to user
+// Bulk create QR codes (admin)
+router.post('/bulk-create', authenticateToken, validate(bulkCreateQRCodeSchema), qrCodeController.bulkCreateQRCodes);
+
+// Claim QR code (user claims an unassigned QR)
+router.post('/claim', authenticateToken, validate(claimQRCodeSchema), qrCodeController.claimQRCode);
+
+// Assign QR code to user (admin assigns to specific user)
 router.post('/:qrCodeId/assign', authenticateToken, validate(assignQRCodeSchema), qrCodeController.assignQRCode);
 
 // Scan QR code

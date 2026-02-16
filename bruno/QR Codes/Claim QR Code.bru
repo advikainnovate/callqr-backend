@@ -1,0 +1,27 @@
+meta {
+  name: Claim QR Code
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/qr-codes/claim
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+body:json {
+  {
+    "humanToken": "QR-K9F7-M2QX"
+  }
+}
+
+docs {
+  User claims an unassigned QR code by providing either:
+  - humanToken: "QR-K9F7-M2QX" (for manual entry)
+  - token: "a1b2c3d4..." (for QR scan)
+}

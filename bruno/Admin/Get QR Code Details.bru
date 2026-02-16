@@ -1,0 +1,26 @@
+meta {
+  name: Get QR Code Details
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{baseUrl}}/api/admin/qr-codes/:qrCodeId
+  body: none
+  auth: bearer
+}
+
+params:path {
+  qrCodeId: qr-code-id-here
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+docs {
+  Get detailed QR code information:
+  - QR code details
+  - Assigned user (if any)
+  - Usage statistics (calls, chats)
+}

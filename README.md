@@ -184,8 +184,10 @@ Copy the generated token and use it in your API requests.
 - `POST /api/users/verify/email` - Verify email exists
 
 ### QR Code Management
-- `POST /api/qr-codes/create` - Generate a new unassigned QR code
-- `POST /api/qr-codes/:qrCodeId/assign` - Assign QR code to user
+- `POST /api/qr-codes/create` - Generate a new unassigned QR code (admin)
+- `POST /api/qr-codes/bulk-create` - Bulk generate QR codes (admin, 1-1000)
+- `POST /api/qr-codes/claim` - Claim an unassigned QR code (user)
+- `POST /api/qr-codes/:qrCodeId/assign` - Assign QR code to user (admin)
 - `POST /api/qr-codes/scan` - Scan QR code and get user info
 - `GET /api/qr-codes/my-codes` - List all your QR codes
 - `GET /api/qr-codes/unassigned` - List unassigned QR codes (admin)
@@ -240,6 +242,39 @@ Copy the generated token and use it in your API requests.
 - `DELETE /api/messages/:messageId` - Delete your message
 - `GET /api/messages/unread-count` - Get total unread message count
 - `GET /api/messages/:chatSessionId/search` - Search messages in chat
+
+### Admin Dashboard
+- `GET /api/admin/overview` - Get dashboard overview stats
+- `GET /api/admin/users` - Get all users (with filters)
+- `GET /api/admin/users/:userId` - Get user details
+- `PATCH /api/admin/users/:userId/block` - Block user
+- `PATCH /api/admin/users/:userId/unblock` - Unblock user
+- `DELETE /api/admin/users/:userId` - Delete user
+- `GET /api/admin/qr-codes` - Get all QR codes (with filters)
+- `GET /api/admin/qr-codes/:qrCodeId` - Get QR code details
+- `POST /api/admin/qr-codes/bulk-create` - Bulk create QR codes
+- `POST /api/admin/qr-codes/:qrCodeId/assign` - Assign QR to user
+- `PATCH /api/admin/qr-codes/:qrCodeId/revoke` - Revoke QR code
+- `GET /api/admin/calls` - Get call history (with filters)
+- `GET /api/admin/calls/:callId` - Get call details
+- `GET /api/admin/chats` - Get chat history (with filters)
+- `GET /api/admin/chats/:chatId` - Get chat details
+- `GET /api/admin/analytics/calls` - Get call analytics & charts
+- `GET /api/admin/analytics/chats` - Get chat analytics & charts
+- `GET /api/admin/analytics/user-growth` - Get user growth analytics
+- `GET /api/admin/bug-reports` - Get all bug reports (with filters)
+- `GET /api/admin/bug-reports/stats` - Get bug report statistics
+- `GET /api/admin/subscriptions` - Get all subscriptions (with filters)
+- `GET /api/admin/subscriptions/stats` - Get subscription statistics
+- `GET /api/admin/monitoring/active-calls` - Get currently active calls
+- `GET /api/admin/monitoring/active-chats` - Get currently active chats
+- `GET /api/admin/monitoring/recent-activity` - Get recent system activity
+- `GET /api/admin/monitoring/system-health` - Get system health status
+- `GET /api/admin/export/users` - Export users to JSON
+- `GET /api/admin/export/qr-codes` - Export QR codes to JSON
+- `GET /api/admin/export/call-history` - Export call history to JSON
+- `GET /api/admin/export/chat-history` - Export chat history to JSON
+- `GET /api/admin/reports/user-growth` - Generate user growth report
 
 ### WebRTC Configuration
 - `GET /api/webrtc/config` - Fetches dynamic ICE (STUN/TURN) servers
@@ -368,7 +403,8 @@ socket.on('message-delivered', (data) => {
 ### QR Codes Table
 ```sql
 - id (uuid, pk)
-- token (varchar, unique, indexed) -- 64-char hex
+- token (varchar, unique, indexed) -- 64-char hex for QR image
+- human_token (varchar, unique, indexed) -- Human-readable (e.g., QR-K9F7-M2QX)
 - assigned_user_id (uuid, fk → users.id, nullable)
 - status (varchar) -- unassigned, active, disabled, revoked
 - created_at (timestamp)
@@ -542,6 +578,9 @@ node scripts/verify-schema.js
 
 # Generate JWT token for testing
 node scripts/generate-test-token.js USER_ID USERNAME
+
+# Bulk generate QR codes (1-1000)
+node scripts/generate-qr-codes.js 100
 
 # Setup database
 node scripts/setup-database.js

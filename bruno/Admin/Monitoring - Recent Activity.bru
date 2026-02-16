@@ -1,0 +1,29 @@
+meta {
+  name: Monitoring - Recent Activity
+  type: http
+  seq: 25
+}
+
+get {
+  url: {{baseUrl}}/api/admin/monitoring/recent-activity?limit=50
+  body: none
+  auth: bearer
+}
+
+params:query {
+  limit: 50
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+docs {
+  Get recent system activity:
+  - User registrations
+  - QR code claims
+  - Call initiations
+  - Chat starts
+  
+  Sorted by timestamp (most recent first)
+}

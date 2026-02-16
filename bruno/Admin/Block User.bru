@@ -1,0 +1,19 @@
+meta {
+  name: Block User
+  type: http
+  seq: 4
+}
+
+patch {
+  url: {{baseUrl}}/api/admin/users/:userId/block
+  body: none
+  auth: bearer
+}
+
+params:path {
+  userId: user-id-here
+}
+
+auth:bearer {
+  token: {{authToken}}
+}

@@ -1,0 +1,22 @@
+meta {
+  name: Subscriptions - Stats
+  type: http
+  seq: 22
+}
+
+get {
+  url: {{baseUrl}}/api/admin/subscriptions/stats
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+docs {
+  Get subscription statistics:
+  - Total active subscriptions
+  - Users by plan (free, pro, enterprise)
+  - Subscription changes over time (last 30 days)
+}

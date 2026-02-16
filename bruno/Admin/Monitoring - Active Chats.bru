@@ -1,0 +1,20 @@
+meta {
+  name: Monitoring - Active Chats
+  type: http
+  seq: 24
+}
+
+get {
+  url: {{baseUrl}}/api/admin/monitoring/active-chats
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+docs {
+  Get list of currently active chat sessions
+  Includes participants and last message time
+}

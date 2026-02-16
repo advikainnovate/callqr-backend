@@ -1,0 +1,30 @@
+meta {
+  name: Get All Users
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/admin/users?status=active&limit=50&offset=0
+  body: none
+  auth: bearer
+}
+
+params:query {
+  status: active
+  limit: 50
+  offset: 0
+  ~search: john
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+docs {
+  Get all users with filters:
+  - status: active, blocked, deleted
+  - search: username search
+  - limit: results per page
+  - offset: pagination offset
+}

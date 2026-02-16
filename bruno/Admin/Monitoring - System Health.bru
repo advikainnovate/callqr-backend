@@ -1,0 +1,22 @@
+meta {
+  name: Monitoring - System Health
+  type: http
+  seq: 26
+}
+
+get {
+  url: {{baseUrl}}/api/admin/monitoring/system-health
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+docs {
+  Get system health status:
+  - Database connection status
+  - Total counts (users, QR codes, calls, chats)
+  - Timestamp
+}

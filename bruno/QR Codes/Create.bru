@@ -18,6 +18,10 @@ body:json {
   {}
 }
 
+docs {
+  Creates a single unassigned QR code with both machine token and human-readable token (e.g., QR-K9F7-M2QX)
+}
+
 tests {
   test("Should create QR code successfully", function() {
     expect(res.status).to.equal(201);

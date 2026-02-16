@@ -58,15 +58,40 @@ localStorage.setItem('authToken', 'YOUR_GENERATED_TOKEN');
 ```
 
 ### 3. Create & Assign QR Code
+
+**Option A: Admin Pre-generates QR Codes**
 ```javascript
-// Create QR
-const qrResponse = await api.post('/qr-codes/create');
-const { id, token } = qrResponse.data.data;
+// Bulk create QR codes (admin)
+const bulkResponse = await api.post('/qr-codes/bulk-create', {
+  count: 100
+});
 
-// Assign to user
-await api.post(`/qr-codes/${id}/assign`);
+// Each QR code has:
+// - token: "a1b2c3d4..." (64-char hex for QR image)
+// - humanToken: "QR-K9F7-M2QX" (for manual entry)
+// - status: "unassigned"
+```
 
-// Get QR image URL
+**Option B: User Claims QR Code**
+```javascript
+// Method 1: User types human-readable code
+const claimResponse = await api.post('/qr-codes/claim', {
+  humanToken: 'QR-K9F7-M2QX'
+});
+
+// Method 2: User scans unassigned QR code
+const scanResponse = await api.post('/qr-codes/scan', {
+  token: 'SCANNED_TOKEN'
+});
+
+// If status is 'unassigned', show claim prompt
+if (scanResponse.data.data.qrCode.status === 'unassigned') {
+  const claimResponse = await api.post('/qr-codes/claim', {
+    token: 'SCANNED_TOKEN'
+  });
+}
+
+// Get QR code image URL
 const qrImageUrl = `${API_URL}/api/qr-codes/image/${token}`;
 ```
 
@@ -278,8 +303,8 @@ socket.on('user-stopped-typing', (data) => {}); // { chatSessionId, userId }
 |--------|--------|----------|
 | Register | POST | `/api/users/register` |
 | Get Profile | GET | `/api/users/profile` |
-| Create QR | POST | `/api/qr-codes/create` |
-| Assign QR | POST | `/api/qr-codes/:id/assign` |
+| Bulk Create QR | POST | `/api/qr-codes/bulk-create` |
+| Claim QR | POST | `/api/qr-codes/claim` |
 | Scan QR | POST | `/api/qr-codes/scan` |
 | QR Image | GET | `/api/qr-codes/image/:token` |
 | Start Call | POST | `/api/calls/initiate` |

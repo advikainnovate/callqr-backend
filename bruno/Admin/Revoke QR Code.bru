@@ -1,0 +1,19 @@
+meta {
+  name: Revoke QR Code
+  type: http
+  seq: 11
+}
+
+patch {
+  url: {{baseUrl}}/api/admin/qr-codes/:qrCodeId/revoke
+  body: none
+  auth: bearer
+}
+
+params:path {
+  qrCodeId: qr-code-id-here
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
