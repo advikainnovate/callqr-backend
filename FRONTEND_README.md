@@ -39,31 +39,51 @@ const socket = io(API_URL, {
 
 ### 1. Register User
 ```javascript
-const response = await api.post('/users/register', {
+const response = await api.post('/auth/register', {
   username: 'testuser',
+  password: 'password123',
   phone: '+1234567890',
   email: 'test@example.com'
 });
-const userId = response.data.data.userId;
+
+// Response includes JWT token and user data
+const { token, user } = response.data.data;
+localStorage.setItem('authToken', token);
 ```
 
-### 2. Get JWT Token
-Generate token using backend script:
-```bash
-node scripts/generate-test-token.js USER_ID USERNAME
-```
-Then store it:
+### 2. Login User
 ```javascript
-localStorage.setItem('authToken', 'YOUR_GENERATED_TOKEN');
+const response = await api.post('/auth/login', {
+  username: 'testuser',
+  password: 'password123'
+});
+
+// Response includes JWT token and user data
+const { token, user } = response.data.data;
+localStorage.setItem('authToken', token);
 ```
 
-### 3. Create & Assign QR Code
+### 3. Get User Profile
+```javascript
+const response = await api.get('/auth/profile');
+const user = response.data.data; // { id, username, status, createdAt, updatedAt }
+```
+
+### 4. Change Password
+```javascript
+await api.post('/auth/change-password', {
+  oldPassword: 'password123',
+  newPassword: 'newpassword456'
+});
+```
+
+### 5. Create & Assign QR Code
 
 **Option A: Admin Pre-generates QR Codes**
 ```javascript
 // Bulk create QR codes (admin)
 const bulkResponse = await api.post('/qr-codes/bulk-create', {
-  count: 100
+  count: 100 // Max: 2000
 });
 
 // Each QR code has:
@@ -95,7 +115,7 @@ if (scanResponse.data.data.qrCode.status === 'unassigned') {
 const qrImageUrl = `${API_URL}/api/qr-codes/image/${token}`;
 ```
 
-### 4. Scan QR Code
+### 6. Scan QR Code
 ```javascript
 const scanResponse = await api.post('/qr-codes/scan', {
   token: 'SCANNED_QR_TOKEN'
@@ -103,7 +123,7 @@ const scanResponse = await api.post('/qr-codes/scan', {
 const scannedUser = scanResponse.data.data; // { id, username, status }
 ```
 
-### 5A. Start Call (WebRTC)
+### 7A. Start Call (WebRTC)
 ```javascript
 // Initiate call
 const callResponse = await api.post('/calls/initiate', {
@@ -194,7 +214,7 @@ await api.patch(`/calls/${callId}/end`);
 socket.emit('end-call', { callId });
 ```
 
-### 5B. Start Chat
+### 7B. Start Chat
 ```javascript
 // Initiate chat
 const chatResponse = await api.post('/chat-sessions/initiate', {
@@ -301,8 +321,11 @@ socket.on('user-stopped-typing', (data) => {}); // { chatSessionId, userId }
 
 | Action | Method | Endpoint |
 |--------|--------|----------|
-| Register | POST | `/api/users/register` |
-| Get Profile | GET | `/api/users/profile` |
+| Register | POST | `/api/auth/register` |
+| Login | POST | `/api/auth/login` |
+| Get Profile | GET | `/api/auth/profile` |
+| Change Password | POST | `/api/auth/change-password` |
+| Get User | GET | `/api/users/:userId` |
 | Bulk Create QR | POST | `/api/qr-codes/bulk-create` |
 | Claim QR | POST | `/api/qr-codes/claim` |
 | Scan QR | POST | `/api/qr-codes/scan` |
@@ -360,7 +383,7 @@ api.interceptors.response.use(
 
 ## 🔐 Authentication
 
-All requests need JWT token:
+All requests need JWT token in Authorization header:
 ```javascript
 Authorization: Bearer YOUR_JWT_TOKEN
 ```
@@ -369,6 +392,26 @@ Socket.IO needs token in auth:
 ```javascript
 socket.auth.token = 'YOUR_JWT_TOKEN';
 ```
+
+### Registration Flow
+1. User fills registration form (username, password, optional phone/email)
+2. Frontend sends `POST /api/auth/register`
+3. Backend returns JWT token + user data
+4. Store token in localStorage
+5. Redirect to dashboard
+
+### Login Flow
+1. User enters username and password
+2. Frontend sends `POST /api/auth/login`
+3. Backend validates credentials and returns JWT token
+4. Store token in localStorage
+5. Redirect to dashboard
+
+### Password Change Flow
+1. User enters old password and new password
+2. Frontend sends `POST /api/auth/change-password` with JWT token
+3. Backend validates old password and updates to new password
+4. Show success message
 
 ## 📝 Response Format
 

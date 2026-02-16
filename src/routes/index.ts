@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { logger } from '../utils';
+import authRoutes from './auth.routes';
 import userRoutes from './user.routes';
 import qrCodeRoutes from './qrCode.routes';
 import callRoutes from './call.routes';
@@ -11,6 +12,9 @@ import messageRoutes from './message.routes';
 import adminRoutes from './admin.routes';
 
 const router = Router();
+
+// Auth routes
+router.use('/auth', authRoutes);
 
 // User routes
 router.use('/users', userRoutes);

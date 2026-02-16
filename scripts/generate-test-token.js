@@ -1,6 +1,13 @@
 const jwt = require('jsonwebtoken');
 require('dotenv').config();
 
+console.log('\n⚠️  DEPRECATION NOTICE:');
+console.log('This script is deprecated. The system now uses password authentication.');
+console.log('Please use the following endpoints instead:');
+console.log('  - POST /api/auth/register (to create a new user)');
+console.log('  - POST /api/auth/login (to get a JWT token)\n');
+console.log('This script can still be used for testing/debugging purposes.\n');
+
 // Get user ID from command line argument
 const userId = process.argv[2];
 const username = process.argv[3] || 'testuser';

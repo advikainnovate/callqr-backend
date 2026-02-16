@@ -2,16 +2,27 @@ import { eq, or } from 'drizzle-orm';
 import { db } from '../db';
 import { users, type NewUser, type User } from '../models';
 import { v4 as uuidv4 } from 'uuid';
-import { logger, ConflictError, NotFoundError, BadRequestError } from '../utils';
+import { logger, ConflictError, NotFoundError, BadRequestError, UnauthorizedError } from '../utils';
 import crypto from 'crypto';
+import bcrypt from 'bcrypt';
 
 export class UserService {
   private hashData(data: string): string {
     return crypto.createHash('sha256').update(data).digest('hex');
   }
 
+  private async hashPassword(password: string): Promise<string> {
+    const saltRounds = 10;
+    return bcrypt.hash(password, saltRounds);
+  }
+
+  private async verifyPassword(password: string, hash: string): Promise<boolean> {
+    return bcrypt.compare(password, hash);
+  }
+
   async createUser(userData: {
     username: string;
+    password: string;
     phone?: string;
     email?: string;
   }): Promise<User> {
@@ -26,6 +37,14 @@ export class UserService {
       throw new ConflictError('Username already exists');
     }
 
+    // Validate password
+    if (!userData.password || userData.password.length < 6) {
+      throw new BadRequestError('Password must be at least 6 characters long');
+    }
+
+    // Hash password
+    const passwordHash = await this.hashPassword(userData.password);
+
     // Hash phone and email if provided
     const phoneHash = userData.phone ? this.hashData(userData.phone) : null;
     const emailHash = userData.email ? this.hashData(userData.email) : null;
@@ -36,14 +55,87 @@ export class UserService {
       .values({
         id: uuidv4(),
         username: userData.username,
+        passwordHash,
         phoneHash,
         emailHash,
         status: 'active',
       })
       .returning();
 
-    logger.info(`User created successfully: ${user.id}`);
+    // Create default FREE subscription for new user
+    const { subscriptions } = await import('../models');
+    const { SUBSCRIPTION_PLANS } = await import('../constants/subscriptions');
+    
+    await db.insert(subscriptions).values({
+      id: uuidv4(),
+      userId: user.id,
+      plan: SUBSCRIPTION_PLANS.FREE,
+      status: 'active',
+      startedAt: new Date(),
+      expiresAt: null,
+    });
+
+    logger.info(`User created successfully with FREE subscription: ${user.id}`);
     return user;
+  }
+
+  async authenticateUser(username: string, password: string): Promise<User> {
+    // Find user by username
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.username, username))
+      .limit(1);
+
+    if (!user) {
+      throw new UnauthorizedError('Invalid username or password');
+    }
+
+    // Check if user is active
+    if (user.status !== 'active') {
+      throw new UnauthorizedError('Account is not active');
+    }
+
+    // Verify password
+    const isPasswordValid = await this.verifyPassword(password, user.passwordHash);
+
+    if (!isPasswordValid) {
+      throw new UnauthorizedError('Invalid username or password');
+    }
+
+    logger.info(`User authenticated successfully: ${user.id}`);
+    return user;
+  }
+
+  async changePassword(userId: string, oldPassword: string, newPassword: string): Promise<void> {
+    // Get user
+    const user = await this.getUserById(userId);
+
+    // Verify old password
+    const isPasswordValid = await this.verifyPassword(oldPassword, user.passwordHash);
+
+    if (!isPasswordValid) {
+      throw new UnauthorizedError('Current password is incorrect');
+    }
+
+    // Validate new password
+    if (!newPassword || newPassword.length < 6) {
+      throw new BadRequestError('New password must be at least 6 characters long');
+    }
+
+    // Hash new password
+    const newPasswordHash = await this.hashPassword(newPassword);
+
+    // Update password
+    await db
+      .update(users)
+      .set({
+        passwordHash: newPasswordHash,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userId));
+
+    logger.info(`Password changed for user: ${userId}`);
   }
 
   async getUserById(id: string): Promise<User> {

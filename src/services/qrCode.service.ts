@@ -75,8 +75,8 @@ export class QRCodeService {
   }
 
   async bulkCreateQRCodes(count: number): Promise<QRCodeType[]> {
-    if (count < 1 || count > 1000) {
-      throw new BadRequestError('Count must be between 1 and 1000');
+    if (count < 1 || count > 2000) {
+      throw new BadRequestError('Count must be between 1 and 2000');
     }
 
     const qrCodes: QRCodeType[] = [];
