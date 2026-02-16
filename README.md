@@ -259,6 +259,13 @@ Copy the generated token and use it in your API requests.
 - `GET /api/admin/calls/:callId` - Get call details
 - `GET /api/admin/chats` - Get chat history (with filters)
 - `GET /api/admin/chats/:chatId` - Get chat details
+- `GET /api/admin/analytics/calls` - Get call analytics & charts
+- `GET /api/admin/analytics/chats` - Get chat analytics & charts
+- `GET /api/admin/analytics/user-growth` - Get user growth analytics
+- `GET /api/admin/bug-reports` - Get all bug reports (with filters)
+- `GET /api/admin/bug-reports/stats` - Get bug report statistics
+- `GET /api/admin/subscriptions` - Get all subscriptions (with filters)
+- `GET /api/admin/subscriptions/stats` - Get subscription statistics
 
 ### WebRTC Configuration
 - `GET /api/webrtc/config` - Fetches dynamic ICE (STUN/TURN) servers

@@ -1,0 +1,30 @@
+meta {
+  name: Bug Reports - Get All
+  type: http
+  seq: 19
+}
+
+get {
+  url: {{baseUrl}}/api/admin/bug-reports?limit=50&offset=0
+  body: none
+  auth: bearer
+}
+
+params:query {
+  limit: 50
+  offset: 0
+  ~status: open
+  ~severity: high
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+docs {
+  Get all bug reports with filters:
+  - status: open, in_progress, resolved
+  - severity: low, medium, high, critical
+  - limit: results per page
+  - offset: pagination offset
+}

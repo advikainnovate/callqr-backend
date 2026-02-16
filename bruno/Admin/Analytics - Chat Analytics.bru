@@ -1,0 +1,30 @@
+meta {
+  name: Analytics - Chat Analytics
+  type: http
+  seq: 17
+}
+
+get {
+  url: {{baseUrl}}/api/admin/analytics/chats?days=30
+  body: none
+  auth: bearer
+}
+
+params:query {
+  days: 30
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+docs {
+  Get chat analytics for specified period:
+  - Total chats and messages
+  - Average messages per chat
+  - Read rate percentage
+  - Chats by status
+  - Messages over time (line chart data)
+  - Messages by hour of day (bar chart data)
+  - Messages by type distribution
+}

@@ -1,0 +1,30 @@
+meta {
+  name: Subscriptions - Get All
+  type: http
+  seq: 21
+}
+
+get {
+  url: {{baseUrl}}/api/admin/subscriptions?limit=50&offset=0
+  body: none
+  auth: bearer
+}
+
+params:query {
+  limit: 50
+  offset: 0
+  ~plan: pro
+  ~status: active
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+docs {
+  Get all subscriptions with filters:
+  - plan: free, pro, enterprise
+  - status: active, expired, canceled
+  - limit: results per page
+  - offset: pagination offset
+}

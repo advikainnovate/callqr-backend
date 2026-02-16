@@ -181,6 +181,66 @@ export class AdminController {
     const details = await adminService.getChatDetails(chatId);
     sendSuccessResponse(res, 200, 'Chat details retrieved successfully', details);
   });
+
+  // ==================== ANALYTICS & CHARTS ====================
+
+  getCallAnalytics = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const days = req.query.days ? parseInt(req.query.days as string) : 30;
+    const analytics = await adminService.getCallAnalytics(days);
+    sendSuccessResponse(res, 200, 'Call analytics retrieved successfully', analytics);
+  });
+
+  getChatAnalytics = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const days = req.query.days ? parseInt(req.query.days as string) : 30;
+    const analytics = await adminService.getChatAnalytics(days);
+    sendSuccessResponse(res, 200, 'Chat analytics retrieved successfully', analytics);
+  });
+
+  getUserGrowthAnalytics = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const days = req.query.days ? parseInt(req.query.days as string) : 30;
+    const analytics = await adminService.getUserGrowthAnalytics(days);
+    sendSuccessResponse(res, 200, 'User growth analytics retrieved successfully', analytics);
+  });
+
+  // ==================== BUG REPORTS MANAGEMENT ====================
+
+  getAllBugReports = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const { status, severity, limit, offset } = req.query;
+
+    const result = await adminService.getAllBugReports({
+      status: status as string,
+      severity: severity as string,
+      limit: limit ? parseInt(limit as string) : undefined,
+      offset: offset ? parseInt(offset as string) : undefined,
+    });
+
+    sendSuccessResponse(res, 200, 'Bug reports retrieved successfully', result);
+  });
+
+  getBugReportStats = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const stats = await adminService.getBugReportStats();
+    sendSuccessResponse(res, 200, 'Bug report stats retrieved successfully', stats);
+  });
+
+  // ==================== SUBSCRIPTION MANAGEMENT ====================
+
+  getSubscriptionStats = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const stats = await adminService.getSubscriptionStats();
+    sendSuccessResponse(res, 200, 'Subscription stats retrieved successfully', stats);
+  });
+
+  getAllSubscriptions = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const { plan, status, limit, offset } = req.query;
+
+    const result = await adminService.getAllSubscriptions({
+      plan: plan as string,
+      status: status as string,
+      limit: limit ? parseInt(limit as string) : undefined,
+      offset: offset ? parseInt(offset as string) : undefined,
+    });
+
+    sendSuccessResponse(res, 200, 'Subscriptions retrieved successfully', result);
+  });
 }
 
 export const adminController = new AdminController();

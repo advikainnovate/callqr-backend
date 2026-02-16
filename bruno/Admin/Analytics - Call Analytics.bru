@@ -1,0 +1,29 @@
+meta {
+  name: Analytics - Call Analytics
+  type: http
+  seq: 16
+}
+
+get {
+  url: {{baseUrl}}/api/admin/analytics/calls?days=30
+  body: none
+  auth: bearer
+}
+
+params:query {
+  days: 30
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+docs {
+  Get call analytics for specified period:
+  - Total calls
+  - Average call duration
+  - Success rate
+  - Calls by status (pie chart data)
+  - Calls over time (line chart data)
+  - Calls by hour of day (bar chart data)
+}

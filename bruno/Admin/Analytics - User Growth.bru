@@ -1,0 +1,24 @@
+meta {
+  name: Analytics - User Growth
+  type: http
+  seq: 18
+}
+
+get {
+  url: {{baseUrl}}/api/admin/analytics/user-growth?days=30
+  body: none
+  auth: bearer
+}
+
+params:query {
+  days: 30
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+docs {
+  Get user growth analytics:
+  - User registrations over time (line chart data)
+}

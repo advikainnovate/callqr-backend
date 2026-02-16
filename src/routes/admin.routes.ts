@@ -59,4 +59,17 @@ router.get('/calls/:callId', authenticateToken, adminController.getCallDetails);
 router.get('/chats', authenticateToken, adminController.getChatHistory);
 router.get('/chats/:chatId', authenticateToken, adminController.getChatDetails);
 
+// ==================== ANALYTICS & CHARTS ====================
+router.get('/analytics/calls', authenticateToken, adminController.getCallAnalytics);
+router.get('/analytics/chats', authenticateToken, adminController.getChatAnalytics);
+router.get('/analytics/user-growth', authenticateToken, adminController.getUserGrowthAnalytics);
+
+// ==================== BUG REPORTS MANAGEMENT ====================
+router.get('/bug-reports', authenticateToken, adminController.getAllBugReports);
+router.get('/bug-reports/stats', authenticateToken, adminController.getBugReportStats);
+
+// ==================== SUBSCRIPTION MANAGEMENT ====================
+router.get('/subscriptions', authenticateToken, adminController.getAllSubscriptions);
+router.get('/subscriptions/stats', authenticateToken, adminController.getSubscriptionStats);
+
 export default router;

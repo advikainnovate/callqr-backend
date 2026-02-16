@@ -1,6 +1,6 @@
 import { eq, and, desc, sql, gte, lte, or, count } from 'drizzle-orm';
 import { db } from '../db';
-import { users, qrCodes, callSessions, chatSessions, messages, subscriptions } from '../models';
+import { users, qrCodes, callSessions, chatSessions, messages, subscriptions, bugReports } from '../models';
 import { logger, NotFoundError, ForbiddenError } from '../utils';
 
 export class AdminService {
@@ -523,6 +523,391 @@ export class AdminService {
       participant2,
       qrCode,
       messageCount: Number(messageCount.count),
+    };
+  }
+
+  // ==================== ANALYTICS & CHARTS ====================
+
+  async getCallAnalytics(days: number = 30) {
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - days);
+
+    // Total calls
+    const [totalCalls] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(callSessions)
+      .where(gte(callSessions.startedAt, startDate));
+
+    // Calls by status
+    const callsByStatus = await db
+      .select({
+        status: callSessions.status,
+        count: sql<number>`count(*)`,
+      })
+      .from(callSessions)
+      .where(gte(callSessions.startedAt, startDate))
+      .groupBy(callSessions.status);
+
+    // Average call duration (only for ended calls)
+    const [avgDuration] = await db
+      .select({
+        avgDuration: sql<number>`AVG(EXTRACT(EPOCH FROM (${callSessions.endedAt} - ${callSessions.startedAt})))`,
+      })
+      .from(callSessions)
+      .where(
+        and(
+          gte(callSessions.startedAt, startDate),
+          eq(callSessions.status, 'ended'),
+          sql`${callSessions.endedAt} IS NOT NULL`
+        )
+      );
+
+    // Calls over time (daily)
+    const callsOverTime = await db
+      .select({
+        date: sql<string>`DATE(${callSessions.startedAt})`,
+        count: sql<number>`count(*)`,
+      })
+      .from(callSessions)
+      .where(gte(callSessions.startedAt, startDate))
+      .groupBy(sql`DATE(${callSessions.startedAt})`)
+      .orderBy(sql`DATE(${callSessions.startedAt})`);
+
+    // Calls by hour of day
+    const callsByHour = await db
+      .select({
+        hour: sql<number>`EXTRACT(HOUR FROM ${callSessions.startedAt})`,
+        count: sql<number>`count(*)`,
+      })
+      .from(callSessions)
+      .where(gte(callSessions.startedAt, startDate))
+      .groupBy(sql`EXTRACT(HOUR FROM ${callSessions.startedAt})`)
+      .orderBy(sql`EXTRACT(HOUR FROM ${callSessions.startedAt})`);
+
+    // Success rate
+    const connectedCalls = callsByStatus.find((s) => s.status === 'connected')?.count || 0;
+    const successRate = Number(totalCalls.count) > 0 
+      ? (Number(connectedCalls) / Number(totalCalls.count)) * 100 
+      : 0;
+
+    return {
+      totalCalls: Number(totalCalls.count),
+      averageDuration: Math.round(Number(avgDuration.avgDuration) || 0),
+      successRate: Math.round(successRate * 100) / 100,
+      callsByStatus: callsByStatus.map((s) => ({
+        status: s.status,
+        count: Number(s.count),
+      })),
+      callsOverTime: callsOverTime.map((c) => ({
+        date: c.date,
+        count: Number(c.count),
+      })),
+      callsByHour: callsByHour.map((c) => ({
+        hour: Number(c.hour),
+        count: Number(c.count),
+      })),
+    };
+  }
+
+  async getChatAnalytics(days: number = 30) {
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - days);
+
+    // Total chats
+    const [totalChats] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(chatSessions)
+      .where(gte(chatSessions.startedAt, startDate));
+
+    // Total messages
+    const [totalMessages] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(messages)
+      .where(gte(messages.sentAt, startDate));
+
+    // Average messages per chat
+    const avgMessagesPerChat = Number(totalChats.count) > 0
+      ? Number(totalMessages.count) / Number(totalChats.count)
+      : 0;
+
+    // Chats by status
+    const chatsByStatus = await db
+      .select({
+        status: chatSessions.status,
+        count: sql<number>`count(*)`,
+      })
+      .from(chatSessions)
+      .where(gte(chatSessions.startedAt, startDate))
+      .groupBy(chatSessions.status);
+
+    // Messages over time (daily)
+    const messagesOverTime = await db
+      .select({
+        date: sql<string>`DATE(${messages.sentAt})`,
+        count: sql<number>`count(*)`,
+      })
+      .from(messages)
+      .where(gte(messages.sentAt, startDate))
+      .groupBy(sql`DATE(${messages.sentAt})`)
+      .orderBy(sql`DATE(${messages.sentAt})`);
+
+    // Messages by hour of day
+    const messagesByHour = await db
+      .select({
+        hour: sql<number>`EXTRACT(HOUR FROM ${messages.sentAt})`,
+        count: sql<number>`count(*)`,
+      })
+      .from(messages)
+      .where(gte(messages.sentAt, startDate))
+      .groupBy(sql`EXTRACT(HOUR FROM ${messages.sentAt})`)
+      .orderBy(sql`EXTRACT(HOUR FROM ${messages.sentAt})`);
+
+    // Message types distribution
+    const messagesByType = await db
+      .select({
+        type: messages.messageType,
+        count: sql<number>`count(*)`,
+      })
+      .from(messages)
+      .where(gte(messages.sentAt, startDate))
+      .groupBy(messages.messageType);
+
+    // Read rate
+    const [readStats] = await db
+      .select({
+        total: sql<number>`count(*)`,
+        read: sql<number>`count(*) FILTER (WHERE ${messages.isRead} = true)`,
+      })
+      .from(messages)
+      .where(gte(messages.sentAt, startDate));
+
+    const readRate = Number(readStats.total) > 0
+      ? (Number(readStats.read) / Number(readStats.total)) * 100
+      : 0;
+
+    return {
+      totalChats: Number(totalChats.count),
+      totalMessages: Number(totalMessages.count),
+      averageMessagesPerChat: Math.round(avgMessagesPerChat * 100) / 100,
+      readRate: Math.round(readRate * 100) / 100,
+      chatsByStatus: chatsByStatus.map((s) => ({
+        status: s.status,
+        count: Number(s.count),
+      })),
+      messagesOverTime: messagesOverTime.map((m) => ({
+        date: m.date,
+        count: Number(m.count),
+      })),
+      messagesByHour: messagesByHour.map((m) => ({
+        hour: Number(m.hour),
+        count: Number(m.count),
+      })),
+      messagesByType: messagesByType.map((m) => ({
+        type: m.type,
+        count: Number(m.count),
+      })),
+    };
+  }
+
+  async getUserGrowthAnalytics(days: number = 30) {
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - days);
+
+    // User registrations over time
+    const userGrowth = await db
+      .select({
+        date: sql<string>`DATE(${users.createdAt})`,
+        count: sql<number>`count(*)`,
+      })
+      .from(users)
+      .where(gte(users.createdAt, startDate))
+      .groupBy(sql`DATE(${users.createdAt})`)
+      .orderBy(sql`DATE(${users.createdAt})`);
+
+    return {
+      userGrowth: userGrowth.map((u) => ({
+        date: u.date,
+        count: Number(u.count),
+      })),
+    };
+  }
+
+  // ==================== BUG REPORTS MANAGEMENT ====================
+
+  async getAllBugReports(filters?: {
+    status?: string;
+    severity?: string;
+    limit?: number;
+    offset?: number;
+  }) {
+    const { status, severity, limit = 50, offset = 0 } = filters || {};
+
+    let query = db
+      .select({
+        report: sql`bug_reports.*`,
+        user: {
+          id: users.id,
+          username: users.username,
+        },
+      })
+      .from(sql`bug_reports`)
+      .leftJoin(users, sql`bug_reports.user_id = ${users.id}`);
+
+    const conditions = [];
+    if (status) {
+      conditions.push(sql`bug_reports.status = ${status}`);
+    }
+    if (severity) {
+      conditions.push(sql`bug_reports.severity = ${severity}`);
+    }
+
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions)) as any;
+    }
+
+    const reports = await query
+      .orderBy(sql`bug_reports.created_at DESC`)
+      .limit(limit)
+      .offset(offset);
+
+    const [totalResult] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(sql`bug_reports`)
+      .where(conditions.length > 0 ? and(...conditions) : undefined);
+
+    return {
+      reports,
+      total: Number(totalResult.count),
+      limit,
+      offset,
+    };
+  }
+
+  async getBugReportStats() {
+    // Reports by status
+    const reportsByStatus = await db
+      .select({
+        status: sql`status`,
+        count: sql<number>`count(*)`,
+      })
+      .from(sql`bug_reports`)
+      .groupBy(sql`status`);
+
+    // Reports by severity
+    const reportsBySeverity = await db
+      .select({
+        severity: sql`severity`,
+        count: sql<number>`count(*)`,
+      })
+      .from(sql`bug_reports`)
+      .groupBy(sql`severity`);
+
+    return {
+      byStatus: reportsByStatus.map((r) => ({
+        status: r.status,
+        count: Number(r.count),
+      })),
+      bySeverity: reportsBySeverity.map((r) => ({
+        severity: r.severity,
+        count: Number(r.count),
+      })),
+    };
+  }
+
+  // ==================== SUBSCRIPTION MANAGEMENT ====================
+
+  async getSubscriptionStats() {
+    // Users by plan
+    const usersByPlan = await db
+      .select({
+        plan: subscriptions.plan,
+        count: sql<number>`count(DISTINCT ${subscriptions.userId})`,
+      })
+      .from(subscriptions)
+      .where(eq(subscriptions.status, 'active'))
+      .groupBy(subscriptions.plan);
+
+    // Total active subscriptions
+    const [totalActive] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(subscriptions)
+      .where(eq(subscriptions.status, 'active'));
+
+    // Subscription changes over time (last 30 days)
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    const subscriptionChanges = await db
+      .select({
+        date: sql<string>`DATE(${subscriptions.createdAt})`,
+        plan: subscriptions.plan,
+        count: sql<number>`count(*)`,
+      })
+      .from(subscriptions)
+      .where(gte(subscriptions.createdAt, thirtyDaysAgo))
+      .groupBy(sql`DATE(${subscriptions.createdAt})`, subscriptions.plan)
+      .orderBy(sql`DATE(${subscriptions.createdAt})`);
+
+    return {
+      totalActive: Number(totalActive.count),
+      usersByPlan: usersByPlan.map((u) => ({
+        plan: u.plan,
+        count: Number(u.count),
+      })),
+      subscriptionChanges: subscriptionChanges.map((s) => ({
+        date: s.date,
+        plan: s.plan,
+        count: Number(s.count),
+      })),
+    };
+  }
+
+  async getAllSubscriptions(filters?: {
+    plan?: string;
+    status?: string;
+    limit?: number;
+    offset?: number;
+  }) {
+    const { plan, status, limit = 50, offset = 0 } = filters || {};
+
+    let query = db
+      .select({
+        subscription: subscriptions,
+        user: {
+          id: users.id,
+          username: users.username,
+        },
+      })
+      .from(subscriptions)
+      .leftJoin(users, eq(subscriptions.userId, users.id));
+
+    const conditions = [];
+    if (plan) {
+      conditions.push(eq(subscriptions.plan, plan as any));
+    }
+    if (status) {
+      conditions.push(eq(subscriptions.status, status as any));
+    }
+
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions)) as any;
+    }
+
+    const subs = await query
+      .orderBy(desc(subscriptions.createdAt))
+      .limit(limit)
+      .offset(offset);
+
+    const [totalResult] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(subscriptions)
+      .where(conditions.length > 0 ? and(...conditions) : undefined);
+
+    return {
+      subscriptions: subs,
+      total: Number(totalResult.count),
+      limit,
+      offset,
     };
   }
 }
