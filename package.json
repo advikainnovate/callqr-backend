@@ -19,6 +19,9 @@
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "db:reset": "node scripts/reset-database.js",
+    "db:add-indexes": "node scripts/migrate-add-indexes.js",
+    "db:add-constraints": "node scripts/migrate-add-constraints.js",
+    "db:rollback": "node scripts/rollback-migration.js",
     "deploy": "git pull && npm install && npm run build && pm2 restart callqr-backend"
   },
   "keywords": [],

@@ -681,6 +681,18 @@ npm run db:studio    # Open Drizzle Studio
 npm run db:reset     # Reset database (drops all tables)
 ```
 
+### Database Migration Scripts
+```bash
+# Add performance indexes to database tables
+npm run db:add-indexes
+
+# Add unique constraints and check constraints
+npm run db:add-constraints
+
+# Rollback the last applied migration
+npm run db:rollback
+```
+
 ### Utility Scripts
 ```bash
 # Verify database schema
@@ -694,6 +706,15 @@ node scripts/generate-qr-codes.js 100
 
 # Setup database
 node scripts/setup-database.js
+
+# Add database indexes for better query performance
+node scripts/migrate-add-indexes.js
+
+# Add unique and check constraints for data integrity
+node scripts/migrate-add-constraints.js
+
+# Rollback last migration with automatic cleanup
+node scripts/rollback-migration.js
 ```
 
 ### Project Structure
