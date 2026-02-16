@@ -28,7 +28,7 @@ router.post(
   validate(
     z.object({
       body: z.object({
-        count: z.number().int().min(1).max(1000),
+        count: z.number().int().min(1).max(2000),
       }),
     })
   ),

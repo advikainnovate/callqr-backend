@@ -7,6 +7,65 @@ A secure, privacy-focused calling system where users can initiate WebRTC calls b
 - **[Frontend Integration Guide](FRONTEND_README.md)** - Complete guide for connecting your frontend 📱
 - **[API Documentation](http://localhost:4000/api-docs)** - Live Swagger docs 🔍
 
+## 🎯 Complete User Workflow
+
+### 1. Registration & Authentication
+```
+Register → POST /api/auth/register (username, password)
+         → Auto-creates FREE subscription
+         → Returns JWT token
+
+Login    → POST /api/auth/login (username, password)
+         → Returns JWT token
+```
+
+### 2. QR Code Setup
+```
+Admin generates QR codes:
+  POST /api/qr-codes/bulk-create { count: 100 }
+
+User claims QR code:
+  POST /api/qr-codes/claim { humanToken: "QR-K9F7-M2QX" }
+  → QR becomes active and assigned to user
+```
+
+### 3. Communication Flow
+```
+Someone scans QR:
+  POST /api/qr-codes/scan { token: "..." }
+  → Returns QR owner's profile
+
+Choose action:
+  
+  A) Voice/Video Call:
+     POST /api/calls/initiate { qrToken }
+     → WebRTC signaling via Socket.IO
+     → PATCH /api/calls/:id/accept or /reject
+     → PATCH /api/calls/:id/end
+  
+  B) Text Chat:
+     POST /api/chat-sessions/initiate { qrToken }
+     → POST /api/messages/send { content }
+     → Real-time via Socket.IO
+     → PATCH /api/chat-sessions/:id/end
+```
+
+### 4. Subscription Limits
+| Plan | Daily Calls | Daily Messages | Active Chats |
+|------|-------------|----------------|--------------|
+| Free | 20 | 50 | 5 |
+| Pro | 80 | 500 | 20 |
+| Enterprise | 200 | Unlimited | Unlimited |
+
+### 5. Admin Dashboard
+```
+GET /api/admin/overview           → Stats & metrics
+GET /api/admin/users              → User management
+GET /api/admin/qr-codes           → QR management
+GET /api/admin/analytics/calls    → Call analytics
+GET /api/admin/monitoring/active-calls → Real-time monitoring
+```
+
 ## 🚀 Features
 
 ### Core Functionality
@@ -79,6 +138,9 @@ DATABASE_URL=postgres://username:password@localhost:5432/qr_calling_db
 JWT_SECRET=your-super-secret-jwt-key-min-32-chars
 ENCRYPTION_KEY=your-32-byte-encryption-key-hex-encoded
 
+# Admin Configuration
+ADMIN_USER_IDS=comma-separated-user-ids
+
 # CORS Configuration
 ALLOWED_ORIGINS=*
 
@@ -115,6 +177,26 @@ npm run build
 npm start
 ```
 
+### 5. Setup Admin User
+```bash
+# 1. Register your admin account via API
+# POST /api/auth/register with username and password
+
+# 2. Copy the returned user ID from the response
+
+# 3. Add to .env file
+ADMIN_USER_IDS=your-user-id-here
+
+# 4. Restart the server
+# Admin routes will now be accessible to this user
+```
+
+### 6. Generate QR Codes (Optional)
+```bash
+# Generate up to 2000 QR codes for users to claim
+node scripts/generate-qr-codes.js 100
+```
+
 ### 5. Multi-Process Deployment (PM2)
 In production environments (like a PM2 cluster), Socket.IO **must** be configured to use `websocket` transport exclusively to avoid session ID mismatches across different worker processes.
 
@@ -131,16 +213,17 @@ transports: ['websocket']
 3. Run tests in sequence to test the complete flow
 
 ### Complete Testing Flow
-1. **Register** → Create test user
-2. **Generate Token** → Create JWT token manually (see below)
-3. **Create QR** → Generate unassigned QR code
-4. **Assign QR** → Assign QR code to user
-5. **Scan QR** → Get privacy-preserving profile
-6. **Create Subscription** → Set up user subscription
-7. **Initiate Call** → Start WebRTC signaling
-8. **Initiate Chat** → Start chat session via QR scan
-9. **Send Messages** → Exchange messages with typing indicators
-10. **Get Config** → Fetch STUN/TURN servers
+1. **Register** → `POST /api/auth/register` with username, password, phone, email
+2. **Login** → `POST /api/auth/login` with username, password (get JWT token)
+3. **Get Profile** → `GET /api/auth/profile` with JWT token
+4. **Create QR** → Generate unassigned QR code
+5. **Assign QR** → Assign QR code to user
+6. **Scan QR** → Get privacy-preserving profile
+7. **Create Subscription** → Set up user subscription
+8. **Initiate Call** → Start WebRTC signaling
+9. **Initiate Chat** → Start chat session via QR scan
+10. **Send Messages** → Exchange messages with typing indicators
+11. **Get Config** → Fetch STUN/TURN servers
 
 ### Chat Feature Workflow
 After scanning a QR code, users can choose to either call or chat:
@@ -157,24 +240,15 @@ After scanning a QR code, users can choose to either call or chat:
    - Mark as read: `PATCH /api/messages/:messageId/read` → `socket.emit('message-read')`
    - End chat: `PATCH /api/chat-sessions/:chatSessionId/end`
 
-### Generate JWT Token for Testing
-Since the new schema doesn't use passwords, generate tokens manually:
-
-```bash
-# After registering a user, generate a token
-node scripts/generate-test-token.js USER_ID USERNAME
-
-# Example
-node scripts/generate-test-token.js 123e4567-e89b-12d3-a456-426614174000 testuser
-```
-
-Copy the generated token and use it in your API requests.
-
 ## 📱 API Endpoints
 
-### Authentication & Users
-- `POST /api/users/register` - Register new account
-- `GET /api/users/profile` - Get current user profile
+### Authentication
+- `POST /api/auth/register` - Register new account with password
+- `POST /api/auth/login` - Login with username and password
+- `GET /api/auth/profile` - Get current user profile
+- `POST /api/auth/change-password` - Change password (requires auth)
+
+### User Management
 - `GET /api/users/:userId` - Get user by ID
 - `PATCH /api/users/:userId` - Update user
 - `PATCH /api/users/:userId/block` - Block user (admin)
@@ -185,7 +259,7 @@ Copy the generated token and use it in your API requests.
 
 ### QR Code Management
 - `POST /api/qr-codes/create` - Generate a new unassigned QR code (admin)
-- `POST /api/qr-codes/bulk-create` - Bulk generate QR codes (admin, 1-1000)
+- `POST /api/qr-codes/bulk-create` - Bulk generate QR codes (admin, 1-2000)
 - `POST /api/qr-codes/claim` - Claim an unassigned QR code (user)
 - `POST /api/qr-codes/:qrCodeId/assign` - Assign QR code to user (admin)
 - `POST /api/qr-codes/scan` - Scan QR code and get user info

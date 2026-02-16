@@ -5,18 +5,6 @@ import { asyncHandler } from '../utils';
 import { sendSuccessResponse } from '../utils/responseHandler';
 
 export class UserController {
-  createUser = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
-    const { username, phone, email } = req.body;
-    const user = await userService.createUser({ username, phone, email });
-
-    sendSuccessResponse(res, 201, 'User created successfully', {
-      id: user.id,
-      username: user.username,
-      status: user.status,
-      createdAt: user.createdAt,
-    });
-  });
-
   getUser = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const { userId } = req.params;
     const user = await userService.getUserById(userId);
