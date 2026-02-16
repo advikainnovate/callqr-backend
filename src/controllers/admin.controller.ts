@@ -241,6 +241,92 @@ export class AdminController {
 
     sendSuccessResponse(res, 200, 'Subscriptions retrieved successfully', result);
   });
+
+  // ==================== REAL-TIME MONITORING ====================
+
+  getActiveCallsList = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const activeCalls = await adminService.getActiveCallsList();
+    sendSuccessResponse(res, 200, 'Active calls retrieved successfully', {
+      calls: activeCalls,
+      count: activeCalls.length,
+    });
+  });
+
+  getActiveChatsList = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const activeChats = await adminService.getActiveChatsList();
+    sendSuccessResponse(res, 200, 'Active chats retrieved successfully', {
+      chats: activeChats,
+      count: activeChats.length,
+    });
+  });
+
+  getRecentActivity = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const limit = req.query.limit ? parseInt(req.query.limit as string) : 50;
+    const activities = await adminService.getRecentActivity(limit);
+    sendSuccessResponse(res, 200, 'Recent activity retrieved successfully', {
+      activities,
+      count: activities.length,
+    });
+  });
+
+  getSystemHealth = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const health = await adminService.getSystemHealth();
+    sendSuccessResponse(res, 200, 'System health retrieved successfully', health);
+  });
+
+  // ==================== REPORTS & EXPORT ====================
+
+  exportUsers = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const { status } = req.query;
+    const users = await adminService.exportUsers({ status: status as string });
+
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', 'attachment; filename=users-export.json');
+    res.send(JSON.stringify(users, null, 2));
+  });
+
+  exportQRCodes = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const { status } = req.query;
+    const qrCodes = await adminService.exportQRCodes({ status: status as string });
+
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', 'attachment; filename=qr-codes-export.json');
+    res.send(JSON.stringify(qrCodes, null, 2));
+  });
+
+  exportCallHistory = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const { startDate, endDate, status } = req.query;
+
+    const calls = await adminService.exportCallHistory({
+      startDate: startDate ? new Date(startDate as string) : undefined,
+      endDate: endDate ? new Date(endDate as string) : undefined,
+      status: status as string,
+    });
+
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', 'attachment; filename=call-history-export.json');
+    res.send(JSON.stringify(calls, null, 2));
+  });
+
+  exportChatHistory = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const { startDate, endDate, status } = req.query;
+
+    const chats = await adminService.exportChatHistory({
+      startDate: startDate ? new Date(startDate as string) : undefined,
+      endDate: endDate ? new Date(endDate as string) : undefined,
+      status: status as string,
+    });
+
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', 'attachment; filename=chat-history-export.json');
+    res.send(JSON.stringify(chats, null, 2));
+  });
+
+  generateUserGrowthReport = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const days = req.query.days ? parseInt(req.query.days as string) : 30;
+    const report = await adminService.generateUserGrowthReport(days);
+    sendSuccessResponse(res, 200, 'User growth report generated successfully', report);
+  });
 }
 
 export const adminController = new AdminController();

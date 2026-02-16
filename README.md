@@ -266,6 +266,15 @@ Copy the generated token and use it in your API requests.
 - `GET /api/admin/bug-reports/stats` - Get bug report statistics
 - `GET /api/admin/subscriptions` - Get all subscriptions (with filters)
 - `GET /api/admin/subscriptions/stats` - Get subscription statistics
+- `GET /api/admin/monitoring/active-calls` - Get currently active calls
+- `GET /api/admin/monitoring/active-chats` - Get currently active chats
+- `GET /api/admin/monitoring/recent-activity` - Get recent system activity
+- `GET /api/admin/monitoring/system-health` - Get system health status
+- `GET /api/admin/export/users` - Export users to JSON
+- `GET /api/admin/export/qr-codes` - Export QR codes to JSON
+- `GET /api/admin/export/call-history` - Export call history to JSON
+- `GET /api/admin/export/chat-history` - Export chat history to JSON
+- `GET /api/admin/reports/user-growth` - Generate user growth report
 
 ### WebRTC Configuration
 - `GET /api/webrtc/config` - Fetches dynamic ICE (STUN/TURN) servers

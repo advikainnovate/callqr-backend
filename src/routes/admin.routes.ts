@@ -72,4 +72,17 @@ router.get('/bug-reports/stats', authenticateToken, adminController.getBugReport
 router.get('/subscriptions', authenticateToken, adminController.getAllSubscriptions);
 router.get('/subscriptions/stats', authenticateToken, adminController.getSubscriptionStats);
 
+// ==================== REAL-TIME MONITORING ====================
+router.get('/monitoring/active-calls', authenticateToken, adminController.getActiveCallsList);
+router.get('/monitoring/active-chats', authenticateToken, adminController.getActiveChatsList);
+router.get('/monitoring/recent-activity', authenticateToken, adminController.getRecentActivity);
+router.get('/monitoring/system-health', authenticateToken, adminController.getSystemHealth);
+
+// ==================== REPORTS & EXPORT ====================
+router.get('/export/users', authenticateToken, adminController.exportUsers);
+router.get('/export/qr-codes', authenticateToken, adminController.exportQRCodes);
+router.get('/export/call-history', authenticateToken, adminController.exportCallHistory);
+router.get('/export/chat-history', authenticateToken, adminController.exportChatHistory);
+router.get('/reports/user-growth', authenticateToken, adminController.generateUserGrowthReport);
+
 export default router;

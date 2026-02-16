@@ -1,0 +1,26 @@
+meta {
+  name: Export - Users
+  type: http
+  seq: 27
+}
+
+get {
+  url: {{baseUrl}}/api/admin/export/users
+  body: none
+  auth: bearer
+}
+
+params:query {
+  ~status: active
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+docs {
+  Export all users to JSON file
+  Optional filter by status: active, blocked, deleted
+  
+  Downloads as: users-export.json
+}

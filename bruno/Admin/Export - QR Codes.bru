@@ -1,0 +1,26 @@
+meta {
+  name: Export - QR Codes
+  type: http
+  seq: 28
+}
+
+get {
+  url: {{baseUrl}}/api/admin/export/qr-codes
+  body: none
+  auth: bearer
+}
+
+params:query {
+  ~status: unassigned
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+docs {
+  Export all QR codes to JSON file
+  Optional filter by status: unassigned, active, disabled, revoked
+  
+  Downloads as: qr-codes-export.json
+}

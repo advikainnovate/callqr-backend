@@ -910,6 +910,374 @@ export class AdminService {
       offset,
     };
   }
+
+  // ==================== REAL-TIME MONITORING ====================
+
+  async getActiveCallsList() {
+    const activeCalls = await db
+      .select({
+        call: callSessions,
+        caller: {
+          id: users.id,
+          username: users.username,
+        },
+        receiver: {
+          id: sql`receiver.id`,
+          username: sql`receiver.username`,
+        },
+      })
+      .from(callSessions)
+      .leftJoin(users, eq(callSessions.callerId, users.id))
+      .leftJoin(sql`users as receiver`, sql`${callSessions.receiverId} = receiver.id`)
+      .where(
+        or(
+          eq(callSessions.status, 'initiated'),
+          eq(callSessions.status, 'ringing'),
+          eq(callSessions.status, 'connected')
+        )
+      )
+      .orderBy(desc(callSessions.startedAt));
+
+    return activeCalls.map((c) => ({
+      ...c.call,
+      caller: c.caller,
+      receiver: c.receiver,
+      duration: c.call.startedAt
+        ? Math.floor((Date.now() - c.call.startedAt.getTime()) / 1000)
+        : 0,
+    }));
+  }
+
+  async getActiveChatsList() {
+    const activeChats = await db
+      .select({
+        chat: chatSessions,
+        participant1: {
+          id: users.id,
+          username: users.username,
+        },
+        participant2: {
+          id: sql`participant2.id`,
+          username: sql`participant2.username`,
+        },
+      })
+      .from(chatSessions)
+      .leftJoin(users, eq(chatSessions.participant1Id, users.id))
+      .leftJoin(sql`users as participant2`, sql`${chatSessions.participant2Id} = participant2.id`)
+      .where(eq(chatSessions.status, 'active'))
+      .orderBy(desc(chatSessions.lastMessageAt));
+
+    return activeChats.map((c) => ({
+      ...c.chat,
+      participant1: c.participant1,
+      participant2: c.participant2,
+    }));
+  }
+
+  async getRecentActivity(limit: number = 50) {
+    // Get recent user registrations
+    const recentUsers = await db
+      .select({
+        type: sql<string>`'user_registration'`,
+        timestamp: users.createdAt,
+        data: sql`json_build_object('userId', ${users.id}, 'username', ${users.username})`,
+      })
+      .from(users)
+      .orderBy(desc(users.createdAt))
+      .limit(limit);
+
+    // Get recent QR claims
+    const recentQRClaims = await db
+      .select({
+        type: sql<string>`'qr_claimed'`,
+        timestamp: qrCodes.assignedAt,
+        data: sql`json_build_object('qrId', ${qrCodes.id}, 'humanToken', ${qrCodes.humanToken}, 'userId', ${qrCodes.assignedUserId})`,
+      })
+      .from(qrCodes)
+      .where(sql`${qrCodes.assignedAt} IS NOT NULL`)
+      .orderBy(desc(qrCodes.assignedAt))
+      .limit(limit);
+
+    // Get recent calls
+    const recentCalls = await db
+      .select({
+        type: sql<string>`'call_initiated'`,
+        timestamp: callSessions.startedAt,
+        data: sql`json_build_object('callId', ${callSessions.id}, 'callerId', ${callSessions.callerId}, 'receiverId', ${callSessions.receiverId}, 'status', ${callSessions.status})`,
+      })
+      .from(callSessions)
+      .orderBy(desc(callSessions.startedAt))
+      .limit(limit);
+
+    // Get recent chats
+    const recentChats = await db
+      .select({
+        type: sql<string>`'chat_started'`,
+        timestamp: chatSessions.startedAt,
+        data: sql`json_build_object('chatId', ${chatSessions.id}, 'participant1Id', ${chatSessions.participant1Id}, 'participant2Id', ${chatSessions.participant2Id})`,
+      })
+      .from(chatSessions)
+      .orderBy(desc(chatSessions.startedAt))
+      .limit(limit);
+
+    // Combine and sort all activities
+    const allActivities = [
+      ...recentUsers,
+      ...recentQRClaims,
+      ...recentCalls,
+      ...recentChats,
+    ].sort((a, b) => {
+      const timeA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+      const timeB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+      return timeB - timeA;
+    });
+
+    return allActivities.slice(0, limit);
+  }
+
+  async getSystemHealth() {
+    // Get database connection status
+    try {
+      await db.select({ result: sql<number>`1` });
+      const dbHealthy = true;
+
+      // Get counts for health check
+      const [userCount] = await db.select({ count: sql<number>`count(*)` }).from(users);
+      const [qrCount] = await db.select({ count: sql<number>`count(*)` }).from(qrCodes);
+      const [callCount] = await db.select({ count: sql<number>`count(*)` }).from(callSessions);
+      const [chatCount] = await db.select({ count: sql<number>`count(*)` }).from(chatSessions);
+
+      return {
+        status: 'healthy',
+        database: 'connected',
+        timestamp: new Date(),
+        counts: {
+          users: Number(userCount.count),
+          qrCodes: Number(qrCount.count),
+          calls: Number(callCount.count),
+          chats: Number(chatCount.count),
+        },
+      };
+    } catch (error) {
+      return {
+        status: 'unhealthy',
+        database: 'disconnected',
+        timestamp: new Date(),
+        counts: {
+          users: 0,
+          qrCodes: 0,
+          calls: 0,
+          chats: 0,
+        },
+      };
+    }
+  }
+
+  // ==================== REPORTS & EXPORT ====================
+
+  async exportUsers(filters?: { status?: string }) {
+    const { status } = filters || {};
+
+    let query = db.select().from(users);
+
+    if (status) {
+      query = query.where(eq(users.status, status as any)) as any;
+    }
+
+    const usersList = await query.orderBy(desc(users.createdAt));
+
+    return usersList.map((user) => ({
+      id: user.id,
+      username: user.username,
+      phoneHash: user.phoneHash,
+      emailHash: user.emailHash,
+      status: user.status,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+    }));
+  }
+
+  async exportQRCodes(filters?: { status?: string }) {
+    const { status } = filters || {};
+
+    let query = db.select().from(qrCodes);
+
+    if (status) {
+      query = query.where(eq(qrCodes.status, status as any)) as any;
+    }
+
+    const qrCodesList = await query.orderBy(desc(qrCodes.createdAt));
+
+    return qrCodesList.map((qr) => ({
+      id: qr.id,
+      token: qr.token,
+      humanToken: qr.humanToken,
+      assignedUserId: qr.assignedUserId,
+      status: qr.status,
+      createdAt: qr.createdAt,
+      assignedAt: qr.assignedAt,
+    }));
+  }
+
+  async exportCallHistory(filters?: {
+    startDate?: Date;
+    endDate?: Date;
+    status?: string;
+  }) {
+    const { startDate, endDate, status } = filters || {};
+
+    let query = db
+      .select({
+        call: callSessions,
+        caller: {
+          id: users.id,
+          username: users.username,
+        },
+        receiver: {
+          id: sql`receiver.id`,
+          username: sql`receiver.username`,
+        },
+        qrCode: {
+          humanToken: qrCodes.humanToken,
+        },
+      })
+      .from(callSessions)
+      .leftJoin(users, eq(callSessions.callerId, users.id))
+      .leftJoin(sql`users as receiver`, sql`${callSessions.receiverId} = receiver.id`)
+      .leftJoin(qrCodes, eq(callSessions.qrId, qrCodes.id));
+
+    const conditions = [];
+    if (startDate) {
+      conditions.push(gte(callSessions.startedAt, startDate));
+    }
+    if (endDate) {
+      conditions.push(lte(callSessions.startedAt, endDate));
+    }
+    if (status) {
+      conditions.push(eq(callSessions.status, status as any));
+    }
+
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions)) as any;
+    }
+
+    const calls = await query.orderBy(desc(callSessions.startedAt));
+
+    return calls.map((c) => ({
+      callId: c.call.id,
+      callerUsername: c.caller?.username,
+      receiverUsername: c.receiver?.username,
+      qrCode: c.qrCode?.humanToken,
+      status: c.call.status,
+      endedReason: c.call.endedReason,
+      startedAt: c.call.startedAt,
+      endedAt: c.call.endedAt,
+      duration:
+        c.call.startedAt && c.call.endedAt
+          ? Math.floor((c.call.endedAt.getTime() - c.call.startedAt.getTime()) / 1000)
+          : null,
+    }));
+  }
+
+  async exportChatHistory(filters?: {
+    startDate?: Date;
+    endDate?: Date;
+    status?: string;
+  }) {
+    const { startDate, endDate, status } = filters || {};
+
+    let query = db
+      .select({
+        chat: chatSessions,
+        participant1: {
+          id: users.id,
+          username: users.username,
+        },
+        participant2: {
+          id: sql`participant2.id`,
+          username: sql`participant2.username`,
+        },
+        qrCode: {
+          humanToken: qrCodes.humanToken,
+        },
+      })
+      .from(chatSessions)
+      .leftJoin(users, eq(chatSessions.participant1Id, users.id))
+      .leftJoin(sql`users as participant2`, sql`${chatSessions.participant2Id} = participant2.id`)
+      .leftJoin(qrCodes, eq(chatSessions.qrId, qrCodes.id));
+
+    const conditions = [];
+    if (startDate) {
+      conditions.push(gte(chatSessions.startedAt, startDate));
+    }
+    if (endDate) {
+      conditions.push(lte(chatSessions.startedAt, endDate));
+    }
+    if (status) {
+      conditions.push(eq(chatSessions.status, status as any));
+    }
+
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions)) as any;
+    }
+
+    const chats = await query.orderBy(desc(chatSessions.startedAt));
+
+    // Get message counts for each chat
+    const chatsWithMessageCount = await Promise.all(
+      chats.map(async (c) => {
+        const [msgCount] = await db
+          .select({ count: sql<number>`count(*)` })
+          .from(messages)
+          .where(eq(messages.chatSessionId, c.chat.id));
+
+        return {
+          chatId: c.chat.id,
+          participant1Username: c.participant1?.username,
+          participant2Username: c.participant2?.username,
+          qrCode: c.qrCode?.humanToken,
+          status: c.chat.status,
+          startedAt: c.chat.startedAt,
+          endedAt: c.chat.endedAt,
+          messageCount: Number(msgCount.count),
+        };
+      })
+    );
+
+    return chatsWithMessageCount;
+  }
+
+  async generateUserGrowthReport(days: number = 30) {
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - days);
+
+    const userGrowth = await db
+      .select({
+        date: sql<string>`DATE(${users.createdAt})`,
+        count: sql<number>`count(*)`,
+      })
+      .from(users)
+      .where(gte(users.createdAt, startDate))
+      .groupBy(sql`DATE(${users.createdAt})`)
+      .orderBy(sql`DATE(${users.createdAt})`);
+
+    const [totalUsers] = await db.select({ count: sql<number>`count(*)` }).from(users);
+
+    const [newUsers] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(users)
+      .where(gte(users.createdAt, startDate));
+
+    return {
+      period: `${days} days`,
+      totalUsers: Number(totalUsers.count),
+      newUsers: Number(newUsers.count),
+      dailyGrowth: userGrowth.map((u) => ({
+        date: u.date,
+        count: Number(u.count),
+      })),
+    };
+  }
 }
 
 export const adminService = new AdminService();
