@@ -1,0 +1,27 @@
+meta {
+  name: Get User Details
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/api/admin/users/:userId
+  body: none
+  auth: bearer
+}
+
+params:path {
+  userId: user-id-here
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+docs {
+  Get detailed user information:
+  - User profile
+  - QR codes owned
+  - Subscription details
+  - Call/chat/message statistics
+}

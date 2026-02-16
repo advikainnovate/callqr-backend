@@ -1,0 +1,30 @@
+meta {
+  name: Get All QR Codes
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{baseUrl}}/api/admin/qr-codes?status=unassigned&limit=50&offset=0
+  body: none
+  auth: bearer
+}
+
+params:query {
+  status: unassigned
+  limit: 50
+  offset: 0
+  ~search: QR-K9F7
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+docs {
+  Get all QR codes with filters:
+  - status: unassigned, active, disabled, revoked
+  - search: human token or machine token
+  - limit: results per page
+  - offset: pagination offset
+}

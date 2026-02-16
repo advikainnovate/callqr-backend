@@ -1,0 +1,29 @@
+meta {
+  name: Assign QR Code
+  type: http
+  seq: 10
+}
+
+post {
+  url: {{baseUrl}}/api/admin/qr-codes/:qrCodeId/assign
+  body: json
+  auth: bearer
+}
+
+params:path {
+  qrCodeId: qr-code-id-here
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+body:json {
+  {
+    "userId": "user-id-here"
+  }
+}
+
+docs {
+  Admin assigns QR code to specific user
+}

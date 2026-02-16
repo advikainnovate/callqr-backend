@@ -1,0 +1,23 @@
+meta {
+  name: Overview Stats
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/admin/overview
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+docs {
+  Get dashboard overview statistics:
+  - Total users (active, blocked, deleted)
+  - Total QR codes (unassigned, active, disabled, revoked)
+  - Today's calls and messages
+  - Active calls and chats right now
+}

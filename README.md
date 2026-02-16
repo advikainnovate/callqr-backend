@@ -243,6 +243,23 @@ Copy the generated token and use it in your API requests.
 - `GET /api/messages/unread-count` - Get total unread message count
 - `GET /api/messages/:chatSessionId/search` - Search messages in chat
 
+### Admin Dashboard
+- `GET /api/admin/overview` - Get dashboard overview stats
+- `GET /api/admin/users` - Get all users (with filters)
+- `GET /api/admin/users/:userId` - Get user details
+- `PATCH /api/admin/users/:userId/block` - Block user
+- `PATCH /api/admin/users/:userId/unblock` - Unblock user
+- `DELETE /api/admin/users/:userId` - Delete user
+- `GET /api/admin/qr-codes` - Get all QR codes (with filters)
+- `GET /api/admin/qr-codes/:qrCodeId` - Get QR code details
+- `POST /api/admin/qr-codes/bulk-create` - Bulk create QR codes
+- `POST /api/admin/qr-codes/:qrCodeId/assign` - Assign QR to user
+- `PATCH /api/admin/qr-codes/:qrCodeId/revoke` - Revoke QR code
+- `GET /api/admin/calls` - Get call history (with filters)
+- `GET /api/admin/calls/:callId` - Get call details
+- `GET /api/admin/chats` - Get chat history (with filters)
+- `GET /api/admin/chats/:chatId` - Get chat details
+
 ### WebRTC Configuration
 - `GET /api/webrtc/config` - Fetches dynamic ICE (STUN/TURN) servers
 
