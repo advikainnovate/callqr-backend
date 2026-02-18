@@ -1,0 +1,21 @@
+meta {
+  name: Get All Reports (Admin)
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/api/reports/admin/all
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+docs {
+  Get all bug reports (admin only).
+  
+  Returns list of all bug reports with details.
+}

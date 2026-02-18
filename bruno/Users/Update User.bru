@@ -1,0 +1,28 @@
+meta {
+  name: Update User
+  type: http
+  seq: 2
+}
+
+patch {
+  url: {{baseUrl}}/api/users/{{userId}}
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+body:json {
+  {
+    "phone": "+1234567890",
+    "email": "newemail@example.com"
+  }
+}
+
+docs {
+  Update user information.
+  
+  Can update phone and email fields.
+}

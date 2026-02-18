@@ -1,0 +1,21 @@
+meta {
+  name: Delete User
+  type: http
+  seq: 5
+}
+
+delete {
+  url: {{baseUrl}}/api/users/{{userId}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+docs {
+  Soft delete a user (admin only).
+  
+  Marks user as deleted without removing from database.
+}

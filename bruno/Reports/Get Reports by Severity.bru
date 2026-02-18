@@ -1,0 +1,21 @@
+meta {
+  name: Get Reports by Severity
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{baseUrl}}/api/reports/severity/high
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+docs {
+  Get bug reports by severity level (admin only).
+  
+  Valid severities: low, medium, high, critical
+}

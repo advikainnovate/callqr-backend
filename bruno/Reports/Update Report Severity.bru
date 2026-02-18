@@ -1,0 +1,27 @@
+meta {
+  name: Update Report Severity
+  type: http
+  seq: 6
+}
+
+patch {
+  url: {{baseUrl}}/api/reports/{{reportId}}/severity
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+body:json {
+  {
+    "severity": "high"
+  }
+}
+
+docs {
+  Update bug report severity (admin only).
+  
+  Valid severities: low, medium, high, critical
+}

@@ -1,0 +1,21 @@
+meta {
+  name: Block User
+  type: http
+  seq: 3
+}
+
+patch {
+  url: {{baseUrl}}/api/users/{{userId}}/block
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+docs {
+  Block a user (admin only).
+  
+  Prevents user from accessing the system.
+}

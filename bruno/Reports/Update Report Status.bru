@@ -1,0 +1,27 @@
+meta {
+  name: Update Report Status
+  type: http
+  seq: 5
+}
+
+patch {
+  url: {{baseUrl}}/api/reports/{{reportId}}/status
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+body:json {
+  {
+    "status": "in_progress"
+  }
+}
+
+docs {
+  Update bug report status (admin only).
+  
+  Valid statuses: pending, in_progress, resolved, closed
+}

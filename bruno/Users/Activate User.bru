@@ -1,0 +1,21 @@
+meta {
+  name: Activate User
+  type: http
+  seq: 4
+}
+
+patch {
+  url: {{baseUrl}}/api/users/{{userId}}/activate
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+docs {
+  Activate a blocked user (admin only).
+  
+  Restores user access to the system.
+}

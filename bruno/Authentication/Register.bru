@@ -1,0 +1,38 @@
+meta {
+  name: Register
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/auth/register
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "username": "testuser",
+    "password": "password123",
+    "phone": "+1234567890",
+    "email": "testuser@example.com"
+  }
+}
+
+docs {
+  Register a new user account.
+  
+  Required fields:
+  - username: 3-50 characters
+  - password: minimum 6 characters
+  
+  Optional fields:
+  - phone: phone number
+  - email: email address
+  
+  Returns:
+  - JWT token for API authentication
+  - User profile (id, username, status, createdAt)
+  
+  Use the token in Authorization header: Bearer <token>
+}

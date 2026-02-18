@@ -1,0 +1,24 @@
+meta {
+  name: Verify Phone
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{baseUrl}}/api/users/verify/phone
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "phone": "+1234567890",
+    "code": "123456"
+  }
+}
+
+docs {
+  Verify phone number with verification code.
+  
+  Used during registration or phone update process.
+}

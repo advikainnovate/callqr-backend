@@ -1,0 +1,21 @@
+meta {
+  name: Get Reports by Status
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{baseUrl}}/api/reports/status/pending
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+docs {
+  Get bug reports by status (admin only).
+  
+  Valid statuses: pending, in_progress, resolved, closed
+}
