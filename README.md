@@ -61,6 +61,8 @@ ALLOWED_ORIGINS=*
 - Phone/email stored as SHA-256 hashes
 - QR codes contain only secure tokens
 - JWT authentication with rate limiting
+- Socket.IO rate limiting (prevents spam/DoS)
+- Graceful shutdown with client notification
 - Helmet.js security headers
 - Input validation with Zod
 
@@ -100,6 +102,8 @@ PostgreSQL Database (Users, QR Codes, Sessions, Messages)
 
 - **[WORKFLOW.md](WORKFLOW.md)** - Complete API workflows for admin and users
 - **[API_ENDPOINTS.md](API_ENDPOINTS.md)** - All available endpoints with examples
+- **[SOCKET_RATE_LIMITING.md](SOCKET_RATE_LIMITING.md)** - Socket.IO rate limiting implementation
+- **[GRACEFUL_SHUTDOWN.md](GRACEFUL_SHUTDOWN.md)** - Graceful shutdown implementation
 - **[Swagger Docs](http://localhost:9001/api-docs)** - Live interactive API documentation
 
 ## 🛠️ Development
@@ -142,6 +146,22 @@ src/
 
 ## 🔌 WebRTC Integration
 
+### Socket.IO Rate Limiting
+
+All Socket.IO events are protected with rate limiting to prevent abuse:
+
+| Event Type | Limit | Window |
+|------------|-------|--------|
+| WebRTC Signaling | 100 requests | 1 minute |
+| Call Actions | 20 requests | 1 minute |
+| Chat Messages | 30 messages | 1 minute |
+| Typing Indicators | 20 events | 10 seconds |
+| Chat Room Actions | 30 requests | 1 minute |
+| Read Receipts | 50 requests | 1 minute |
+| Connections (per IP) | 10 connections | 1 minute |
+
+See [SOCKET_RATE_LIMITING.md](SOCKET_RATE_LIMITING.md) for details.
+
 ### Client Setup
 
 ```javascript
@@ -149,6 +169,11 @@ const socket = io('https://api.yourdomain.com', {
   path: '/socket.io',
   transports: ['websocket'],
   auth: { token: 'JWT_TOKEN' }
+});
+
+// Handle rate limit events
+socket.on('rate-limit-exceeded', ({ event, message, retryAfter }) => {
+  console.warn(`Rate limited: ${message}. Retry after ${retryAfter}s`);
 });
 ```
 
