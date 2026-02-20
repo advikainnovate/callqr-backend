@@ -1,4 +1,4 @@
-import { pgTable, timestamp, uuid, varchar } from 'drizzle-orm/pg-core';
+import { pgTable, timestamp, uuid, varchar, index } from 'drizzle-orm/pg-core';
 import { users } from './user.schema';
 
 export const subscriptions = pgTable('subscriptions', {
@@ -9,7 +9,10 @@ export const subscriptions = pgTable('subscriptions', {
   startedAt: timestamp('started_at').defaultNow(),
   expiresAt: timestamp('expires_at'),
   createdAt: timestamp('created_at').defaultNow(),
-});
+}, (table) => ({
+  userIdIdx: index('subscriptions_user_id_idx').on(table.userId),
+  statusIdx: index('subscriptions_status_idx').on(table.status),
+}));
 
 export type Subscription = typeof subscriptions.$inferSelect;
 export type NewSubscription = typeof subscriptions.$inferInsert;

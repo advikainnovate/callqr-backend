@@ -1,30 +1,31 @@
 import { Router } from 'express';
 import { adminController } from '../controllers/admin.controller';
 import { authenticateToken } from '../middlewares/auth.middleware';
+import { requireAdmin } from '../middlewares/admin.middleware';
 import { validate } from '../middlewares/validate';
 import { z } from 'zod';
 
 const router = Router();
 
-// Note: All admin routes require authentication
-// TODO: Add admin role middleware to restrict access
+// Note: All admin routes require authentication and admin role
 
 // ==================== OVERVIEW ====================
-router.get('/overview', authenticateToken, adminController.getOverviewStats);
+router.get('/overview', authenticateToken, requireAdmin, adminController.getOverviewStats);
 
 // ==================== USER MANAGEMENT ====================
-router.get('/users', authenticateToken, adminController.getAllUsers);
-router.get('/users/:userId', authenticateToken, adminController.getUserDetails);
-router.patch('/users/:userId/block', authenticateToken, adminController.blockUser);
-router.patch('/users/:userId/unblock', authenticateToken, adminController.unblockUser);
-router.delete('/users/:userId', authenticateToken, adminController.deleteUser);
+router.get('/users', authenticateToken, requireAdmin, adminController.getAllUsers);
+router.get('/users/:userId', authenticateToken, requireAdmin, adminController.getUserDetails);
+router.patch('/users/:userId/block', authenticateToken, requireAdmin, adminController.blockUser);
+router.patch('/users/:userId/unblock', authenticateToken, requireAdmin, adminController.unblockUser);
+router.delete('/users/:userId', authenticateToken, requireAdmin, adminController.deleteUser);
 
 // ==================== QR CODE MANAGEMENT ====================
-router.get('/qr-codes', authenticateToken, adminController.getAllQRCodes);
-router.get('/qr-codes/:qrCodeId', authenticateToken, adminController.getQRCodeDetails);
+router.get('/qr-codes', authenticateToken, requireAdmin, adminController.getAllQRCodes);
+router.get('/qr-codes/:qrCodeId', authenticateToken, requireAdmin, adminController.getQRCodeDetails);
 router.post(
   '/qr-codes/bulk-create',
   authenticateToken,
+  requireAdmin,
   validate(
     z.object({
       body: z.object({
@@ -37,6 +38,7 @@ router.post(
 router.post(
   '/qr-codes/:qrCodeId/assign',
   authenticateToken,
+  requireAdmin,
   validate(
     z.object({
       body: z.object({
@@ -49,40 +51,40 @@ router.post(
   ),
   adminController.assignQRCode
 );
-router.patch('/qr-codes/:qrCodeId/revoke', authenticateToken, adminController.revokeQRCode);
+router.patch('/qr-codes/:qrCodeId/revoke', authenticateToken, requireAdmin, adminController.revokeQRCode);
 
 // ==================== CALL HISTORY ====================
-router.get('/calls', authenticateToken, adminController.getCallHistory);
-router.get('/calls/:callId', authenticateToken, adminController.getCallDetails);
+router.get('/calls', authenticateToken, requireAdmin, adminController.getCallHistory);
+router.get('/calls/:callId', authenticateToken, requireAdmin, adminController.getCallDetails);
 
 // ==================== CHAT HISTORY ====================
-router.get('/chats', authenticateToken, adminController.getChatHistory);
-router.get('/chats/:chatId', authenticateToken, adminController.getChatDetails);
+router.get('/chats', authenticateToken, requireAdmin, adminController.getChatHistory);
+router.get('/chats/:chatId', authenticateToken, requireAdmin, adminController.getChatDetails);
 
 // ==================== ANALYTICS & CHARTS ====================
-router.get('/analytics/calls', authenticateToken, adminController.getCallAnalytics);
-router.get('/analytics/chats', authenticateToken, adminController.getChatAnalytics);
-router.get('/analytics/user-growth', authenticateToken, adminController.getUserGrowthAnalytics);
+router.get('/analytics/calls', authenticateToken, requireAdmin, adminController.getCallAnalytics);
+router.get('/analytics/chats', authenticateToken, requireAdmin, adminController.getChatAnalytics);
+router.get('/analytics/user-growth', authenticateToken, requireAdmin, adminController.getUserGrowthAnalytics);
 
 // ==================== BUG REPORTS MANAGEMENT ====================
-router.get('/bug-reports', authenticateToken, adminController.getAllBugReports);
-router.get('/bug-reports/stats', authenticateToken, adminController.getBugReportStats);
+router.get('/bug-reports', authenticateToken, requireAdmin, adminController.getAllBugReports);
+router.get('/bug-reports/stats', authenticateToken, requireAdmin, adminController.getBugReportStats);
 
 // ==================== SUBSCRIPTION MANAGEMENT ====================
-router.get('/subscriptions', authenticateToken, adminController.getAllSubscriptions);
-router.get('/subscriptions/stats', authenticateToken, adminController.getSubscriptionStats);
+router.get('/subscriptions', authenticateToken, requireAdmin, adminController.getAllSubscriptions);
+router.get('/subscriptions/stats', authenticateToken, requireAdmin, adminController.getSubscriptionStats);
 
 // ==================== REAL-TIME MONITORING ====================
-router.get('/monitoring/active-calls', authenticateToken, adminController.getActiveCallsList);
-router.get('/monitoring/active-chats', authenticateToken, adminController.getActiveChatsList);
-router.get('/monitoring/recent-activity', authenticateToken, adminController.getRecentActivity);
-router.get('/monitoring/system-health', authenticateToken, adminController.getSystemHealth);
+router.get('/monitoring/active-calls', authenticateToken, requireAdmin, adminController.getActiveCallsList);
+router.get('/monitoring/active-chats', authenticateToken, requireAdmin, adminController.getActiveChatsList);
+router.get('/monitoring/recent-activity', authenticateToken, requireAdmin, adminController.getRecentActivity);
+router.get('/monitoring/system-health', authenticateToken, requireAdmin, adminController.getSystemHealth);
 
 // ==================== REPORTS & EXPORT ====================
-router.get('/export/users', authenticateToken, adminController.exportUsers);
-router.get('/export/qr-codes', authenticateToken, adminController.exportQRCodes);
-router.get('/export/call-history', authenticateToken, adminController.exportCallHistory);
-router.get('/export/chat-history', authenticateToken, adminController.exportChatHistory);
-router.get('/reports/user-growth', authenticateToken, adminController.generateUserGrowthReport);
+router.get('/export/users', authenticateToken, requireAdmin, adminController.exportUsers);
+router.get('/export/qr-codes', authenticateToken, requireAdmin, adminController.exportQRCodes);
+router.get('/export/call-history', authenticateToken, requireAdmin, adminController.exportCallHistory);
+router.get('/export/chat-history', authenticateToken, requireAdmin, adminController.exportChatHistory);
+router.get('/reports/user-growth', authenticateToken, requireAdmin, adminController.generateUserGrowthReport);
 
 export default router;

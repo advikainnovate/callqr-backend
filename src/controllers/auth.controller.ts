@@ -55,15 +55,9 @@ export class AuthController {
 
   getProfile = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const userId = req.user!.userId;
-    const user = await userService.getUserById(userId);
+    const profile = await userService.getUserProfile(userId);
 
-    sendSuccessResponse(res, 200, 'Profile retrieved successfully', {
-      id: user.id,
-      username: user.username,
-      status: user.status,
-      createdAt: user.createdAt,
-      updatedAt: user.updatedAt,
-    });
+    sendSuccessResponse(res, 200, 'Profile retrieved successfully', profile);
   });
 }
 
