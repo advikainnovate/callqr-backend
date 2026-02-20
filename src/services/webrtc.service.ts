@@ -5,6 +5,11 @@ import { appConfig } from '../config';
 import { logger } from '../utils';
 import { callSessionService } from './callSession.service';
 import { userService } from './user.service';
+import { 
+  SocketRateLimiter, 
+  ConnectionRateLimiter, 
+  rateLimitProfiles 
+} from '../middleware/socketRateLimit';
 
 interface AuthenticatedSocket extends Socket {
   userId?: string;
@@ -26,8 +31,14 @@ export class WebRTCService {
   private io: SocketIOServer;
   private connectedUsers: Map<string, string> = new Map(); // userId -> socketId
   private iceConfig: ICEConfiguration;
+  private rateLimiter: SocketRateLimiter;
+  private connectionLimiter: ConnectionRateLimiter;
 
   constructor(server: HTTPServer) {
+    // Initialize rate limiters
+    this.rateLimiter = new SocketRateLimiter();
+    this.connectionLimiter = new ConnectionRateLimiter(10, 60000); // 10 connections per minute per IP
+
     this.io = new SocketIOServer(server, {
       path: '/socket.io',
       perMessageDeflate: false, // Fix for Nginx RSV1 error
@@ -60,6 +71,19 @@ export class WebRTCService {
   }
 
   private setupMiddleware() {
+    // Connection rate limiting (before authentication)
+    this.io.use(async (socket: AuthenticatedSocket, next) => {
+      const ip = socket.handshake.address;
+      const { allowed, retryAfter } = this.connectionLimiter.allowConnection(ip);
+
+      if (!allowed) {
+        logger.warn(`Connection rate limit exceeded for IP: ${ip}`);
+        return next(new Error(`Too many connections. Retry after ${retryAfter} seconds.`));
+      }
+
+      next();
+    });
+
     // Authenticate socket connections
     this.io.use(async (socket: AuthenticatedSocket, next) => {
       try {
@@ -99,6 +123,40 @@ export class WebRTCService {
 
       // Join user to their personal room
       socket.join(userId);
+
+      // Handle WebRTC signaling with rate limiting
+      socket.use((packet, next) => {
+        const [eventName, data] = packet;
+        
+        // Apply rate limiting based on event type
+        switch (eventName) {
+          case 'webrtc-signal':
+            return this.rateLimiter.createLimiter('webrtc-signal', rateLimitProfiles.signaling)(socket, data, next);
+          
+          case 'initiate-call':
+          case 'accept-call':
+          case 'reject-call':
+          case 'end-call':
+            return this.rateLimiter.createLimiter(eventName, rateLimitProfiles.callAction)(socket, data, next);
+          
+          case 'chat-message':
+            return this.rateLimiter.createLimiter('chat-message', rateLimitProfiles.chatMessage)(socket, data, next);
+          
+          case 'typing-start':
+          case 'typing-stop':
+            return this.rateLimiter.createLimiter(eventName, rateLimitProfiles.typing)(socket, data, next);
+          
+          case 'join-chat':
+          case 'leave-chat':
+            return this.rateLimiter.createLimiter(eventName, rateLimitProfiles.chatRoom)(socket, data, next);
+          
+          case 'message-read':
+            return this.rateLimiter.createLimiter('message-read', rateLimitProfiles.readReceipt)(socket, data, next);
+          
+          default:
+            return next();
+        }
+      });
 
       // Handle WebRTC signaling
       socket.on('webrtc-signal', async (data: WebRTCSignal) => {
@@ -461,5 +519,68 @@ export class WebRTCService {
 
   public getICEConfiguration(): ICEConfiguration {
     return this.iceConfig;
+  }
+
+  /**
+   * Gracefully shutdown the WebRTC service
+   * Notifies all connected clients and closes connections
+   */
+  public async shutdown(reason: string = 'Server maintenance'): Promise<void> {
+    logger.info('🔌 Initiating WebRTC service shutdown...');
+    
+    const connectedCount = this.connectedUsers.size;
+    logger.info(`📊 Notifying ${connectedCount} connected clients...`);
+
+    // Notify all connected clients about shutdown
+    this.io.emit('server-shutdown', {
+      reason,
+      message: 'Server is shutting down. Please reconnect in a few moments.',
+      timestamp: new Date().toISOString(),
+    });
+
+    // Give clients time to receive the notification (2 seconds)
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    // Disconnect all clients gracefully
+    const sockets = await this.io.fetchSockets();
+    logger.info(`🔌 Disconnecting ${sockets.length} socket connections...`);
+    
+    for (const socket of sockets) {
+      socket.disconnect(true);
+    }
+
+    // Close the Socket.IO server
+    await new Promise<void>((resolve, reject) => {
+      this.io.close((err) => {
+        if (err) {
+          logger.error('Error closing Socket.IO server:', err);
+          reject(err);
+        } else {
+          logger.info('✅ Socket.IO server closed');
+          resolve();
+        }
+      });
+    });
+
+    // Cleanup rate limiters
+    this.rateLimiter.destroy();
+    this.connectionLimiter.destroy();
+    logger.info('✅ Rate limiters cleaned up');
+
+    // Clear internal state
+    this.connectedUsers.clear();
+    logger.info('✅ Internal state cleared');
+
+    logger.info('✅ WebRTC service shutdown complete');
+  }
+
+  /**
+   * Get server statistics
+   */
+  public getStats() {
+    return {
+      connectedUsers: this.connectedUsers.size,
+      users: Array.from(this.connectedUsers.keys()),
+    };
   }
 }

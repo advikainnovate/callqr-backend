@@ -12,6 +12,8 @@ export const qrCodes = pgTable('qr_codes', {
 }, (table) => ({
   tokenIdx: index('qr_codes_token_idx').on(table.token),
   humanTokenIdx: index('qr_codes_human_token_idx').on(table.humanToken),
+  assignedUserIdIdx: index('qr_codes_assigned_user_id_idx').on(table.assignedUserId),
+  statusIdx: index('qr_codes_status_idx').on(table.status),
 }));
 
 export type QRCode = typeof qrCodes.$inferSelect;

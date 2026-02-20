@@ -9,7 +9,7 @@ const PORT = appConfig.port;
 const server = createServer(app);
 
 // Initialize WebRTC service
-const webrtcService = new WebRTCService(server);
+let webrtcService: WebRTCService;
 
 let httpServer: any; // Declare server variable to hold the http.Server instance
 
@@ -62,6 +62,9 @@ const checkServices = async () => {
   try {
     logger.info('🔍 Checking service health...');
     
+    // Initialize WebRTC service
+    webrtcService = new WebRTCService(server);
+    
     // Check all services
     const services = await checkServices();
     
@@ -94,32 +97,70 @@ const checkServices = async () => {
 
 // Function to handle graceful shutdown
 const gracefulShutdown = async (signal: string) => {
-  logger.info(`Received ${signal}. Initiating graceful shutdown...`);
+  logger.info(`📡 Received ${signal}. Initiating graceful shutdown...`);
 
-  // Close the HTTP server
-  httpServer.close(async (err: any) => {
-    if (err) {
-      logger.error('Error closing HTTP server:', err);
-      process.exit(1);
+  try {
+    // Step 1: Shutdown WebRTC service (notify clients and close connections)
+    if (webrtcService) {
+      logger.info('🔌 Shutting down WebRTC service...');
+      await webrtcService.shutdown(`Server received ${signal}`);
     }
-    logger.info('HTTP server closed.');
 
-    // Close Database connection
+    // Step 2: Close the HTTP server (stop accepting new connections)
+    await new Promise<void>((resolve, reject) => {
+      httpServer.close((err: any) => {
+        if (err) {
+          logger.error('❌ Error closing HTTP server:', err);
+          reject(err);
+        } else {
+          logger.info('✅ HTTP server closed');
+          resolve();
+        }
+      });
+    });
+
+    // Step 3: Close Database connection
     await client.end();
-    logger.info('Database connection closed.');
+    logger.info('✅ Database connection closed');
 
-    logger.info('Application gracefully shut down.');
+    logger.info('✅ Application gracefully shut down');
     process.exit(0);
-  });
-
-  // Force close if server hasn't exited within a timeout
-  setTimeout(() => {
-    logger.error('Forcing shutdown after timeout.');
+  } catch (error) {
+    logger.error('❌ Error during graceful shutdown:', error);
     process.exit(1);
-  }, 10000); // 10 seconds timeout
+  }
+};
+
+// Timeout handler for forced shutdown
+const forceShutdown = () => {
+  logger.error('⚠️ Forcing shutdown after timeout');
+  process.exit(1);
 };
 
 // Listen for termination signals
-process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
-process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+process.on('SIGTERM', () => {
+  gracefulShutdown('SIGTERM');
+  // Force shutdown after 15 seconds if graceful shutdown hangs
+  setTimeout(forceShutdown, 15000);
+});
+
+process.on('SIGINT', () => {
+  gracefulShutdown('SIGINT');
+  // Force shutdown after 15 seconds if graceful shutdown hangs
+  setTimeout(forceShutdown, 15000);
+});
+
+// Handle uncaught exceptions
+process.on('uncaughtException', (error) => {
+  logger.error('❌ Uncaught Exception:', error);
+  gracefulShutdown('UNCAUGHT_EXCEPTION');
+  setTimeout(forceShutdown, 5000);
+});
+
+// Handle unhandled promise rejections
+process.on('unhandledRejection', (reason, promise) => {
+  logger.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
+  gracefulShutdown('UNHANDLED_REJECTION');
+  setTimeout(forceShutdown, 5000);
+});
 

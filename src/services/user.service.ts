@@ -5,10 +5,33 @@ import { v4 as uuidv4 } from 'uuid';
 import { logger, ConflictError, NotFoundError, BadRequestError, UnauthorizedError } from '../utils';
 import crypto from 'crypto';
 import bcrypt from 'bcrypt';
+import { appConfig } from '../config';
 
 export class UserService {
   private hashData(data: string): string {
     return crypto.createHash('sha256').update(data).digest('hex');
+  }
+
+  private encryptData(data: string): string {
+    const algorithm = 'aes-256-cbc';
+    const key = Buffer.from(appConfig.encryptionKey, 'hex');
+    const iv = crypto.randomBytes(16);
+    const cipher = crypto.createCipheriv(algorithm, key, iv);
+    let encrypted = cipher.update(data, 'utf8', 'hex');
+    encrypted += cipher.final('hex');
+    return iv.toString('hex') + ':' + encrypted;
+  }
+
+  private decryptData(encryptedData: string): string {
+    const algorithm = 'aes-256-cbc';
+    const key = Buffer.from(appConfig.encryptionKey, 'hex');
+    const parts = encryptedData.split(':');
+    const iv = Buffer.from(parts[0], 'hex');
+    const encrypted = parts[1];
+    const decipher = crypto.createDecipheriv(algorithm, key, iv);
+    let decrypted = decipher.update(encrypted, 'hex', 'utf8');
+    decrypted += decipher.final('utf8');
+    return decrypted;
   }
 
   private async hashPassword(password: string): Promise<string> {
@@ -45,7 +68,9 @@ export class UserService {
     // Hash password
     const passwordHash = await this.hashPassword(userData.password);
 
-    // Hash phone and email if provided
+    // Encrypt and hash phone and email if provided
+    const phone = userData.phone ? this.encryptData(userData.phone) : null;
+    const email = userData.email ? this.encryptData(userData.email) : null;
     const phoneHash = userData.phone ? this.hashData(userData.phone) : null;
     const emailHash = userData.email ? this.hashData(userData.email) : null;
 
@@ -56,6 +81,8 @@ export class UserService {
         id: uuidv4(),
         username: userData.username,
         passwordHash,
+        phone,
+        email,
         phoneHash,
         emailHash,
         status: 'active',
@@ -190,8 +217,14 @@ export class UserService {
     };
 
     if (updateData.username) updatePayload.username = updateData.username;
-    if (updateData.phone) updatePayload.phoneHash = this.hashData(updateData.phone);
-    if (updateData.email) updatePayload.emailHash = this.hashData(updateData.email);
+    if (updateData.phone) {
+      updatePayload.phone = this.encryptData(updateData.phone);
+      updatePayload.phoneHash = this.hashData(updateData.phone);
+    }
+    if (updateData.email) {
+      updatePayload.email = this.encryptData(updateData.email);
+      updatePayload.emailHash = this.hashData(updateData.email);
+    }
     if (updateData.status) updatePayload.status = updateData.status;
 
     const [updatedUser] = await db
@@ -245,6 +278,28 @@ export class UserService {
       .limit(1);
 
     return user || null;
+  }
+
+  async getUserProfile(userId: string): Promise<{
+    id: string;
+    username: string;
+    phone: string | null;
+    email: string | null;
+    status: string;
+    createdAt: Date | null;
+    updatedAt: Date | null;
+  }> {
+    const user = await this.getUserById(userId);
+
+    return {
+      id: user.id,
+      username: user.username,
+      phone: user.phone ? this.decryptData(user.phone) : null,
+      email: user.email ? this.decryptData(user.email) : null,
+      status: user.status,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+    };
   }
 }
 
