@@ -104,6 +104,7 @@ PostgreSQL Database (Users, QR Codes, Sessions, Messages)
 - **[API_ENDPOINTS.md](API_ENDPOINTS.md)** - All available endpoints with examples
 - **[SOCKET_RATE_LIMITING.md](SOCKET_RATE_LIMITING.md)** - Socket.IO rate limiting implementation
 - **[GRACEFUL_SHUTDOWN.md](GRACEFUL_SHUTDOWN.md)** - Graceful shutdown implementation
+- **[PROFILE_ENDPOINT_DOCS.md](PROFILE_ENDPOINT_DOCS.md)** - Enhanced profile endpoint with usage stats
 - **[Swagger Docs](http://localhost:9001/api-docs)** - Live interactive API documentation
 
 ## 🛠️ Development

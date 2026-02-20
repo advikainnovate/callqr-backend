@@ -55,9 +55,72 @@ export class AuthController {
 
   getProfile = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const userId = req.user!.userId;
+    
+    // Get basic user profile
     const profile = await userService.getUserProfile(userId);
+    
+    // Get subscription information
+    const { subscriptionService } = await import('../services/subscription.service');
+    const subscription = await subscriptionService.getActiveSubscription(userId);
+    const callUsage = await subscriptionService.getCallUsage(userId);
+    
+    // Get QR codes
+    const { qrCodeService } = await import('../services/qrCode.service');
+    const qrCodes = await qrCodeService.getUserQRCodes(userId);
+    
+    // Get chat and message usage
+    const { chatSessionService } = await import('../services/chatSession.service');
+    const { messageService } = await import('../services/message.service');
+    const { DAILY_MESSAGE_LIMITS, ACTIVE_CHAT_LIMITS } = await import('../constants/subscriptions');
+    
+    const activeChatCount = await chatSessionService.getActiveChatCount(userId);
+    const dailyMessageCount = await messageService.getDailyMessageCount(userId);
+    
+    const plan = await subscriptionService.getUserPlan(userId);
+    const messageLimit = DAILY_MESSAGE_LIMITS[plan];
+    const chatLimit = ACTIVE_CHAT_LIMITS[plan];
 
-    sendSuccessResponse(res, 200, 'Profile retrieved successfully', profile);
+    sendSuccessResponse(res, 200, 'Profile retrieved successfully', {
+      ...profile,
+      subscription: subscription ? {
+        plan: subscription.plan,
+        status: subscription.status,
+        startedAt: subscription.startedAt,
+        expiresAt: subscription.expiresAt,
+      } : {
+        plan: 'FREE',
+        status: 'active',
+        startedAt: null,
+        expiresAt: null,
+      },
+      qrCodes: {
+        total: qrCodes.length,
+        active: qrCodes.filter(qr => qr.status === 'active').length,
+        codes: qrCodes.map(qr => ({
+          id: qr.id,
+          token: qr.token,
+          status: qr.status,
+          assignedAt: qr.assignedAt,
+        })),
+      },
+      usage: {
+        calls: {
+          today: callUsage.used,
+          limit: callUsage.limit,
+          remaining: callUsage.remaining,
+        },
+        messages: {
+          today: dailyMessageCount,
+          limit: messageLimit === -1 ? 'unlimited' : messageLimit,
+          remaining: messageLimit === -1 ? 'unlimited' : Math.max(0, messageLimit - dailyMessageCount),
+        },
+        chats: {
+          active: activeChatCount,
+          limit: chatLimit === -1 ? 'unlimited' : chatLimit,
+          remaining: chatLimit === -1 ? 'unlimited' : Math.max(0, chatLimit - activeChatCount),
+        },
+      },
+    });
   });
 }
 
