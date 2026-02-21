@@ -22,4 +22,46 @@ tests {
     expect(res.body.data.username).to.be.a('string');
     expect(res.body.data.status).to.equal('active');
   });
+  
+  test("Should include subscription information", function() {
+    expect(res.body.data.subscription).to.be.an('object');
+    expect(res.body.data.subscription.plan).to.be.a('string');
+    expect(res.body.data.subscription.status).to.be.a('string');
+  });
+  
+  test("Should include QR codes information", function() {
+    expect(res.body.data.qrCodes).to.be.an('object');
+    expect(res.body.data.qrCodes.total).to.be.a('number');
+    expect(res.body.data.qrCodes.active).to.be.a('number');
+    expect(res.body.data.qrCodes.codes).to.be.an('array');
+  });
+  
+  test("Should include usage statistics", function() {
+    expect(res.body.data.usage).to.be.an('object');
+    expect(res.body.data.usage.calls).to.be.an('object');
+    expect(res.body.data.usage.messages).to.be.an('object');
+    expect(res.body.data.usage.chats).to.be.an('object');
+  });
+  
+  test("Usage should have valid counts", function() {
+    expect(res.body.data.usage.calls.today).to.be.a('number');
+    expect(res.body.data.usage.calls.remaining).to.be.at.least(0);
+    expect(res.body.data.usage.messages.today).to.be.a('number');
+    expect(res.body.data.usage.chats.active).to.be.a('number');
+  });
+}
+
+docs {
+  Get complete user profile with subscription, QR codes, and usage statistics.
+  
+  Returns:
+  - User information (id, username, phone, email, status, timestamps)
+  - Subscription details (plan, status, start/expiry dates)
+  - QR codes (total, active, full list)
+  - Usage statistics (calls, messages, chats with limits and remaining)
+  
+  Plans:
+  - FREE: 20 calls/day, 100 messages/day, 5 active chats
+  - PRO: 80 calls/day, 500 messages/day, 20 active chats
+  - ENTERPRISE: 200 calls/day, unlimited messages, unlimited chats
 }

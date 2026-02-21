@@ -10,6 +10,7 @@ import subscriptionRoutes from './subscription.routes';
 import chatSessionRoutes from './chatSession.routes';
 import messageRoutes from './message.routes';
 import adminRoutes from './admin.routes';
+import paymentRoutes from './payment.routes';
 
 const router = Router();
 
@@ -42,5 +43,8 @@ router.use('/messages', messageRoutes);
 
 // Admin routes
 router.use('/admin', adminRoutes);
+
+// Payment routes
+router.use('/payments', paymentRoutes);
 
 export default router;

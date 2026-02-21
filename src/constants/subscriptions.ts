@@ -23,3 +23,24 @@ export const ACTIVE_CHAT_LIMITS: Record<SubscriptionPlan, number> = {
     [SUBSCRIPTION_PLANS.PRO]: 20,
     [SUBSCRIPTION_PLANS.ENTERPRISE]: -1, // unlimited
 };
+
+// Pricing in INR (paise - 1 INR = 100 paise)
+export const SUBSCRIPTION_PRICES: Record<SubscriptionPlan, number> = {
+    [SUBSCRIPTION_PLANS.FREE]: 0,
+    [SUBSCRIPTION_PLANS.PRO]: 49900, // ₹499
+    [SUBSCRIPTION_PLANS.ENTERPRISE]: 149900, // ₹1499
+};
+
+// Pricing display (for UI)
+export const SUBSCRIPTION_PRICES_DISPLAY: Record<SubscriptionPlan, string> = {
+    [SUBSCRIPTION_PLANS.FREE]: '₹0',
+    [SUBSCRIPTION_PLANS.PRO]: '₹499',
+    [SUBSCRIPTION_PLANS.ENTERPRISE]: '₹1499',
+};
+
+// Subscription duration in days
+export const SUBSCRIPTION_DURATION_DAYS: Record<SubscriptionPlan, number> = {
+    [SUBSCRIPTION_PLANS.FREE]: 0, // No expiry
+    [SUBSCRIPTION_PLANS.PRO]: 30, // 30 days
+    [SUBSCRIPTION_PLANS.ENTERPRISE]: 30, // 30 days
+};

@@ -12,8 +12,14 @@ post {
 
 body:json {
   {
-    "username": "Suryansu",
-    "password": "Hcode@147 "
+    "username": "testuser",
+    "password": "password123"
+  }
+}
+
+script:post-response {
+  if (res.body.success && res.body.data.token) {
+    bru.setEnvVar("authToken", res.body.data.token);
   }
 }
 
@@ -24,5 +30,6 @@ docs {
   - JWT token for API authentication
   - User profile (id, username, status, createdAt)
   
+  The token is automatically saved to the authToken environment variable.
   Use the token in Authorization header: Bearer <token>
 }

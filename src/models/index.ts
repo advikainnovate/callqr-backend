@@ -5,3 +5,4 @@ export * from './subscription.schema';
 export * from './report.schema';
 export * from './chatSession.schema';
 export * from './message.schema';
+export * from './payment.schema';
