@@ -270,12 +270,16 @@ export class WebRTCService {
         return;
       }
 
+      // Get caller's username
+      const caller = await userService.getUserById(call.callerId);
+
       // Notify receiver
       const receiverSocketId = this.connectedUsers.get(call.receiverId);
       if (receiverSocketId) {
         this.io.to(receiverSocketId).emit('incoming-call', {
           callId: call.id,
           callerId: call.callerId,
+          callerUsername: caller.username,
         });
 
         // Update call status

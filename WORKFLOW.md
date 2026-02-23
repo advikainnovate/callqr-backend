@@ -147,7 +147,9 @@ socket.on('webrtc-signal', (data) => {
 
 // Listen for incoming calls
 socket.on('incoming-call', (data) => {
-  // Show incoming call UI
+  // data = { callId, callerId, callerUsername }
+  // Show incoming call UI with caller's name
+  console.log(`Incoming call from ${data.callerUsername}`);
 });
 ```
 
@@ -603,6 +605,13 @@ Headers: Authorization: Bearer <admin-token>
 
 **Server → Client:**
 - `incoming-call` - Notify of incoming call
+  ```javascript
+  {
+    callId: "uuid",
+    callerId: "user-uuid",
+    callerUsername: "John"  // Username of the caller
+  }
+  ```
 - `call-accepted` - Call was accepted
 - `call-rejected` - Call was rejected
 - `call-ended` - Call ended

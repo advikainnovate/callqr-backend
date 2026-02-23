@@ -24,11 +24,17 @@
  *       properties:
  *         callId:
  *           type: string
+ *           description: Unique identifier for the call
  *         callerId:
  *           type: string
+ *           description: User ID of the caller
+ *         callerUsername:
+ *           type: string
+ *           description: Username of the caller
  *         callType:
  *           type: string
  *           enum: [audio, video]
+ *           description: Type of call (currently audio only)
  *     
  *     CallAccepted:
  *       type: object
