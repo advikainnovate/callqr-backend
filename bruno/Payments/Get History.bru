@@ -1,0 +1,51 @@
+meta {
+  name: Get History
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{baseUrl}}/api/payments/history
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+tests {
+  test("Should get payment history", function() {
+    expect(res.status).to.equal(200);
+    expect(res.body.success).to.be.true;
+    expect(res.body.data.payments).to.be.an('array');
+  });
+  
+  test("Payment should have required fields", function() {
+    if (res.body.data.payments.length > 0) {
+      const payment = res.body.data.payments[0];
+      expect(payment).to.have.property('id');
+      expect(payment).to.have.property('orderId');
+      expect(payment).to.have.property('amount');
+      expect(payment).to.have.property('status');
+      expect(payment).to.have.property('plan');
+    }
+  });
+}
+
+docs {
+  Get user's payment history.
+  
+  Returns array of payments with:
+  - id: Payment record ID
+  - orderId: Razorpay order ID
+  - paymentId: Razorpay payment ID (if paid)
+  - amount: Amount in paise
+  - currency: Currency code (INR)
+  - plan: Subscription plan
+  - status: Payment status (created, paid, failed)
+  - createdAt: Order creation time
+  - paidAt: Payment completion time (if paid)
+  
+  Ordered by creation date (newest first)
+}

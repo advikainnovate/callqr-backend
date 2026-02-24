@@ -1,0 +1,54 @@
+meta {
+  name: Verify Payment
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/payments/verify
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+body:json {
+  {
+    "razorpay_order_id": "{{razorpayOrderId}}",
+    "razorpay_payment_id": "pay_xxxxxxxxxxxxx",
+    "razorpay_signature": "signature_from_razorpay"
+  }
+}
+
+tests {
+  test("Should verify payment", function() {
+    expect(res.status).to.equal(200);
+    expect(res.body.success).to.be.true;
+    expect(res.body.data.status).to.equal('paid');
+    expect(res.body.data.plan).to.be.a('string');
+  });
+}
+
+docs {
+  Verify payment signature and activate subscription.
+  
+  Request:
+  - razorpay_order_id: Order ID from create-order
+  - razorpay_payment_id: Payment ID from Razorpay
+  - razorpay_signature: Signature from Razorpay
+  
+  This endpoint:
+  1. Verifies payment signature (HMAC SHA256)
+  2. Updates payment status to "paid"
+  3. Creates/upgrades user subscription
+  4. Links payment to subscription
+  
+  Returns:
+  - paymentId: Razorpay payment ID
+  - status: "paid"
+  - plan: Subscription plan activated
+  
+  Note: Get these values from Razorpay checkout response
+}

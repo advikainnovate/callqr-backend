@@ -19,6 +19,7 @@
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "db:reset": "node scripts/reset-database.js",
+    "admin:create": "node scripts/create-admin.js",
     "deploy": "git pull && npm install && npm run build && pm2 restart callqr-backend"
   },
   "keywords": [],

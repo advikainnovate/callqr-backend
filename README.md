@@ -51,6 +51,10 @@ TURN_SERVER=
 TURN_USERNAME=
 TURN_PASSWORD=
 
+# Razorpay (Optional - for payments)
+RAZORPAY_KEY_ID=your_razorpay_key_id
+RAZORPAY_KEY_SECRET=your_razorpay_key_secret
+
 # CORS
 ALLOWED_ORIGINS=*
 ```
@@ -76,6 +80,7 @@ ALLOWED_ORIGINS=*
 ### Management
 - QR code lifecycle (create, assign, scan, revoke)
 - Subscription tiers (Free, Pro, Enterprise)
+- Razorpay payment integration
 - Admin dashboard with analytics
 - Bug reporting system
 - User management
@@ -118,6 +123,21 @@ npm start            # Start production server
 npm run lint         # Run ESLint
 npm run prettier     # Format code
 npm run db:push      # Push schema to database
+npm run admin:create # Create admin user (interactive)
+```
+
+### Create Admin User
+
+```bash
+npm run admin:create
+```
+
+Follow the prompts to create an admin user, then add the user ID to `.env`:
+```env
+ADMIN_USER_IDS=user-id-from-script
+```
+
+Restart the server to apply admin privileges.
 npm run db:studio    # Open Drizzle Studio
 npm run db:reset     # Reset database
 ```
@@ -144,6 +164,46 @@ src/
 ├── config/          # Configuration files
 └── utils/           # Utility functions
 ```
+
+## 💳 Razorpay Integration (Optional)
+
+The system includes full Razorpay payment integration for subscription upgrades. If you don't configure Razorpay credentials, the app works normally with manual subscription management.
+
+### Setup
+
+1. Sign up at [Razorpay Dashboard](https://dashboard.razorpay.com/)
+2. Get your API keys (Key ID and Key Secret)
+3. Add to `.env`:
+```env
+RAZORPAY_KEY_ID=rzp_test_xxxxx
+RAZORPAY_KEY_SECRET=your_secret_key
+```
+
+### Features
+- Secure payment order creation
+- Payment signature verification
+- Automatic subscription activation
+- Payment history tracking
+- Webhook support for payment events
+- Idempotency for duplicate payments
+
+### Frontend Integration
+```javascript
+// Load Razorpay SDK
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+
+// Create order and open checkout
+const order = await createOrder('pro');
+const options = {
+  key: order.keyId,
+  amount: order.amount,
+  order_id: order.orderId,
+  handler: (response) => verifyPayment(response)
+};
+new Razorpay(options).open();
+```
+
+See [WORKFLOW.md](WORKFLOW.md#6-payment--subscription-workflow) for complete payment flow.
 
 ## 🔌 WebRTC Integration
 

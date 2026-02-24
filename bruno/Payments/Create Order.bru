@@ -1,0 +1,57 @@
+meta {
+  name: Create Order
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/payments/create-order
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+body:json {
+  {
+    "plan": "pro"
+  }
+}
+
+script:post-response {
+  if (res.body.success && res.body.data.orderId) {
+    bru.setEnvVar("razorpayOrderId", res.body.data.orderId);
+    bru.setEnvVar("razorpayKeyId", res.body.data.keyId);
+  }
+}
+
+tests {
+  test("Should create payment order", function() {
+    expect(res.status).to.equal(201);
+    expect(res.body.success).to.be.true;
+    expect(res.body.data.orderId).to.be.a('string');
+    expect(res.body.data.amount).to.be.a('number');
+    expect(res.body.data.currency).to.equal('INR');
+    expect(res.body.data.keyId).to.be.a('string');
+  });
+}
+
+docs {
+  Create a Razorpay payment order for subscription purchase.
+  
+  Request:
+  - plan: "pro" or "enterprise"
+  
+  Returns:
+  - orderId: Razorpay order ID
+  - amount: Amount in paise (e.g., 29900 for ₹299)
+  - currency: "INR"
+  - keyId: Razorpay public key for checkout
+  
+  Next steps:
+  1. Use orderId and keyId to open Razorpay checkout
+  2. User completes payment
+  3. Call verify endpoint with payment details
+}

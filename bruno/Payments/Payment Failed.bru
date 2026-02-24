@@ -1,0 +1,54 @@
+meta {
+  name: Payment Failed
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/api/payments/failed
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+body:json {
+  {
+    "razorpay_order_id": "{{razorpayOrderId}}",
+    "error_code": "BAD_REQUEST_ERROR",
+    "error_description": "Payment failed due to insufficient funds"
+  }
+}
+
+tests {
+  test("Should record payment failure", function() {
+    expect(res.status).to.equal(200);
+    expect(res.body.success).to.be.true;
+    expect(res.body.data.status).to.equal('failed');
+  });
+}
+
+docs {
+  Record payment failure for tracking and analytics.
+  
+  Request:
+  - razorpay_order_id: Order ID from create-order
+  - error_code: Error code from Razorpay (optional)
+  - error_description: Error description (optional)
+  
+  This endpoint:
+  1. Updates payment status to "failed"
+  2. Records error details
+  3. Logs failure for analytics
+  
+  Common error codes:
+  - BAD_REQUEST_ERROR: Invalid request
+  - GATEWAY_ERROR: Payment gateway error
+  - SERVER_ERROR: Server error
+  
+  Returns:
+  - orderId: Razorpay order ID
+  - status: "failed"
+}

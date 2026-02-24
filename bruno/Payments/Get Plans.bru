@@ -1,0 +1,47 @@
+meta {
+  name: Get Plans
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/payments/plans
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+tests {
+  test("Should get subscription plans", function() {
+    expect(res.status).to.equal(200);
+    expect(res.body.success).to.be.true;
+    expect(res.body.data.plans).to.be.an('array');
+    expect(res.body.data.plans.length).to.be.at.least(3);
+  });
+  
+  test("Plans should have required fields", function() {
+    const plan = res.body.data.plans[0];
+    expect(plan).to.have.property('id');
+    expect(plan).to.have.property('name');
+    expect(plan).to.have.property('price');
+    expect(plan).to.have.property('features');
+  });
+}
+
+docs {
+  Get available subscription plans with pricing and features.
+  
+  Returns:
+  - FREE plan (₹0)
+  - PRO plan (₹299/month)
+  - ENTERPRISE plan (₹999/month)
+  
+  Each plan includes:
+  - Daily call limits
+  - Daily message limits
+  - Active chat limits
+  - Support level
+}

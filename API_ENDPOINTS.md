@@ -573,6 +573,149 @@ DELETE /api/subscriptions/:subscriptionId
 
 ---
 
+## Payment Endpoints
+
+### Get Subscription Plans
+```
+GET /api/payments/plans
+```
+**Auth:** Required  
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "plans": [
+      {
+        "id": "free",
+        "name": "Free",
+        "price": "₹0",
+        "features": ["20 calls/day", "50 messages/day", "5 active chats"]
+      },
+      {
+        "id": "pro",
+        "name": "Pro",
+        "price": "₹299/month",
+        "duration": "30 days",
+        "features": ["80 calls/day", "500 messages/day", "20 active chats"]
+      },
+      {
+        "id": "enterprise",
+        "name": "Enterprise",
+        "price": "₹999/month",
+        "duration": "30 days",
+        "features": ["200 calls/day", "Unlimited messages", "Unlimited chats"]
+      }
+    ]
+  }
+}
+```
+
+### Create Payment Order
+```
+POST /api/payments/create-order
+```
+**Auth:** Required  
+**Body:**
+```json
+{
+  "plan": "string (pro|enterprise, required)"
+}
+```
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "orderId": "order_xxxxxxxxxxxxx",
+    "amount": 29900,
+    "currency": "INR",
+    "keyId": "rzp_test_xxxxxxxxxxxxx"
+  }
+}
+```
+**Note:** Amount is in paise (₹299 = 29900 paise)
+
+### Verify Payment
+```
+POST /api/payments/verify
+```
+**Auth:** Required  
+**Body:**
+```json
+{
+  "razorpay_order_id": "string (required)",
+  "razorpay_payment_id": "string (required)",
+  "razorpay_signature": "string (required)"
+}
+```
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "paymentId": "pay_xxxxxxxxxxxxx",
+    "status": "paid",
+    "plan": "pro"
+  }
+}
+```
+**Note:** This activates the subscription automatically
+
+### Record Payment Failure
+```
+POST /api/payments/failed
+```
+**Auth:** Required  
+**Body:**
+```json
+{
+  "razorpay_order_id": "string (required)",
+  "error_code": "string (optional)",
+  "error_description": "string (optional)"
+}
+```
+
+### Get Payment History
+```
+GET /api/payments/history
+```
+**Auth:** Required  
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "payments": [
+      {
+        "id": "uuid",
+        "orderId": "order_xxxxxxxxxxxxx",
+        "paymentId": "pay_xxxxxxxxxxxxx",
+        "amount": 29900,
+        "currency": "INR",
+        "plan": "pro",
+        "status": "paid",
+        "createdAt": "2026-02-21T10:00:00Z",
+        "paidAt": "2026-02-21T10:05:00Z"
+      }
+    ]
+  }
+}
+```
+
+### Razorpay Webhook
+```
+POST /api/payments/webhook
+```
+**Auth:** None (verified via signature)  
+**Headers:**
+```
+x-razorpay-signature: <webhook-signature>
+```
+**Note:** This is called by Razorpay, not by clients
+
+---
+
 ## Bug Report Endpoints
 
 ### Create Bug Report

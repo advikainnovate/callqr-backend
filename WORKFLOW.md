@@ -311,7 +311,83 @@ GET /api/subscriptions/history
 Headers: Authorization: Bearer <token>
 ```
 
-### 6. Bug Reporting
+### 6. Payment & Subscription Workflow
+
+```
+Flow: Get Plans → Create Order → Complete Payment → Verify Payment → Subscription Activated
+```
+
+#### Step 1: Get Available Plans
+```
+GET /api/payments/plans
+Headers: Authorization: Bearer <token>
+```
+- Returns FREE, PRO, ENTERPRISE plans with pricing and limits
+
+#### Step 2: Create Payment Order
+```
+POST /api/payments/create-order
+Headers: Authorization: Bearer <token>
+{
+  "plan": "pro"  // or "enterprise"
+}
+```
+- Creates Razorpay order
+- Returns: orderId, amount, currency, keyId
+
+#### Step 3: Complete Payment (Frontend)
+```javascript
+// Use Razorpay Checkout
+const options = {
+  key: response.data.keyId,
+  amount: response.data.amount,
+  currency: response.data.currency,
+  order_id: response.data.orderId,
+  name: "CallQR",
+  description: "Subscription Payment",
+  handler: function(response) {
+    // Payment successful, verify on backend
+    verifyPayment(response);
+  }
+};
+const rzp = new Razorpay(options);
+rzp.open();
+```
+
+#### Step 4: Verify Payment
+```
+POST /api/payments/verify
+Headers: Authorization: Bearer <token>
+{
+  "razorpay_order_id": "order_xxx",
+  "razorpay_payment_id": "pay_xxx",
+  "razorpay_signature": "signature_xxx"
+}
+```
+- Verifies payment signature
+- Activates subscription
+- Returns subscription details
+
+#### Step 5: Handle Payment Failure
+```
+POST /api/payments/failed
+Headers: Authorization: Bearer <token>
+{
+  "razorpay_order_id": "order_xxx",
+  "error_code": "PAYMENT_FAILED",
+  "error_description": "Card declined"
+}
+```
+- Records failed payment for tracking
+
+#### Get Payment History
+```
+GET /api/payments/history
+Headers: Authorization: Bearer <token>
+```
+- Returns all payment transactions
+
+### 7. Bug Reporting
 
 #### Submit Bug Report (Anonymous OK)
 ```
