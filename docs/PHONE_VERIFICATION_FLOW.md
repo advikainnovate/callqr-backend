@@ -4,6 +4,38 @@
 
 Phone verification system using 6-digit OTP sent via Twilio SMS.
 
+**IMPORTANT:** Phone verification is now REQUIRED during registration. Users cannot login until their phone is verified.
+
+## Registration & Verification Flow
+
+### 1. User Registers
+```
+POST /api/auth/register
+Body: { "username": "john", "password": "pass123", "phone": "+918005936038" }
+```
+- Phone number is REQUIRED
+- OTP sent immediately
+- User status: `pending_verification`
+- Returns JWT token (but can't login yet)
+
+### 2. User Verifies Phone
+```
+POST /api/auth/verify-phone
+Authorization: Bearer <token>
+Body: { "otp": "123456" }
+```
+- Validates OTP
+- Changes status to `active`
+- User can now login
+
+### 3. User Can Login
+```
+POST /api/auth/login
+Body: { "username": "john", "password": "pass123" }
+```
+- Only works if phone is verified
+- Blocked if status is `pending_verification`
+
 ## API Endpoints
 
 ### 1. Send OTP

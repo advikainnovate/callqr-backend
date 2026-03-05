@@ -48,6 +48,7 @@ export class UserService {
     password: string;
     phone?: string;
     email?: string;
+    status?: string;
   }): Promise<User> {
     // Check if username already exists
     const existingUser = await db
@@ -85,7 +86,7 @@ export class UserService {
         email,
         phoneHash,
         emailHash,
-        status: 'active',
+        status: userData.status || 'active',
       })
       .returning();
 

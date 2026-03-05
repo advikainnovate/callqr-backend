@@ -148,11 +148,18 @@ export class PhoneVerificationController {
       // Verify OTP
       await userService.verifyPhoneOTP(userId, otp);
 
+      // Activate user account if it was pending verification
+      const user = await userService.getUserById(userId);
+      if (user.status === 'pending_verification') {
+        await userService.updateUser(userId, { status: 'active' });
+        logger.info(`User account activated after phone verification: ${userId}`);
+      }
+
       logger.info(`Phone verified successfully for user ${userId}`);
 
       res.status(200).json({
         success: true,
-        message: 'Phone number verified successfully',
+        message: 'Phone number verified successfully. Your account is now active!',
       });
     } catch (error) {
       if (error instanceof z.ZodError) {

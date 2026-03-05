@@ -9,19 +9,50 @@ export class AuthController {
   register = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const { username, password, phone, email } = req.body;
 
-    const user = await userService.createUser({ username, password, phone, email });
+    // Validate that phone is provided
+    if (!phone) {
+      res.status(400).json({
+        success: false,
+        message: 'Phone number is required for registration',
+      });
+      return;
+    }
 
-    // Generate JWT token
+    // Create user with pending_verification status
+    const user = await userService.createUser({ 
+      username, 
+      password, 
+      phone, 
+      email,
+      status: 'pending_verification' 
+    });
+
+    // Generate OTP
+    const otp = await userService.generatePhoneVerificationOTP(user.id);
+
+    // Send OTP via SMS
+    const { smsService } = await import('../services/sms.service');
+    const userProfile = await userService.getUserProfile(user.id);
+    
+    if (userProfile.phone) {
+      await smsService.sendOTP(userProfile.phone, otp);
+    }
+
+    // Generate JWT token (but user can't login until verified)
     const token = generateAccessToken({ userId: user.id, username: user.username });
 
-    sendSuccessResponse(res, 201, 'User registered successfully', {
+    logger.info(`User registered, OTP sent: ${user.id}`);
+
+    sendSuccessResponse(res, 201, 'Registration successful. Please verify your phone number.', {
       token,
       user: {
         id: user.id,
         username: user.username,
         status: user.status,
+        isPhoneVerified: false,
         createdAt: user.createdAt,
       },
+      message: 'An OTP has been sent to your phone number. Please verify to activate your account.',
     });
   });
 
@@ -29,6 +60,33 @@ export class AuthController {
     const { username, password } = req.body;
 
     const user = await userService.authenticateUser(username, password);
+
+    // Check if phone is verified
+    if (user.isPhoneVerified !== 'true') {
+      res.status(403).json({
+        success: false,
+        message: 'Please verify your phone number before logging in',
+        data: {
+          userId: user.id,
+          isPhoneVerified: false,
+          hint: 'Use POST /api/auth/resend-phone-verification to get a new OTP',
+        },
+      });
+      return;
+    }
+
+    // Check if account is pending verification
+    if (user.status === 'pending_verification') {
+      res.status(403).json({
+        success: false,
+        message: 'Your account is pending phone verification',
+        data: {
+          userId: user.id,
+          isPhoneVerified: false,
+        },
+      });
+      return;
+    }
 
     // Generate JWT token
     const token = generateAccessToken({ userId: user.id, username: user.username });

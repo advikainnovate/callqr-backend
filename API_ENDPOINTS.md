@@ -35,12 +35,34 @@ POST /api/auth/register
 ```json
 {
   "username": "string (required)",
-  "password": "string (required)",
-  "phone": "string (optional)",
+  "password": "string (required, min 6 chars)",
+  "phone": "string (required, E.164 format)",
   "email": "string (optional)"
 }
 ```
-**Response:** JWT token + user data
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Registration successful. Please verify your phone number.",
+  "data": {
+    "token": "jwt_token",
+    "user": {
+      "id": "user_id",
+      "username": "username",
+      "status": "pending_verification",
+      "isPhoneVerified": false,
+      "createdAt": "timestamp"
+    },
+    "message": "An OTP has been sent to your phone number. Please verify to activate your account."
+  }
+}
+```
+**Note:** 
+- Phone number is now REQUIRED for registration
+- OTP is sent immediately after registration
+- User must verify phone before they can login
+- Account status is `pending_verification` until phone is verified
 
 ### Login
 ```
@@ -48,6 +70,28 @@ POST /api/auth/login
 ```
 **Body:**
 ```json
+{
+  "username": "string (required)",
+  "password": "string (required)"
+}
+```
+**Response:** JWT token + user data
+
+**Note:**
+- Login is blocked if phone is not verified
+- Users with `pending_verification` status cannot login
+- Error response if unverified:
+```json
+{
+  "success": false,
+  "message": "Please verify your phone number before logging in",
+  "data": {
+    "userId": "user_id",
+    "isPhoneVerified": false,
+    "hint": "Use POST /api/auth/resend-phone-verification to get a new OTP"
+  }
+}
+```
 {
   "username": "string (required)",
   "password": "string (required)"
