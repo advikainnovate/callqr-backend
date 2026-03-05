@@ -55,6 +55,11 @@ TURN_PASSWORD=
 RAZORPAY_KEY_ID=your_razorpay_key_id
 RAZORPAY_KEY_SECRET=your_razorpay_key_secret
 
+# Twilio (Optional - for phone verification)
+TWILIO_ACCOUNT_SID=your_account_sid
+TWILIO_AUTH_TOKEN=your_auth_token
+TWILIO_PHONE_NUMBER=+1234567890
+
 # CORS
 ALLOWED_ORIGINS=*
 ```
@@ -69,6 +74,9 @@ ALLOWED_ORIGINS=*
 - Graceful shutdown with client notification
 - Helmet.js security headers
 - Input validation with Zod
+- Forgot password with secure token reset
+- Global user blocking for platform-wide access control
+- Phone verification with OTP via Twilio SMS
 
 ### Communication
 - WebRTC voice/video calls
@@ -93,6 +101,14 @@ ALLOWED_ORIGINS=*
 | Pro | 80 | 500 | 20 |
 | Enterprise | 200 | Unlimited | Unlimited |
 
+### Subscription Management
+- **Upgrade**: Instant upgrade to higher tier with payment
+- **Downgrade**: Downgrade to lower tier (with usage validation)
+  - System checks if current usage fits within new plan limits
+  - Prevents downgrade if usage exceeds new limits
+  - Immediate effect once downgraded
+- **Cancel**: Cancel paid subscription (reverts to Free tier)
+
 ## 🏗️ Architecture
 
 ```
@@ -107,9 +123,14 @@ PostgreSQL Database (Users, QR Codes, Sessions, Messages)
 
 - **[WORKFLOW.md](WORKFLOW.md)** - Complete API workflows for admin and users
 - **[API_ENDPOINTS.md](API_ENDPOINTS.md)** - All available endpoints with examples
+- **[DATABASE_BACKUP.md](docs/DATABASE_BACKUP.md)** - Database backup and restore guide
 - **[SOCKET_RATE_LIMITING.md](SOCKET_RATE_LIMITING.md)** - Socket.IO rate limiting implementation
 - **[GRACEFUL_SHUTDOWN.md](GRACEFUL_SHUTDOWN.md)** - Graceful shutdown implementation
 - **[PROFILE_ENDPOINT_DOCS.md](PROFILE_ENDPOINT_DOCS.md)** - Enhanced profile endpoint with usage stats
+- **[FORGOT_PASSWORD_FLOW.md](docs/FORGOT_PASSWORD_FLOW.md)** - Password reset implementation
+- **[GLOBAL_USER_BLOCKING.md](docs/GLOBAL_USER_BLOCKING.md)** - Global user blocking system
+- **[PHONE_VERIFICATION_FLOW.md](docs/PHONE_VERIFICATION_FLOW.md)** - Phone verification with OTP
+- **[NEW_FEATURES_SUMMARY.md](docs/NEW_FEATURES_SUMMARY.md)** - Summary of latest features
 - **[Swagger Docs](http://localhost:9001/api-docs)** - Live interactive API documentation
 
 ## 🛠️ Development
@@ -123,8 +144,25 @@ npm start            # Start production server
 npm run lint         # Run ESLint
 npm run prettier     # Format code
 npm run db:push      # Push schema to database
+npm run db:backup    # Backup database
+npm run db:restore   # Restore database from backup
 npm run admin:create # Create admin user (interactive)
 ```
+
+### Database Backup & Restore
+
+```bash
+# Create a backup
+npm run db:backup
+
+# Restore from a backup
+npm run db:restore backup_mydb_2024-03-05_15-30-00.sql
+
+# List available backups
+ls backups/
+```
+
+Backups are stored in the `backups/` directory with timestamps.
 
 ### Create Admin User
 

@@ -55,6 +55,122 @@ POST /api/auth/login
 ```
 **Response:** JWT token + user data
 
+### Forgot Password
+```
+POST /api/auth/forgot-password
+```
+**Body:**
+```json
+{
+  "email": "string (required)"
+}
+```
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Password reset token generated. Check your email.",
+  "data": {
+    "message": "If an account exists with this email, a password reset link has been sent.",
+    "resetToken": "abc123..." // Only in development mode
+  }
+}
+```
+**Note:** In production, the reset token is sent via email only. In development mode, it's included in the response for testing.
+
+### Reset Password
+```
+POST /api/auth/reset-password
+```
+**Body:**
+```json
+{
+  "token": "string (required)",
+  "newPassword": "string (required, min 6 chars)"
+}
+```
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Password reset successful. You can now login with your new password.",
+  "data": null
+}
+```
+
+### Send Phone Verification OTP
+```
+POST /api/auth/send-phone-verification
+```
+**Auth:** Required (Bearer token)
+
+**Body:**
+```json
+{
+  "phone": "string (required, min 10 digits)"
+}
+```
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Verification code sent to your phone"
+}
+```
+**Note:** OTP expires in 10 minutes. In development mode (without Twilio configured), OTP is logged to console.
+
+### Verify Phone Number
+```
+POST /api/auth/verify-phone
+```
+**Auth:** Required (Bearer token)
+
+**Body:**
+```json
+{
+  "otp": "string (required, 6 digits)"
+}
+```
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Phone number verified successfully"
+}
+```
+
+### Resend Phone Verification OTP
+```
+POST /api/auth/resend-phone-verification
+```
+**Auth:** Required (Bearer token)
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Verification code resent to your phone"
+}
+```
+
+### Get Phone Verification Status
+```
+GET /api/auth/phone-verification-status
+```
+**Auth:** Required (Bearer token)
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "hasPhone": true,
+    "isPhoneVerified": true,
+    "phone": "+12****7890"
+  }
+}
+```
+
 ### Get Profile
 ```
 GET /api/auth/profile
@@ -132,6 +248,48 @@ PATCH /api/users/:userId/activate
 DELETE /api/users/:userId
 ```
 **Auth:** Admin Required
+
+### Global Block User (Admin)
+```
+POST /api/admin/users/:userId/global-block
+```
+**Auth:** Admin Required  
+**Body:**
+```json
+{
+  "reason": "string (required, 1-500 chars)"
+}
+```
+**Response:**
+```json
+{
+  "success": true,
+  "message": "User globally blocked successfully",
+  "data": {
+    "id": "uuid",
+    "username": "string",
+    "status": "blocked",
+    "isGloballyBlocked": "true",
+    "globalBlockReason": "string",
+    "globalBlockedAt": "ISO date",
+    "globalBlockedBy": "admin-uuid"
+  }
+}
+```
+**Note:** Globally blocked users cannot login or access any API endpoints.
+
+### Global Unblock User (Admin)
+```
+POST /api/admin/users/:userId/global-unblock
+```
+**Auth:** Admin Required
+
+### Get Globally Blocked Users (Admin)
+```
+GET /api/admin/users/global-blocked/list
+```
+**Auth:** Admin Required  
+**Query Params:** `limit` (default: 100), `offset` (default: 0)
 
 ### Verify Phone
 ```
@@ -562,6 +720,94 @@ POST /api/subscriptions/upgrade
 ```json
 {
   "plan": "string (pro|enterprise, required)"
+}
+```
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Plan upgraded successfully",
+  "data": {
+    "id": "uuid",
+    "plan": "pro",
+    "status": "active",
+    "startedAt": "ISO date",
+    "expiresAt": "ISO date"
+  }
+}
+```
+
+### Downgrade Plan
+```
+POST /api/subscriptions/downgrade
+```
+**Auth:** Required  
+**Body:**
+```json
+{
+  "plan": "string (free|pro, required)"
+}
+```
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Plan downgraded successfully",
+  "data": {
+    "id": "uuid",
+    "plan": "free",
+    "status": "active",
+    "startedAt": "ISO date",
+    "expiresAt": null,
+    "message": "Your subscription has been downgraded. New limits will apply immediately."
+  }
+}
+```
+**Note:** Downgrade is only allowed if current usage doesn't exceed the new plan's limits. Use the check endpoint first.
+
+### Check Downgrade Eligibility
+```
+GET /api/subscriptions/downgrade/check?plan=free
+```
+**Auth:** Required  
+**Query Params:** `plan` (required: free|pro)  
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Downgrade eligibility checked",
+  "data": {
+    "eligible": true,
+    "currentPlan": "pro",
+    "targetPlan": "free",
+    "warnings": [],
+    "currentUsage": {
+      "calls": { "used": 5, "newLimit": 20 },
+      "messages": { "used": 30, "newLimit": 50 },
+      "chats": { "active": 2, "newLimit": 5 }
+    }
+  }
+}
+```
+**Response (Not Eligible):**
+```json
+{
+  "success": true,
+  "message": "Downgrade eligibility checked",
+  "data": {
+    "eligible": false,
+    "currentPlan": "enterprise",
+    "targetPlan": "free",
+    "warnings": [
+      "Current calls today (45) exceeds free limit (20)",
+      "Current active chats (8) exceeds free limit (5)"
+    ],
+    "currentUsage": {
+      "calls": { "used": 45, "newLimit": 20 },
+      "messages": { "used": 120, "newLimit": 50 },
+      "chats": { "active": 8, "newLimit": 5 }
+    }
+  }
 }
 ```
 

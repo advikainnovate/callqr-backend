@@ -1,0 +1,21 @@
+meta {
+  name: Phone Verification Status
+  type: http
+  seq: 9
+}
+
+get {
+  url: {{baseUrl}}/api/auth/phone-verification-status
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+docs {
+  Check phone verification status for current user.
+  Returns whether user has a phone number and if it's verified.
+  Phone number is masked for security.
+}

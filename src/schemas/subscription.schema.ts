@@ -18,6 +18,12 @@ export const upgradePlanSchema = z.object({
   }),
 });
 
+export const downgradePlanSchema = z.object({
+  body: z.object({
+    plan: z.enum(['free', 'pro']), // Can only downgrade to free or pro
+  }),
+});
+
 export const getSubscriptionSchema = z.object({
   params: z.object({
     userId: z.string().uuid(),

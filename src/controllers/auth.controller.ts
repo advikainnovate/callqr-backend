@@ -1,7 +1,7 @@
 import { Response } from 'express';
 import { userService } from '../services/user.service';
 import { AuthenticatedRequest } from '../middlewares/auth.middleware';
-import { asyncHandler } from '../utils';
+import { asyncHandler, logger } from '../utils';
 import { sendSuccessResponse } from '../utils/responseHandler';
 import { generateAccessToken } from '../utils/jwt';
 
@@ -121,6 +121,34 @@ export class AuthController {
         },
       },
     });
+  });
+
+  // Forgot Password - Request reset token
+  forgotPassword = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const { email } = req.body;
+
+    const { token, user } = await userService.generatePasswordResetToken(email);
+
+    // In production, send this token via email
+    // For now, we'll return it in the response (NOT RECOMMENDED FOR PRODUCTION)
+    // TODO: Integrate email service (SendGrid, AWS SES, etc.)
+    
+    logger.info(`Password reset requested for user: ${user.id}`);
+
+    sendSuccessResponse(res, 200, 'Password reset token generated. Check your email.', {
+      message: 'If an account exists with this email, a password reset link has been sent.',
+      // Remove this in production - only for development/testing
+      ...(process.env.NODE_ENV === 'development' && { resetToken: token }),
+    });
+  });
+
+  // Reset Password - Verify token and set new password
+  resetPassword = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const { token, newPassword } = req.body;
+
+    await userService.resetPassword(token, newPassword);
+
+    sendSuccessResponse(res, 200, 'Password reset successful. You can now login with your new password.', null);
   });
 }
 

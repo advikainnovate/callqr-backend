@@ -1,7 +1,7 @@
 import { Response } from 'express';
 import { subscriptionService } from '../services/subscription.service';
 import { AuthenticatedRequest } from '../middlewares/auth.middleware';
-import { asyncHandler } from '../utils';
+import { asyncHandler, BadRequestError } from '../utils';
 import { sendSuccessResponse } from '../utils/responseHandler';
 import { SUBSCRIPTION_PLANS, type SubscriptionPlan } from '../constants/subscriptions';
 
@@ -80,6 +80,41 @@ export class SubscriptionController {
       startedAt: subscription.startedAt,
       expiresAt: subscription.expiresAt,
     });
+  });
+
+  downgradePlan = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const userId = req.user!.userId;
+    const { plan } = req.body;
+
+    const subscription = await subscriptionService.downgradePlan(
+      userId,
+      plan as SubscriptionPlan
+    );
+
+    sendSuccessResponse(res, 200, 'Plan downgraded successfully', {
+      id: subscription.id,
+      plan: subscription.plan,
+      status: subscription.status,
+      startedAt: subscription.startedAt,
+      expiresAt: subscription.expiresAt,
+      message: 'Your subscription has been downgraded. New limits will apply immediately.',
+    });
+  });
+
+  checkDowngradeEligibility = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const userId = req.user!.userId;
+    const { plan } = req.query;
+
+    if (!plan) {
+      throw new BadRequestError('Target plan is required');
+    }
+
+    const eligibility = await subscriptionService.getDowngradeEligibility(
+      userId,
+      plan as SubscriptionPlan
+    );
+
+    sendSuccessResponse(res, 200, 'Downgrade eligibility checked', eligibility);
   });
 
   cancelSubscription = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {

@@ -11,11 +11,15 @@ import chatSessionRoutes from './chatSession.routes';
 import messageRoutes from './message.routes';
 import adminRoutes from './admin.routes';
 import paymentRoutes from './payment.routes';
+import phoneVerificationRoutes from './phone-verification.routes';
 
 const router = Router();
 
 // Auth routes
 router.use('/auth', authRoutes);
+
+// Phone verification routes (under /auth)
+router.use('/auth', phoneVerificationRoutes);
 
 // User routes
 router.use('/users', userRoutes);

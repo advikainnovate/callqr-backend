@@ -65,6 +65,60 @@ export class AdminController {
     });
   });
 
+  // Global User Blocking
+  globalBlockUser = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const { userId } = req.params;
+    const { reason } = req.body;
+    const adminId = req.user!.userId;
+
+    const user = await userService.globalBlockUser(userId, adminId, reason);
+
+    sendSuccessResponse(res, 200, 'User globally blocked successfully', {
+      id: user.id,
+      username: user.username,
+      status: user.status,
+      isGloballyBlocked: user.isGloballyBlocked,
+      globalBlockReason: user.globalBlockReason,
+      globalBlockedAt: user.globalBlockedAt,
+      globalBlockedBy: user.globalBlockedBy,
+    });
+  });
+
+  globalUnblockUser = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const { userId } = req.params;
+
+    const user = await userService.globalUnblockUser(userId);
+
+    sendSuccessResponse(res, 200, 'User globally unblocked successfully', {
+      id: user.id,
+      username: user.username,
+      status: user.status,
+      isGloballyBlocked: user.isGloballyBlocked,
+    });
+  });
+
+  getGloballyBlockedUsers = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const { limit, offset } = req.query;
+
+    const users = await userService.getGloballyBlockedUsers(
+      limit ? parseInt(limit as string) : 100,
+      offset ? parseInt(offset as string) : 0
+    );
+
+    sendSuccessResponse(res, 200, 'Globally blocked users retrieved successfully', {
+      users: users.map(user => ({
+        id: user.id,
+        username: user.username,
+        status: user.status,
+        isGloballyBlocked: user.isGloballyBlocked,
+        globalBlockReason: user.globalBlockReason,
+        globalBlockedAt: user.globalBlockedAt,
+        globalBlockedBy: user.globalBlockedBy,
+      })),
+      count: users.length,
+    });
+  });
+
   // ==================== QR CODE MANAGEMENT ====================
 
   getAllQRCodes = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {

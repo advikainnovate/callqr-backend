@@ -387,6 +387,65 @@ Headers: Authorization: Bearer <token>
 ```
 - Returns all payment transactions
 
+#### Downgrade Subscription
+
+**Step 1: Check Eligibility**
+```
+GET /api/subscriptions/downgrade/check?plan=free
+Headers: Authorization: Bearer <token>
+```
+- Checks if current usage allows downgrade
+- Returns eligibility status and warnings
+
+**Step 2: Downgrade (if eligible)**
+```
+POST /api/subscriptions/downgrade
+Headers: Authorization: Bearer <token>
+{
+  "plan": "free"  // or "pro"
+}
+```
+- Downgrades subscription immediately
+- New limits apply right away
+- Cannot downgrade if current usage exceeds new limits
+
+**Downgrade Rules:**
+- Enterprise → Pro: Allowed if usage within Pro limits
+- Enterprise → Free: Allowed if usage within Free limits
+- Pro → Free: Allowed if usage within Free limits
+- Cannot downgrade if:
+  - Today's calls exceed new limit
+  - Today's messages exceed new limit
+  - Active chats exceed new limit
+
+**Example Workflow:**
+```javascript
+// 1. Check if downgrade is possible
+const checkResponse = await fetch('/api/subscriptions/downgrade/check?plan=free', {
+  headers: { 'Authorization': `Bearer ${token}` }
+});
+const eligibility = await checkResponse.json();
+
+if (eligibility.data.eligible) {
+  // 2. Proceed with downgrade
+  const downgradeResponse = await fetch('/api/subscriptions/downgrade', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ plan: 'free' })
+  });
+  
+  if (downgradeResponse.ok) {
+    alert('Downgraded successfully!');
+  }
+} else {
+  // Show warnings to user
+  alert(`Cannot downgrade: ${eligibility.data.warnings.join(', ')}`);
+}
+```
+
 ### 7. Bug Reporting
 
 #### Submit Bug Report (Anonymous OK)

@@ -26,6 +26,10 @@ build/
 logs/
 *.log
 
+# Backups
+backups/
+*.sql
+
 # Dependency directories
 jspm_packages/
 
@@ -69,6 +73,9 @@ temp/
 test-results/
 playwright-report/
 test-results.xml
+test-*.ps1
+test-*.sh
+token.txt
 
 # TypeScript cache
 *.tsbuildinfo 

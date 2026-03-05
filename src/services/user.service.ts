@@ -2,7 +2,7 @@ import { eq, or } from 'drizzle-orm';
 import { db } from '../db';
 import { users, type NewUser, type User } from '../models';
 import { v4 as uuidv4 } from 'uuid';
-import { logger, ConflictError, NotFoundError, BadRequestError, UnauthorizedError } from '../utils';
+import { logger, ConflictError, NotFoundError, BadRequestError, UnauthorizedError, ForbiddenError } from '../utils';
 import crypto from 'crypto';
 import bcrypt from 'bcrypt';
 import { appConfig } from '../config';
@@ -116,6 +116,11 @@ export class UserService {
 
     if (!user) {
       throw new UnauthorizedError('Invalid username or password');
+    }
+
+    // Check if user is globally blocked
+    if (user.isGloballyBlocked === 'true') {
+      throw new ForbiddenError('Your account has been globally blocked. Please contact support.');
     }
 
     // Check if user is active
@@ -300,6 +305,254 @@ export class UserService {
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
     };
+  }
+
+  // Forgot Password - Generate reset token
+  async generatePasswordResetToken(email: string): Promise<{ token: string; user: User }> {
+    // Find user by email hash
+    const emailHash = this.hashData(email);
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.emailHash, emailHash))
+      .limit(1);
+
+    if (!user) {
+      throw new NotFoundError('No account found with this email address');
+    }
+
+    if (user.status !== 'active') {
+      throw new BadRequestError('Account is not active');
+    }
+
+    // Check if user is globally blocked
+    if (user.isGloballyBlocked === 'true') {
+      throw new ForbiddenError('Account is globally blocked. Contact support.');
+    }
+
+    // Generate secure reset token
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const hashedToken = this.hashData(resetToken);
+
+    // Token expires in 1 hour
+    const expiresAt = new Date();
+    expiresAt.setHours(expiresAt.getHours() + 1);
+
+    // Save hashed token to database
+    await db
+      .update(users)
+      .set({
+        resetPasswordToken: hashedToken,
+        resetPasswordExpires: expiresAt,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, user.id));
+
+    logger.info(`Password reset token generated for user: ${user.id}`);
+
+    return { token: resetToken, user };
+  }
+
+  // Reset Password - Verify token and update password
+  async resetPassword(token: string, newPassword: string): Promise<void> {
+    // Hash the token to compare with database
+    const hashedToken = this.hashData(token);
+
+    // Find user with valid reset token
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.resetPasswordToken, hashedToken))
+      .limit(1);
+
+    if (!user) {
+      throw new BadRequestError('Invalid or expired reset token');
+    }
+
+    // Check if token has expired
+    if (!user.resetPasswordExpires || user.resetPasswordExpires < new Date()) {
+      throw new BadRequestError('Reset token has expired');
+    }
+
+    // Check if user is globally blocked
+    if (user.isGloballyBlocked === 'true') {
+      throw new ForbiddenError('Account is globally blocked. Contact support.');
+    }
+
+    // Validate new password
+    if (!newPassword || newPassword.length < 6) {
+      throw new BadRequestError('Password must be at least 6 characters long');
+    }
+
+    // Hash new password
+    const newPasswordHash = await this.hashPassword(newPassword);
+
+    // Update password and clear reset token
+    await db
+      .update(users)
+      .set({
+        passwordHash: newPasswordHash,
+        resetPasswordToken: null,
+        resetPasswordExpires: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, user.id));
+
+    logger.info(`Password reset successful for user: ${user.id}`);
+  }
+
+  // Global User Blocking - Block user globally (admin only)
+  async globalBlockUser(
+    userId: string,
+    adminId: string,
+    reason: string
+  ): Promise<User> {
+    const user = await this.getUserById(userId);
+
+    if (user.isGloballyBlocked === 'true') {
+      throw new BadRequestError('User is already globally blocked');
+    }
+
+    const [blockedUser] = await db
+      .update(users)
+      .set({
+        isGloballyBlocked: 'true',
+        globalBlockReason: reason,
+        globalBlockedAt: new Date(),
+        globalBlockedBy: adminId,
+        status: 'blocked',
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userId))
+      .returning();
+
+    logger.info(`User ${userId} globally blocked by admin ${adminId}. Reason: ${reason}`);
+    return blockedUser;
+  }
+
+  // Global User Unblocking - Unblock user globally (admin only)
+  async globalUnblockUser(userId: string): Promise<User> {
+    const user = await this.getUserById(userId);
+
+    if (user.isGloballyBlocked !== 'true') {
+      throw new BadRequestError('User is not globally blocked');
+    }
+
+    const [unblockedUser] = await db
+      .update(users)
+      .set({
+        isGloballyBlocked: 'false',
+        globalBlockReason: null,
+        globalBlockedAt: null,
+        globalBlockedBy: null,
+        status: 'active',
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userId))
+      .returning();
+
+    logger.info(`User ${userId} globally unblocked`);
+    return unblockedUser;
+  }
+
+  // Check if user is globally blocked
+  async isGloballyBlocked(userId: string): Promise<boolean> {
+    const user = await this.getUserById(userId);
+    return user.isGloballyBlocked === 'true';
+  }
+
+  // Get globally blocked users (admin only)
+  async getGloballyBlockedUsers(limit: number = 100, offset: number = 0): Promise<User[]> {
+    return db
+      .select()
+      .from(users)
+      .where(eq(users.isGloballyBlocked, 'true'))
+      .limit(limit)
+      .offset(offset);
+  }
+
+  // Phone Verification Methods
+  
+  // Generate and store phone verification OTP
+  async generatePhoneVerificationOTP(userId: string): Promise<string> {
+    // Generate 6-digit OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    
+    // Hash the OTP before storing
+    const hashedOTP = this.hashData(otp);
+    
+    // Set expiry to 10 minutes from now
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+    
+    // Store hashed OTP and expiry in database
+    await db
+      .update(users)
+      .set({
+        phoneVerificationCode: hashedOTP,
+        phoneVerificationExpires: expiresAt,
+      })
+      .where(eq(users.id, userId));
+    
+    logger.info(`Phone verification OTP generated for user ${userId}`);
+    
+    // Return the plain OTP to send via SMS
+    return otp;
+  }
+
+  // Verify phone OTP
+  async verifyPhoneOTP(userId: string, otp: string): Promise<boolean> {
+    const user = await this.getUserById(userId);
+    
+    if (!user.phoneVerificationCode || !user.phoneVerificationExpires) {
+      throw new BadRequestError('No verification code found. Please request a new code.');
+    }
+    
+    // Check if OTP has expired
+    if (new Date() > user.phoneVerificationExpires) {
+      throw new BadRequestError('Verification code has expired. Please request a new code.');
+    }
+    
+    // Hash the provided OTP and compare
+    const hashedOTP = this.hashData(otp);
+    
+    if (hashedOTP !== user.phoneVerificationCode) {
+      throw new BadRequestError('Invalid verification code.');
+    }
+    
+    // Mark phone as verified and clear verification fields
+    await db
+      .update(users)
+      .set({
+        isPhoneVerified: 'true',
+        phoneVerificationCode: null,
+        phoneVerificationExpires: null,
+      })
+      .where(eq(users.id, userId));
+    
+    logger.info(`Phone verified successfully for user ${userId}`);
+    return true;
+  }
+
+  // Check if user's phone is verified
+  async isPhoneVerified(userId: string): Promise<boolean> {
+    const user = await this.getUserById(userId);
+    return user.isPhoneVerified === 'true';
+  }
+
+  // Resend phone verification OTP
+  async resendPhoneVerificationOTP(userId: string): Promise<string> {
+    const user = await this.getUserById(userId);
+    
+    if (!user.phone) {
+      throw new BadRequestError('No phone number associated with this account.');
+    }
+    
+    if (user.isPhoneVerified === 'true') {
+      throw new BadRequestError('Phone number is already verified.');
+    }
+    
+    // Generate new OTP
+    return this.generatePhoneVerificationOTP(userId);
   }
 }
 

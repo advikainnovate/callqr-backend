@@ -1,0 +1,27 @@
+meta {
+  name: Send Phone Verification
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{baseUrl}}/api/auth/send-phone-verification
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+body:json {
+  {
+    "phone": "+1234567890"
+  }
+}
+
+docs {
+  Send OTP to phone number for verification.
+  Requires authentication.
+  OTP expires in 10 minutes.
+}

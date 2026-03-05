@@ -19,6 +19,26 @@ router.patch('/users/:userId/block', authenticateToken, requireAdmin, adminContr
 router.patch('/users/:userId/unblock', authenticateToken, requireAdmin, adminController.unblockUser);
 router.delete('/users/:userId', authenticateToken, requireAdmin, adminController.deleteUser);
 
+// Global User Blocking
+router.post(
+  '/users/:userId/global-block',
+  authenticateToken,
+  requireAdmin,
+  validate(
+    z.object({
+      body: z.object({
+        reason: z.string().min(1).max(500),
+      }),
+      params: z.object({
+        userId: z.string().uuid(),
+      }),
+    })
+  ),
+  adminController.globalBlockUser
+);
+router.post('/users/:userId/global-unblock', authenticateToken, requireAdmin, adminController.globalUnblockUser);
+router.get('/users/global-blocked/list', authenticateToken, requireAdmin, adminController.getGloballyBlockedUsers);
+
 // ==================== QR CODE MANAGEMENT ====================
 router.get('/qr-codes', authenticateToken, requireAdmin, adminController.getAllQRCodes);
 router.get('/qr-codes/:qrCodeId', authenticateToken, requireAdmin, adminController.getQRCodeDetails);

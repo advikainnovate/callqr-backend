@@ -73,6 +73,138 @@ export class SubscriptionService {
     return this.createSubscription(userId, newPlan, expiresAt);
   }
 
+  async downgradePlan(userId: string, newPlan: SubscriptionPlan): Promise<Subscription> {
+    const currentSubscription = await this.getActiveSubscription(userId);
+    
+    if (!currentSubscription) {
+      throw new BadRequestError('No active subscription to downgrade');
+    }
+
+    const currentPlan = currentSubscription.plan as SubscriptionPlan;
+
+    // Validate downgrade is actually a downgrade
+    const planHierarchy = {
+      [SUBSCRIPTION_PLANS.FREE]: 0,
+      [SUBSCRIPTION_PLANS.PRO]: 1,
+      [SUBSCRIPTION_PLANS.ENTERPRISE]: 2,
+    };
+
+    if (planHierarchy[newPlan] >= planHierarchy[currentPlan]) {
+      throw new BadRequestError('New plan must be lower than current plan. Use upgrade endpoint for upgrades.');
+    }
+
+    // Check if user can downgrade based on current usage
+    await this.validateDowngrade(userId, newPlan);
+
+    // Cancel current subscription
+    await this.cancelSubscription(currentSubscription.id);
+
+    // Create new subscription (FREE plan has no expiry)
+    const expiresAt = newPlan === SUBSCRIPTION_PLANS.FREE ? undefined : undefined;
+    const newSubscription = await this.createSubscription(userId, newPlan, expiresAt);
+
+    logger.info(`User ${userId} downgraded from ${currentPlan} to ${newPlan}`);
+    return newSubscription;
+  }
+
+  async validateDowngrade(userId: string, newPlan: SubscriptionPlan): Promise<void> {
+    const { DAILY_MESSAGE_LIMITS, ACTIVE_CHAT_LIMITS } = await import('../constants/subscriptions');
+    const { chatSessionService } = await import('./chatSession.service');
+    const { messageService } = await import('./message.service');
+
+    // Get new plan limits
+    const newCallLimit = DAILY_CALL_LIMITS[newPlan];
+    const newMessageLimit = DAILY_MESSAGE_LIMITS[newPlan];
+    const newChatLimit = ACTIVE_CHAT_LIMITS[newPlan];
+
+    // Check current usage
+    const callUsage = await this.getCallUsage(userId);
+    const activeChatCount = await chatSessionService.getActiveChatCount(userId);
+    const dailyMessageCount = await messageService.getDailyMessageCount(userId);
+
+    const warnings: string[] = [];
+
+    // Check if current usage exceeds new limits
+    if (callUsage.used > newCallLimit) {
+      warnings.push(`You have already used ${callUsage.used} calls today, which exceeds the ${newPlan} plan limit of ${newCallLimit} calls/day.`);
+    }
+
+    if (newMessageLimit !== -1 && dailyMessageCount > newMessageLimit) {
+      warnings.push(`You have sent ${dailyMessageCount} messages today, which exceeds the ${newPlan} plan limit of ${newMessageLimit} messages/day.`);
+    }
+
+    if (newChatLimit !== -1 && activeChatCount > newChatLimit) {
+      warnings.push(`You have ${activeChatCount} active chats, which exceeds the ${newPlan} plan limit of ${newChatLimit} active chats.`);
+    }
+
+    // If there are warnings, throw error with details
+    if (warnings.length > 0) {
+      throw new BadRequestError(
+        `Cannot downgrade: Current usage exceeds new plan limits. ${warnings.join(' ')}`
+      );
+    }
+  }
+
+  async getDowngradeEligibility(userId: string, targetPlan: SubscriptionPlan): Promise<{
+    eligible: boolean;
+    currentPlan: string;
+    targetPlan: string;
+    warnings: string[];
+    currentUsage: {
+      calls: { used: number; newLimit: number };
+      messages: { used: number; newLimit: number | string };
+      chats: { active: number; newLimit: number | string };
+    };
+  }> {
+    const currentSubscription = await this.getActiveSubscription(userId);
+    const currentPlan = currentSubscription?.plan as SubscriptionPlan || SUBSCRIPTION_PLANS.FREE;
+
+    const { DAILY_MESSAGE_LIMITS, ACTIVE_CHAT_LIMITS } = await import('../constants/subscriptions');
+    const { chatSessionService } = await import('./chatSession.service');
+    const { messageService } = await import('./message.service');
+
+    // Get new plan limits
+    const newCallLimit = DAILY_CALL_LIMITS[targetPlan];
+    const newMessageLimit = DAILY_MESSAGE_LIMITS[targetPlan];
+    const newChatLimit = ACTIVE_CHAT_LIMITS[targetPlan];
+
+    // Get current usage
+    const callUsage = await this.getCallUsage(userId);
+    const activeChatCount = await chatSessionService.getActiveChatCount(userId);
+    const dailyMessageCount = await messageService.getDailyMessageCount(userId);
+
+    const warnings: string[] = [];
+    let eligible = true;
+
+    // Check if current usage exceeds new limits
+    if (callUsage.used > newCallLimit) {
+      warnings.push(`Current calls today (${callUsage.used}) exceeds ${targetPlan} limit (${newCallLimit})`);
+      eligible = false;
+    }
+
+    if (newMessageLimit !== -1 && dailyMessageCount > newMessageLimit) {
+      warnings.push(`Current messages today (${dailyMessageCount}) exceeds ${targetPlan} limit (${newMessageLimit})`);
+      eligible = false;
+    }
+
+    if (newChatLimit !== -1 && activeChatCount > newChatLimit) {
+      warnings.push(`Current active chats (${activeChatCount}) exceeds ${targetPlan} limit (${newChatLimit})`);
+      eligible = false;
+    }
+
+    return {
+      eligible,
+      currentPlan,
+      targetPlan,
+      warnings,
+      currentUsage: {
+        calls: { used: callUsage.used, newLimit: newCallLimit },
+        messages: { used: dailyMessageCount, newLimit: newMessageLimit === -1 ? 'unlimited' : newMessageLimit },
+        chats: { active: activeChatCount, newLimit: newChatLimit === -1 ? 'unlimited' : newChatLimit },
+      },
+    };
+  }
+
   async cancelSubscription(subscriptionId: string): Promise<Subscription> {
     const [subscription] = await db
       .update(subscriptions)

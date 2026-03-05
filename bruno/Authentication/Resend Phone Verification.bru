@@ -1,0 +1,21 @@
+meta {
+  name: Resend Phone Verification
+  type: http
+  seq: 8
+}
+
+post {
+  url: {{baseUrl}}/api/auth/resend-phone-verification
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+docs {
+  Resend OTP to phone number.
+  Requires authentication.
+  Cannot resend if phone is already verified.
+}
