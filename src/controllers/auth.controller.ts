@@ -181,30 +181,91 @@ export class AuthController {
     });
   });
 
-  // Forgot Password - Request reset token
+  // Forgot Password - Request OTP via SMS
   forgotPassword = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
-    const { email } = req.body;
+    const { username } = req.body;
 
-    const { token, user } = await userService.generatePasswordResetToken(email);
+    if (!username) {
+      res.status(400).json({
+        success: false,
+        message: 'Username is required',
+      });
+      return;
+    }
 
-    // In production, send this token via email
-    // For now, we'll return it in the response (NOT RECOMMENDED FOR PRODUCTION)
-    // TODO: Integrate email service (SendGrid, AWS SES, etc.)
+    // Find user by username
+    const user = await userService.getUserByUsername(username);
+
+    if (!user) {
+      // Don't reveal if user exists or not (security)
+      sendSuccessResponse(res, 200, 'If an account exists, an OTP has been sent to the registered phone number.', null);
+      return;
+    }
+
+    // Check if user has a verified phone
+    if (user.isPhoneVerified !== 'true' || !user.phone) {
+      res.status(400).json({
+        success: false,
+        message: 'No verified phone number found for this account. Please contact support.',
+      });
+      return;
+    }
+
+    // Generate OTP for password reset
+    const otp = await userService.generatePhoneVerificationOTP(user.id);
+
+    // Send OTP via SMS
+    const { smsService } = await import('../services/sms.service');
+    const userProfile = await userService.getUserProfile(user.id);
     
-    logger.info(`Password reset requested for user: ${user.id}`);
+    if (userProfile.phone) {
+      await smsService.sendOTP(userProfile.phone, otp);
+    }
 
-    sendSuccessResponse(res, 200, 'Password reset token generated. Check your email.', {
-      message: 'If an account exists with this email, a password reset link has been sent.',
-      // Remove this in production - only for development/testing
-      ...(process.env.NODE_ENV === 'development' && { resetToken: token }),
+    logger.info(`Password reset OTP sent to user: ${user.id}`);
+
+    sendSuccessResponse(res, 200, 'OTP sent to your registered phone number.', {
+      message: 'An OTP has been sent to your phone. Use it to reset your password.',
+      userId: user.id, // Needed for next step
     });
   });
 
-  // Reset Password - Verify token and set new password
+  // Reset Password - Verify OTP and set new password
   resetPassword = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
-    const { token, newPassword } = req.body;
+    const { userId, otp, newPassword } = req.body;
 
-    await userService.resetPassword(token, newPassword);
+    if (!userId || !otp || !newPassword) {
+      res.status(400).json({
+        success: false,
+        message: 'User ID, OTP, and new password are required',
+      });
+      return;
+    }
+
+    // Validate new password
+    if (newPassword.length < 6) {
+      res.status(400).json({
+        success: false,
+        message: 'Password must be at least 6 characters long',
+      });
+      return;
+    }
+
+    // Verify OTP
+    try {
+      await userService.verifyPhoneOTP(userId, otp);
+    } catch (error) {
+      res.status(400).json({
+        success: false,
+        message: error instanceof Error ? error.message : 'Invalid or expired OTP',
+      });
+      return;
+    }
+
+    // Change password
+    await userService.resetPasswordWithUserId(userId, newPassword);
+
+    logger.info(`Password reset successful for user: ${userId}`);
 
     sendSuccessResponse(res, 200, 'Password reset successful. You can now login with your new password.', null);
   });

@@ -555,6 +555,28 @@ export class UserService {
     // Generate new OTP
     return this.generatePhoneVerificationOTP(userId);
   }
+
+  // Reset password using user ID (after OTP verification)
+  async resetPasswordWithUserId(userId: string, newPassword: string): Promise<void> {
+    // Validate password
+    if (!newPassword || newPassword.length < 6) {
+      throw new BadRequestError('Password must be at least 6 characters long');
+    }
+
+    // Hash new password
+    const passwordHash = await this.hashPassword(newPassword);
+
+    // Update password
+    await db
+      .update(users)
+      .set({
+        passwordHash,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userId));
+
+    logger.info(`Password reset successfully for user ${userId}`);
+  }
 }
 
 export const userService = new UserService();
