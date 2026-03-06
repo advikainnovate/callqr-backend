@@ -1,281 +1,222 @@
-# Forgot Password Flow
+# Forgot Password Flow (OTP-Based)
 
 ## Overview
 
-The forgot password feature allows users to reset their password via email verification. The system generates a secure reset token that expires after 1 hour.
+Password reset now uses OTP verification via SMS to confirm user identity before allowing password change.
 
-## Flow Diagram
+## Security Benefits
 
+✅ Verifies user has access to registered phone  
+✅ No email-based tokens that can be intercepted  
+✅ OTP expires in 10 minutes  
+✅ Same secure OTP system as registration  
+✅ Prevents unauthorized password resets  
+
+## Flow
+
+### Step 1: Request Password Reset
 ```
-User                    Backend                     Database
-  |                        |                            |
-  |--Forgot Password------>|                            |
-  |   (email)              |                            |
-  |                        |--Find User by Email------->|
-  |                        |<--User Found---------------|
-  |                        |                            |
-  |                        |--Generate Reset Token----->|
-  |                        |  (SHA-256 hash)            |
-  |                        |<--Token Saved--------------|
-  |<--Success Response-----|                            |
-  |   (token in dev mode)  |                            |
-  |                        |                            |
-  |--Reset Password------->|                            |
-  |   (token + new pwd)    |                            |
-  |                        |--Verify Token------------->|
-  |                        |<--Token Valid--------------|
-  |                        |                            |
-  |                        |--Update Password---------->|
-  |                        |  (clear token)             |
-  |                        |<--Password Updated---------|
-  |<--Success Response-----|                            |
+POST /api/auth/forgot-password
+Body: { "username": "john_doe" }
 ```
 
-## API Endpoints
+**What Happens:**
+- System finds user by username
+- Checks if user has verified phone
+- Generates 6-digit OTP
+- Sends OTP via SMS to registered phone
+- Returns user ID for next step
 
-### 1. Request Password Reset
-
-**Endpoint:** `POST /api/auth/forgot-password`
-
-**Request Body:**
-```json
-{
-  "email": "user@example.com"
-}
-```
-
-**Response (Success):**
+**Response:**
 ```json
 {
   "success": true,
-  "message": "Password reset token generated. Check your email.",
+  "message": "OTP sent to your registered phone number.",
   "data": {
-    "message": "If an account exists with this email, a password reset link has been sent.",
-    "resetToken": "abc123..." // Only in development mode
+    "userId": "abc-123-def",
+    "message": "An OTP has been sent to your phone. Use it to reset your password."
   }
 }
 ```
 
-**Response (Error - User Not Found):**
-```json
-{
-  "success": false,
-  "message": "No account found with this email address"
+### Step 2: Verify OTP & Set New Password
+```
+POST /api/auth/reset-password
+Body: {
+  "userId": "abc-123-def",
+  "otp": "123456",
+  "newPassword": "newpass123"
 }
 ```
 
-**Response (Error - Globally Blocked):**
-```json
-{
-  "success": false,
-  "message": "Account is globally blocked. Contact support."
-}
-```
+**What Happens:**
+- System verifies OTP is valid and not expired
+- If valid, updates password
+- Clears OTP from database
+- User can now login with new password
 
-### 2. Reset Password
-
-**Endpoint:** `POST /api/auth/reset-password`
-
-**Request Body:**
-```json
-{
-  "token": "abc123...",
-  "newPassword": "newSecurePassword123"
-}
-```
-
-**Response (Success):**
+**Response:**
 ```json
 {
   "success": true,
-  "message": "Password reset successful. You can now login with your new password.",
-  "data": null
+  "message": "Password reset successful. You can now login with your new password."
 }
 ```
 
-**Response (Error - Invalid Token):**
+### Step 3: Login with New Password
+```
+POST /api/auth/login
+Body: {
+  "username": "john_doe",
+  "password": "newpass123"
+}
+```
+
+## Error Cases
+
+### No Verified Phone
 ```json
 {
   "success": false,
-  "message": "Invalid or expired reset token"
+  "message": "No verified phone number found for this account. Please contact support."
 }
 ```
 
-**Response (Error - Token Expired):**
+### Invalid OTP
 ```json
 {
   "success": false,
-  "message": "Reset token has expired"
+  "message": "Invalid verification code."
 }
 ```
 
-## Security Features
-
-### Token Generation
-- 32-byte random token generated using `crypto.randomBytes()`
-- Token is hashed using SHA-256 before storage
-- Original token sent to user (via email in production)
-- Hashed token stored in database
-
-### Token Expiration
-- Tokens expire after 1 hour
-- Expired tokens are rejected during reset
-- Tokens are cleared after successful password reset
-
-### Rate Limiting
-- Standard API rate limiting applies (100 requests per 15 minutes)
-- Prevents brute force attacks on reset tokens
-
-### Global Blocking Check
-- Users who are globally blocked cannot request password reset
-- Prevents abuse from blocked accounts
-
-## Database Schema Changes
-
-### New Fields in `users` Table
-
-```typescript
-resetPasswordToken: text('reset_password_token')
-resetPasswordExpires: timestamp('reset_password_expires')
+### Expired OTP
+```json
+{
+  "success": false,
+  "message": "Verification code has expired. Please request a new code."
+}
 ```
 
-### Index Added
-
-```typescript
-resetPasswordTokenIdx: index('users_reset_password_token_idx').on(table.resetPasswordToken)
+### User Not Found
+```json
+{
+  "success": true,
+  "message": "If an account exists, an OTP has been sent to the registered phone number."
+}
 ```
-
-## Implementation Details
-
-### Token Storage
-- Token is hashed using SHA-256 before storage
-- Only hashed version stored in database
-- Original token never stored
-
-### Email Integration (TODO)
-
-In production, integrate with an email service:
-
-```typescript
-// Example with SendGrid
-import sgMail from '@sendgrid/mail';
-
-sgMail.setApiKey(process.env.SENDGRID_API_KEY);
-
-const msg = {
-  to: user.email,
-  from: 'noreply@yourdomain.com',
-  subject: 'Password Reset Request',
-  html: `
-    <p>You requested a password reset.</p>
-    <p>Click this link to reset your password:</p>
-    <a href="${process.env.FRONTEND_URL}/reset-password?token=${token}">
-      Reset Password
-    </a>
-    <p>This link expires in 1 hour.</p>
-  `,
-};
-
-await sgMail.send(msg);
-```
-
-### Frontend Integration
-
-```javascript
-// Request password reset
-const forgotPassword = async (email) => {
-  const response = await fetch('/api/auth/forgot-password', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email }),
-  });
-  
-  const data = await response.json();
-  
-  if (data.success) {
-    alert('Check your email for reset instructions');
-  }
-};
-
-// Reset password
-const resetPassword = async (token, newPassword) => {
-  const response = await fetch('/api/auth/reset-password', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ token, newPassword }),
-  });
-  
-  const data = await response.json();
-  
-  if (data.success) {
-    alert('Password reset successful! You can now login.');
-    window.location.href = '/login';
-  }
-};
-```
+*Note: Same response whether user exists or not (security)*
 
 ## Testing
 
-### Development Mode
-In development, the reset token is returned in the API response for testing purposes.
-
+### Development Mode (Console OTP)
 ```bash
-# Request reset
+# 1. Request password reset
 curl -X POST http://localhost:9001/api/auth/forgot-password \
   -H "Content-Type: application/json" \
-  -d '{"email":"user@example.com"}'
+  -d '{"username": "testuser"}'
 
-# Response includes token in dev mode
-{
-  "success": true,
-  "data": {
-    "resetToken": "abc123..."
-  }
-}
+# Check server console for OTP
+# Output: 📱 SMS OTP for +918005936038: 123456
 
-# Use token to reset password
+# 2. Reset password with OTP
 curl -X POST http://localhost:9001/api/auth/reset-password \
   -H "Content-Type: application/json" \
-  -d '{"token":"abc123...","newPassword":"newPassword123"}'
+  -d '{
+    "userId": "user-id-from-step-1",
+    "otp": "123456",
+    "newPassword": "newpassword123"
+  }'
+
+# 3. Login with new password
+curl -X POST http://localhost:9001/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "testuser",
+    "password": "newpassword123"
+  }'
 ```
 
-### Production Mode
-In production, remove the token from the response and send it via email only.
+### Production Mode (Real SMS)
+Same steps, but OTP is sent via SMS to user's phone.
 
-## Error Handling
+## Comparison: Old vs New
 
-| Error | Status Code | Message |
-|-------|-------------|---------|
-| Email not found | 404 | No account found with this email address |
-| Account inactive | 400 | Account is not active |
-| Globally blocked | 403 | Account is globally blocked. Contact support. |
-| Invalid token | 400 | Invalid or expired reset token |
-| Token expired | 400 | Reset token has expired |
-| Weak password | 400 | Password must be at least 6 characters long |
+### Old Flow (Email-Based)
+1. User provides email
+2. System sends reset token via email
+3. User clicks link with token
+4. User sets new password
 
-## Best Practices
+**Issues:**
+- ❌ Email can be compromised
+- ❌ Token in URL can be intercepted
+- ❌ No phone verification
+- ❌ Relies on email delivery
 
-1. **Never reveal if email exists**: Always return success message even if email not found
-2. **Use HTTPS**: Always use HTTPS in production to protect tokens in transit
-3. **Short expiration**: 1-hour expiration balances security and usability
-4. **One-time use**: Tokens are cleared after successful reset
-5. **Email verification**: Only send reset links to verified email addresses
-6. **Audit logging**: Log all password reset attempts for security monitoring
+### New Flow (OTP-Based)
+1. User provides username
+2. System sends OTP to verified phone
+3. User enters OTP + new password
+4. Password updated
 
-## Migration
+**Benefits:**
+- ✅ Requires phone access
+- ✅ OTP expires quickly (10 min)
+- ✅ No clickable links
+- ✅ Same secure system as registration
+- ✅ SMS delivery more reliable
 
-Run database migration to add new fields:
+## Requirements
 
-```bash
-npm run db:push
-```
+- User must have verified phone number
+- Phone verification must be completed during registration
+- Twilio configured for SMS delivery
 
-Or manually add fields:
+## Database Fields Used
 
-```sql
-ALTER TABLE users 
-ADD COLUMN reset_password_token TEXT,
-ADD COLUMN reset_password_expires TIMESTAMP;
+- `phoneVerificationCode` - Stores hashed OTP
+- `phoneVerificationExpires` - OTP expiry timestamp
+- `isPhoneVerified` - Must be 'true' to reset password
 
-CREATE INDEX users_reset_password_token_idx ON users(reset_password_token);
-```
+## Security Notes
+
+- OTP is hashed (SHA-256) before storage
+- OTP expires after 10 minutes
+- OTP cleared after successful use
+- Username required (not email)
+- Same response for existing/non-existing users
+- Rate limiting recommended (prevent OTP spam)
+
+## Migration Impact
+
+### Existing Users
+- Must have verified phone to reset password
+- If no verified phone, contact support
+
+### New Users
+- Phone verified during registration
+- Can reset password using OTP
+
+## Troubleshooting
+
+### "No verified phone number found"
+- User registered before phone verification was required
+- User never verified their phone
+- Solution: Contact support or verify phone first
+
+### OTP not received
+- Check Twilio configuration
+- Check phone number format
+- Check Twilio account balance
+- Check SMS logs in Twilio dashboard
+
+### OTP expired
+- Request new OTP (call forgot-password again)
+- OTP valid for 10 minutes only
+
+## Related Endpoints
+
+- `POST /api/auth/forgot-password` - Request OTP
+- `POST /api/auth/reset-password` - Verify OTP & reset
+- `POST /api/auth/resend-phone-verification` - Resend OTP (if needed)

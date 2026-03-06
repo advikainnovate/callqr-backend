@@ -99,37 +99,42 @@ POST /api/auth/login
 ```
 **Response:** JWT token + user data
 
-### Forgot Password
+### Forgot Password (Request OTP)
 ```
 POST /api/auth/forgot-password
 ```
 **Body:**
 ```json
 {
-  "email": "string (required)"
+  "username": "string (required)"
 }
 ```
 **Response:**
 ```json
 {
   "success": true,
-  "message": "Password reset token generated. Check your email.",
+  "message": "OTP sent to your registered phone number.",
   "data": {
-    "message": "If an account exists with this email, a password reset link has been sent.",
-    "resetToken": "abc123..." // Only in development mode
+    "message": "An OTP has been sent to your phone. Use it to reset your password.",
+    "userId": "user_id"
   }
 }
 ```
-**Note:** In production, the reset token is sent via email only. In development mode, it's included in the response for testing.
+**Note:** 
+- Requires verified phone number
+- OTP sent via SMS to registered phone
+- OTP expires in 10 minutes
+- User ID needed for reset password step
 
-### Reset Password
+### Reset Password (Verify OTP & Set New Password)
 ```
 POST /api/auth/reset-password
 ```
 **Body:**
 ```json
 {
-  "token": "string (required)",
+  "userId": "string (required)",
+  "otp": "string (required, 6 digits)",
   "newPassword": "string (required, min 6 chars)"
 }
 ```
@@ -141,6 +146,10 @@ POST /api/auth/reset-password
   "data": null
 }
 ```
+**Note:**
+- Must provide valid OTP from SMS
+- OTP is verified before password change
+- Old password is replaced with new one
 
 ### Send Phone Verification OTP
 ```
