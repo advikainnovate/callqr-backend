@@ -90,9 +90,9 @@ async function createAdmin() {
     const subscriptionId = uuidv4();
     await sql`
       INSERT INTO subscriptions (
-        id, user_id, plan, status, started_at, created_at, updated_at
+        id, user_id, plan, status, started_at, created_at
       ) VALUES (
-        ${subscriptionId}, ${userId}, 'FREE', 'active', NOW(), NOW(), NOW()
+        ${subscriptionId}, ${userId}, 'FREE', 'active', NOW(), NOW()
       )
     `;
 
