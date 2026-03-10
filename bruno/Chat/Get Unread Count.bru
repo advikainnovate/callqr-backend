@@ -5,11 +5,26 @@ meta {
 }
 
 get {
-  url: {{baseUrl}}/api/messages/unread-count
+  url: {{baseUrl}}/api/messages/unread/count
   body: none
   auth: bearer
 }
 
 auth:bearer {
   token: {{authToken}}
+}
+
+docs {
+  # Get Unread Count
+  
+  Get the total number of unread messages across all user's chat sessions.
+  
+  ## Response:
+  Returns object with:
+  - `unreadCount`: Total number of unread messages
+  
+  ## Notes:
+  - Only counts messages from other users (not own messages)
+  - Only includes messages from active chat sessions
+  - Excludes deleted messages
 }

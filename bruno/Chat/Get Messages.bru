@@ -11,7 +11,7 @@ get {
 }
 
 params:path {
-  chatSessionId: your-chat-session-id
+  chatSessionId: {{chatSessionId}}
 }
 
 params:query {
@@ -21,4 +21,28 @@ params:query {
 
 auth:bearer {
   token: {{authToken}}
+}
+
+docs {
+  # Get Messages
+  
+  Retrieve paginated messages from a chat session.
+  
+  ## Path Parameters:
+  - `chatSessionId` (required): UUID of the chat session
+  
+  ## Query Parameters:
+  - `limit` (optional): Number of messages to retrieve (default: 50, max: 100)
+  - `offset` (optional): Number of messages to skip (default: 0)
+  
+  ## Response:
+  Returns array of messages with:
+  - Message content and metadata
+  - Media attachments (if any) with Cloudinary URLs
+  - Read status and timestamps
+  - Sender information
+  
+  ## Access Control:
+  - User must be a participant in the chat session
+  - Only returns messages from accessible chats
 }

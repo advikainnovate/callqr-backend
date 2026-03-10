@@ -1,0 +1,56 @@
+meta {
+  name: Test Media Upload Limits
+  type: http
+  seq: 9
+}
+
+post {
+  url: {{baseUrl}}/api/messages
+  body: multipartForm
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+body:multipart-form {
+  chatSessionId: your-chat-session-id
+  messageType: image
+  content: Testing upload limits - this should work
+  images: @file(C:\path\to\small-image1.jpg)
+  images: @file(C:\path\to\small-image2.jpg)
+  images: @file(C:\path\to\small-image3.jpg)
+}
+
+docs {
+  # Test Media Upload Limits
+  
+  This endpoint tests various media upload scenarios and limits.
+  
+  ## Test Scenarios:
+  
+  ### Valid Upload (should succeed):
+  - 1-5 images
+  - Each image < 5MB
+  - Total < 10MB
+  - Supported formats (JPG, PNG, GIF, WebP)
+  
+  ### Invalid Uploads (should fail):
+  - More than 5 images
+  - Single image > 5MB
+  - Total upload > 10MB
+  - Unsupported formats (PDF, TXT, etc.)
+  
+  ## Expected Errors:
+  - `400`: "Maximum 5 images allowed per message"
+  - `400`: "File size exceeds 5MB limit"
+  - `400`: "Total upload size exceeds 10MB limit"
+  - `400`: "Invalid file format. Allowed: jpg, jpeg, png, gif, webp"
+  
+  ## To Test Different Scenarios:
+  1. Change number of files in form data
+  2. Use different file sizes
+  3. Try different file formats
+  4. Test with/without content field
+}

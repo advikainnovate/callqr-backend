@@ -1,0 +1,114 @@
+meta {
+  name: Media Upload Examples
+  type: http
+  seq: 10
+}
+
+post {
+  url: {{baseUrl}}/api/messages
+  body: multipartForm
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+body:multipart-form {
+  chatSessionId: your-chat-session-id
+  messageType: image
+  content: Here are some example photos from our trip!
+  images: @file(C:\path\to\photo1.jpg)
+  images: @file(C:\path\to\photo2.png)
+  images: @file(C:\path\to\photo3.gif)
+}
+
+docs {
+  # Media Upload Examples
+  
+  This collection demonstrates various media upload scenarios.
+  
+  ## Example 1: Multiple Images with Caption
+  ```
+  chatSessionId: "uuid"
+  messageType: "image"
+  content: "Here are some photos!"
+  images: photo1.jpg, photo2.png, photo3.gif
+  ```
+  
+  ## Example 2: Single Image without Caption
+  ```
+  chatSessionId: "uuid"
+  messageType: "image"
+  images: single-photo.jpg
+  ```
+  
+  ## Example 3: Maximum Images (5)
+  ```
+  chatSessionId: "uuid"
+  messageType: "image"
+  content: "Photo album"
+  images: img1.jpg, img2.jpg, img3.jpg, img4.jpg, img5.jpg
+  ```
+  
+  ## Frontend Integration Examples:
+  
+  ### JavaScript Fetch API:
+  ```javascript
+  const formData = new FormData();
+  formData.append('chatSessionId', 'your-chat-id');
+  formData.append('messageType', 'image');
+  formData.append('content', 'Optional caption');
+  
+  // Add multiple files
+  for (let i = 0; i < files.length; i++) {
+    formData.append('images', files[i]);
+  }
+  
+  const response = await fetch('/api/messages', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`
+    },
+    body: formData
+  });
+  ```
+  
+  ### cURL Example:
+  ```bash
+  curl -X POST http://localhost:9001/api/messages \
+    -H "Authorization: Bearer YOUR_TOKEN" \
+    -F "chatSessionId=your-chat-id" \
+    -F "messageType=image" \
+    -F "content=Photo caption" \
+    -F "images=@photo1.jpg" \
+    -F "images=@photo2.png"
+  ```
+  
+  ## Expected Response:
+  ```json
+  {
+    "success": true,
+    "message": "Message sent successfully",
+    "data": {
+      "id": "msg-uuid",
+      "messageType": "image",
+      "content": "Photo caption",
+      "mediaAttachments": [
+        {
+          "publicId": "callqr/messages/user_timestamp_random",
+          "url": "https://res.cloudinary.com/cloud/image/upload/...",
+          "secureUrl": "https://res.cloudinary.com/cloud/image/upload/...",
+          "width": 1200,
+          "height": 800,
+          "format": "webp",
+          "bytes": 156789,
+          "originalFilename": "photo1.jpg",
+          "thumbnailUrl": "https://res.cloudinary.com/cloud/image/upload/w_150,h_150,c_fill,f_webp,q_auto/..."
+        }
+      ],
+      "sentAt": "2024-01-01T12:00:00.000Z"
+    }
+  }
+  ```
+}

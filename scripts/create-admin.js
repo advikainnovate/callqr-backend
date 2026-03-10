@@ -92,7 +92,7 @@ async function createAdmin() {
       INSERT INTO subscriptions (
         id, user_id, plan, status, started_at, created_at
       ) VALUES (
-        ${subscriptionId}, ${userId}, 'FREE', 'active', NOW(), NOW()
+        ${subscriptionId}, ${userId}, 'free', 'active', NOW(), NOW()
       )
     `;
 

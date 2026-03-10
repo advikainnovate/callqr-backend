@@ -47,6 +47,7 @@ app.get('/healthz', asyncHandler(async (_, res) => {
   try {
     // Import database client for health check
     const { client } = await import('./db');
+    const { cloudinary } = await import('./config/cloudinary');
 
     const health = {
       status: 'ok',
@@ -56,6 +57,7 @@ app.get('/healthz', asyncHandler(async (_, res) => {
       services: {
         database: { status: 'unknown', details: '' },
         webrtc: { status: 'unknown', details: '' },
+        cloudinary: { status: 'unknown', details: '' },
         environment: {
           status: 'ok',
           details: process.env.NODE_ENV || 'development',
@@ -88,6 +90,40 @@ app.get('/healthz', asyncHandler(async (_, res) => {
       health.services.webrtc = {
         status: 'error',
         details: `WebRTC service error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      };
+      health.status = 'degraded';
+    }
+
+    // Check Cloudinary connection
+    try {
+      const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+      const apiKey = process.env.CLOUDINARY_API_KEY;
+      const apiSecret = process.env.CLOUDINARY_API_SECRET;
+
+      if (!cloudName || !apiKey || !apiSecret) {
+        health.services.cloudinary = {
+          status: 'warning',
+          details: 'Cloudinary credentials not configured'
+        };
+      } else {
+        const result = await cloudinary.api.ping();
+        if (result.status === 'ok') {
+          health.services.cloudinary = {
+            status: 'connected',
+            details: `Cloudinary connected (Cloud: ${cloudName})`
+          };
+        } else {
+          health.services.cloudinary = {
+            status: 'error',
+            details: 'Cloudinary ping failed'
+          };
+          health.status = 'degraded';
+        }
+      }
+    } catch (error) {
+      health.services.cloudinary = {
+        status: 'error',
+        details: `Cloudinary connection failed: ${error instanceof Error ? error.message : 'Unknown error'}`
       };
       health.status = 'degraded';
     }
