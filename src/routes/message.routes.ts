@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { messageController } from '../controllers/message.controller';
 import { authenticateToken } from '../middlewares/auth.middleware';
 import { validate } from '../middlewares/validate';
+import { uploadMultipleImages, handleUploadError } from '../middlewares/upload.middleware';
 import {
   sendMessageSchema,
   getMessagesSchema,
@@ -13,8 +14,15 @@ import {
 
 const router = Router();
 
-// Send message
-router.post('/', authenticateToken, validate(sendMessageSchema), messageController.sendMessage);
+// Send message (with optional media upload)
+router.post(
+  '/', 
+  authenticateToken, 
+  uploadMultipleImages,
+  handleUploadError,
+  validate(sendMessageSchema), 
+  messageController.sendMessage
+);
 
 // Get messages for a chat session
 router.get('/:chatSessionId', authenticateToken, validate(getMessagesSchema), messageController.getMessages);

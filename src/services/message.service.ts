@@ -1,10 +1,11 @@
 import { eq, and, desc, sql, gte, like } from 'drizzle-orm';
 import { db } from '../db';
-import { messages, type NewMessage, type Message } from '../models';
+import { messages, type NewMessage, type Message, type MessageMedia } from '../models';
 import { v4 as uuidv4 } from 'uuid';
 import { logger, NotFoundError, BadRequestError, ForbiddenError, TooManyRequestsError } from '../utils';
 import { chatSessionService } from './chatSession.service';
 import { subscriptionService } from './subscription.service';
+import { mediaService } from './media.service';
 import { DAILY_MESSAGE_LIMITS } from '../constants/subscriptions';
 
 export class MessageService {
@@ -12,7 +13,8 @@ export class MessageService {
     chatSessionId: string,
     senderId: string,
     content: string,
-    messageType: 'text' | 'image' | 'file' | 'system' = 'text'
+    messageType: 'text' | 'image' | 'file' | 'system' = 'text',
+    mediaFiles?: Express.Multer.File[]
   ): Promise<Message> {
     // Verify sender is participant in chat
     const isParticipant = await chatSessionService.verifyParticipant(chatSessionId, senderId);
@@ -29,13 +31,34 @@ export class MessageService {
     // Check daily message limit
     await this.checkDailyMessageLimit(senderId);
 
-    // Validate content
-    if (!content || content.trim().length === 0) {
-      throw new BadRequestError('Message content cannot be empty');
+    // Validate content based on message type
+    if (messageType === 'text') {
+      if (!content || content.trim().length === 0) {
+        throw new BadRequestError('Message content cannot be empty');
+      }
+      if (content.length > 5000) {
+        throw new BadRequestError('Message content exceeds maximum length of 5000 characters');
+      }
     }
 
-    if (content.length > 5000) {
-      throw new BadRequestError('Message content exceeds maximum length of 5000 characters');
+    // Handle media uploads for image messages
+    let mediaAttachments: MessageMedia[] | undefined;
+    if (messageType === 'image' && mediaFiles && mediaFiles.length > 0) {
+      try {
+        const uploadResults = await mediaService.uploadImages(mediaFiles, senderId);
+        mediaAttachments = uploadResults.map(result => ({
+          ...result,
+          thumbnailUrl: mediaService.generateImageUrls(result.publicId).thumbnail,
+        }));
+        
+        // For image messages, content can be optional (caption)
+        if (!content) {
+          content = `Sent ${mediaAttachments.length} image${mediaAttachments.length > 1 ? 's' : ''}`;
+        }
+      } catch (error) {
+        logger.error('Failed to upload media files:', error);
+        throw error;
+      }
     }
 
     // Create message
@@ -47,6 +70,7 @@ export class MessageService {
         senderId,
         messageType,
         content: content.trim(),
+        mediaAttachments,
         isRead: false,
         isDeleted: false,
         sentAt: new Date(),
@@ -56,7 +80,7 @@ export class MessageService {
     // Update chat session's last message time
     await chatSessionService.updateLastMessageTime(chatSessionId);
 
-    logger.info(`Message sent: ${message.id} in chat ${chatSessionId}`);
+    logger.info(`Message sent: ${message.id} in chat ${chatSessionId} (type: ${messageType})`);
     return message;
   }
 
@@ -162,6 +186,14 @@ export class MessageService {
     // Only sender can delete their own message
     if (message.senderId !== userId) {
       throw new ForbiddenError('You can only delete your own messages');
+    }
+
+    // Delete media attachments from Cloudinary if present
+    if (message.mediaAttachments && Array.isArray(message.mediaAttachments)) {
+      const publicIds = message.mediaAttachments.map((media: MessageMedia) => media.publicId);
+      if (publicIds.length > 0) {
+        await mediaService.deleteImages(publicIds);
+      }
     }
 
     const [deletedMessage] = await db

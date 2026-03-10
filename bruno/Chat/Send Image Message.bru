@@ -1,0 +1,46 @@
+meta {
+  name: Send Image Message
+  type: http
+  seq: 8
+}
+
+post {
+  url: {{baseUrl}}/api/messages
+  body: multipartForm
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+body:multipart-form {
+  chatSessionId: {{chatSessionId}}
+  messageType: image
+  content: Check out these photos!
+  images: @file({{testImagePath}})
+}
+
+docs {
+  # Send Image Message
+  
+  This endpoint allows sending messages with image attachments.
+  
+  ## Form Data Fields:
+  - `chatSessionId` (required): UUID of the chat session
+  - `messageType` (required): Set to "image" for image messages
+  - `content` (optional): Caption/text content for the images
+  - `images` (required): One or more image files (max 5)
+  
+  ## File Requirements:
+  - Max 5 images per message
+  - Max 5MB per image
+  - Max 10MB total per message
+  - Supported formats: JPG, JPEG, PNG, GIF, WebP
+  
+  ## Response:
+  Returns message object with `mediaAttachments` array containing:
+  - Cloudinary URLs (original and optimized)
+  - Image metadata (dimensions, file size, format)
+  - Thumbnail URLs for chat previews
+}

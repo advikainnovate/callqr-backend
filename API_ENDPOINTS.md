@@ -670,26 +670,125 @@ PATCH /api/chat-sessions/:chatSessionId/block
 
 ## Message Endpoints
 
-### Send Message
+### Send Text Message
 ```
-POST /api/messages/send
+POST /api/messages
 ```
 **Auth:** Required  
+**Content-Type:** application/json  
 **Body:**
 ```json
 {
   "chatSessionId": "uuid (required)",
-  "content": "string (required)",
-  "messageType": "string (text|image|file|system, default: text)"
+  "content": "string (required, max 5000 chars)",
+  "messageType": "text (default)"
 }
 ```
+
+### Send Image Message
+```
+POST /api/messages
+```
+**Auth:** Required  
+**Content-Type:** multipart/form-data  
+**Form Data:**
+```
+chatSessionId: "uuid (required)"
+messageType: "image (required)"
+content: "string (optional, caption text)"
+images: File[] (required, max 5 files)
+```
+
+**File Requirements:**
+- Max 5 images per message
+- Max 5MB per image
+- Max 10MB total per message
+- Supported formats: JPG, JPEG, PNG, GIF, WebP
+- Automatic compression to 1-2MB
+- WebP conversion for optimization
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Message sent successfully",
+  "data": {
+    "id": "uuid",
+    "chatSessionId": "uuid",
+    "senderId": "uuid",
+    "messageType": "image",
+    "content": "Optional caption",
+    "mediaAttachments": [
+      {
+        "publicId": "callqr/messages/user123_1640995200000_abc123",
+        "url": "https://res.cloudinary.com/cloud/image/upload/v123/...",
+        "secureUrl": "https://res.cloudinary.com/cloud/image/upload/v123/...",
+        "width": 1200,
+        "height": 800,
+        "format": "webp",
+        "bytes": 156789,
+        "originalFilename": "photo.jpg",
+        "thumbnailUrl": "https://res.cloudinary.com/cloud/image/upload/w_150,h_150,c_fill,f_webp,q_auto/..."
+      }
+    ],
+    "isRead": false,
+    "sentAt": "2024-01-01T12:00:00.000Z"
+  }
+}
+```
+
+**Rate Limits:**
+- Free plan: 50 messages/day
+- Pro plan: 500 messages/day
+- Enterprise: Unlimited
 
 ### Get Messages
 ```
 GET /api/messages/:chatSessionId
 ```
 **Auth:** Required  
-**Query Params:** `limit`, `offset`
+**Query Params:** `limit` (default: 50, max: 100), `offset` (default: 0)  
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Messages retrieved successfully",
+  "data": {
+    "messages": [
+      {
+        "id": "uuid",
+        "chatSessionId": "uuid",
+        "senderId": "uuid",
+        "messageType": "text|image|file|system",
+        "content": "string",
+        "mediaAttachments": [
+          {
+            "publicId": "string",
+            "url": "string",
+            "secureUrl": "string",
+            "width": "number",
+            "height": "number",
+            "format": "string",
+            "bytes": "number",
+            "originalFilename": "string",
+            "thumbnailUrl": "string"
+          }
+        ],
+        "isRead": "boolean",
+        "sentAt": "ISO date",
+        "readAt": "ISO date | null"
+      }
+    ],
+    "pagination": {
+      "limit": "number",
+      "offset": "number",
+      "count": "number"
+    }
+  }
+}
+```
+
+**Note:** Returns only messages from chats where the authenticated user is a participant. Media attachments include multiple optimized image sizes.
 
 ### Mark Message as Read
 ```
@@ -711,9 +810,21 @@ DELETE /api/messages/:messageId
 
 ### Get Unread Count
 ```
-GET /api/messages/unread-count
+GET /api/messages/unread/count
 ```
-**Auth:** Required
+**Auth:** Required  
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Unread count retrieved successfully",
+  "data": {
+    "unreadCount": "number"
+  }
+}
+```
+
+**Note:** Returns total unread messages across all user's chat sessions (excluding own messages).
 
 ### Search Messages
 ```
@@ -721,6 +832,62 @@ GET /api/messages/:chatSessionId/search
 ```
 **Auth:** Required  
 **Query Params:** `query` (required)
+
+### Media Upload Error Responses
+
+**File Size Exceeded:**
+```json
+{
+  "success": false,
+  "message": "File size exceeds 5MB limit"
+}
+```
+
+**Too Many Files:**
+```json
+{
+  "success": false,
+  "message": "Maximum 5 images allowed per message"
+}
+```
+
+**Invalid Format:**
+```json
+{
+  "success": false,
+  "message": "Invalid file format. Allowed: jpg, jpeg, png, gif, webp"
+}
+```
+
+**Total Size Exceeded:**
+```json
+{
+  "success": false,
+  "message": "Image validation failed: Total upload size exceeds 10MB limit"
+}
+```
+
+**Rate Limit Exceeded:**
+```json
+{
+  "success": false,
+  "message": "Daily message limit reached for free plan (50/50)"
+}
+```
+
+### Image URL Variants
+
+Each uploaded image automatically generates multiple optimized versions:
+
+```javascript
+const imageUrls = {
+  thumbnail: "w_150,h_150,c_fill,f_webp,q_auto",     // 150x150 cropped
+  small: "w_300,h_300,c_limit,f_webp,q_auto",        // Max 300x300
+  medium: "w_600,h_600,c_limit,f_webp,q_auto",       // Max 600x600  
+  large: "w_1200,h_1200,c_limit,f_webp,q_auto",      // Max 1200x1200
+  original: "" // No transformations
+};
+```
 
 ---
 
@@ -1326,12 +1493,39 @@ GET /healthz
 **Response:**
 ```json
 {
-  "status": "ok",
+  "status": "ok|degraded|error",
   "timestamp": "ISO date",
   "uptime": "number (seconds)",
-  "environment": "string"
+  "environment": "string",
+  "services": {
+    "database": {
+      "status": "connected|error",
+      "details": "string"
+    },
+    "webrtc": {
+      "status": "running|error", 
+      "details": "string"
+    },
+    "cloudinary": {
+      "status": "connected|warning|error",
+      "details": "string"
+    },
+    "environment": {
+      "status": "ok",
+      "details": "string"
+    }
+  }
 }
 ```
+
+**Cloudinary Status:**
+- `connected`: Media uploads fully functional
+- `warning`: Credentials not configured (uploads disabled)
+- `error`: Connection failed or invalid credentials
+
+**HTTP Status Codes:**
+- `200`: All services healthy
+- `503`: One or more services degraded
 
 ### API Documentation
 ```

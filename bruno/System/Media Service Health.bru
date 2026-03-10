@@ -1,0 +1,39 @@
+meta {
+  name: Media Service Health
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/healthz
+  body: none
+  auth: none
+}
+
+docs {
+  # Media Service Health Check
+  
+  Check the health status of all services including Cloudinary media service.
+  
+  ## Response Fields:
+  - `status`: Overall system status (ok, degraded, error)
+  - `timestamp`: Current server timestamp
+  - `uptime`: Server uptime in seconds
+  - `environment`: Current environment (development, production)
+  - `services`: Object containing status of each service
+  
+  ## Service Statuses:
+  - `database`: PostgreSQL connection status
+  - `webrtc`: Socket.IO signaling service status
+  - `cloudinary`: Media upload service status
+  - `environment`: Environment configuration status
+  
+  ## Cloudinary Status Values:
+  - `connected`: Cloudinary API is reachable and configured
+  - `warning`: Credentials not configured (media uploads disabled)
+  - `error`: Connection failed or invalid credentials
+  
+  ## HTTP Status Codes:
+  - `200`: All services healthy
+  - `503`: One or more services degraded or failed
+}

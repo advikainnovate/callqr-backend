@@ -4,6 +4,7 @@ import { logger } from './utils';
 import { appConfig } from './config';
 import { WebRTCService } from './services/webrtc.service';
 import { db, client } from './db'; // Import database connection
+import { cloudinary } from './config/cloudinary';
 
 const PORT = appConfig.port;
 const server = createServer(app);
@@ -18,6 +19,7 @@ const checkServices = async () => {
   const services = {
     database: { status: 'unknown', details: '' },
     webrtc: { status: 'unknown', details: '' },
+    cloudinary: { status: 'unknown', details: '' },
     environment: { status: 'ok', details: process.env.NODE_ENV || 'development' }
   };
 
@@ -55,6 +57,39 @@ const checkServices = async () => {
     };
   }
 
+  // Check Cloudinary connection
+  try {
+    const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+    const apiKey = process.env.CLOUDINARY_API_KEY;
+    const apiSecret = process.env.CLOUDINARY_API_SECRET;
+
+    if (!cloudName || !apiKey || !apiSecret) {
+      services.cloudinary = {
+        status: 'warning',
+        details: 'Cloudinary credentials not configured (media uploads disabled)'
+      };
+    } else {
+      // Test Cloudinary connection by calling the API
+      const result = await cloudinary.api.ping();
+      if (result.status === 'ok') {
+        services.cloudinary = {
+          status: 'connected',
+          details: `Cloudinary connected (Cloud: ${cloudName})`
+        };
+      } else {
+        services.cloudinary = {
+          status: 'error',
+          details: 'Cloudinary ping failed'
+        };
+      }
+    }
+  } catch (error) {
+    services.cloudinary = {
+      status: 'error',
+      details: `Cloudinary connection failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+    };
+  }
+
   return services;
 };
 
@@ -71,13 +106,25 @@ const checkServices = async () => {
     // Log service status
     logger.info('📊 Service Status:');
     Object.entries(services).forEach(([service, status]) => {
-      const icon = status.status === 'connected' || status.status === 'running' || status.status === 'ok' ? '✅' : '❌';
+      let icon = '❌';
+      if (status.status === 'connected' || status.status === 'running' || status.status === 'ok') {
+        icon = '✅';
+      } else if (status.status === 'warning') {
+        icon = '⚠️';
+      }
       logger.info(`${icon} ${service.charAt(0).toUpperCase() + service.slice(1)}: ${status.status} - ${status.details}`);
     });
 
     // Check if critical services are working
     if (services.database.status === 'error') {
       throw new Error('Database connection failed - cannot start server');
+    }
+
+    // Log warnings for non-critical services
+    if (services.cloudinary.status === 'warning') {
+      logger.warn('⚠️  Media uploads will be disabled without Cloudinary configuration');
+    } else if (services.cloudinary.status === 'error') {
+      logger.warn('⚠️  Media uploads may not work properly due to Cloudinary connection issues');
     }
 
     logger.info('🚀 Starting server...');

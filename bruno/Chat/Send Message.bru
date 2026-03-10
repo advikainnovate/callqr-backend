@@ -5,7 +5,7 @@ meta {
 }
 
 post {
-  url: {{baseUrl}}/api/messages/send
+  url: {{baseUrl}}/api/messages
   body: json
   auth: bearer
 }
@@ -16,8 +16,30 @@ auth:bearer {
 
 body:json {
   {
-    "chatSessionId": "your-chat-session-id",
+    "chatSessionId": "{{chatSessionId}}",
     "content": "Hello! This is a test message.",
     "messageType": "text"
   }
+}
+
+docs {
+  # Send Text Message
+  
+  This endpoint allows sending text messages in a chat session.
+  
+  ## Request Body:
+  - `chatSessionId` (required): UUID of the chat session
+  - `content` (required): Message text content (max 5000 characters)
+  - `messageType` (optional): Set to "text" (default)
+  
+  ## Response:
+  Returns message object with:
+  - Message ID and metadata
+  - Sender information
+  - Timestamp and read status
+  
+  ## Rate Limits:
+  - Free plan: 50 messages/day
+  - Pro plan: 500 messages/day
+  - Enterprise: Unlimited
 }

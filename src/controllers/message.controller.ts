@@ -8,8 +8,17 @@ export class MessageController {
   sendMessage = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const senderId = req.user!.userId;
     const { chatSessionId, content, messageType } = req.body;
+    
+    // Get uploaded files if any
+    const mediaFiles = req.files as Express.Multer.File[] | undefined;
 
-    const message = await messageService.sendMessage(chatSessionId, senderId, content, messageType);
+    const message = await messageService.sendMessage(
+      chatSessionId, 
+      senderId, 
+      content, 
+      messageType,
+      mediaFiles
+    );
 
     sendSuccessResponse(res, 201, 'Message sent successfully', {
       id: message.id,
@@ -17,6 +26,7 @@ export class MessageController {
       senderId: message.senderId,
       messageType: message.messageType,
       content: message.content,
+      mediaAttachments: message.mediaAttachments,
       isRead: message.isRead,
       sentAt: message.sentAt,
     });
@@ -37,6 +47,7 @@ export class MessageController {
         senderId: msg.senderId,
         messageType: msg.messageType,
         content: msg.content,
+        mediaAttachments: msg.mediaAttachments,
         isRead: msg.isRead,
         sentAt: msg.sentAt,
         readAt: msg.readAt,
@@ -112,6 +123,7 @@ export class MessageController {
         senderId: msg.senderId,
         messageType: msg.messageType,
         content: msg.content,
+        mediaAttachments: msg.mediaAttachments,
         isRead: msg.isRead,
         sentAt: msg.sentAt,
         readAt: msg.readAt,
