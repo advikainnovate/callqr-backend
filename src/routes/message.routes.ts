@@ -10,6 +10,9 @@ import {
   markChatAsReadSchema,
   deleteMessageSchema,
   searchMessagesSchema,
+  markAsDeliveredSchema,
+  markChatAsDeliveredSchema,
+  getDeliveryStatusSchema,
 } from '../schemas/message.schema';
 
 const router = Router();
@@ -33,8 +36,17 @@ router.get('/:chatSessionId', authenticateToken, validate(getMessagesSchema), me
 // Mark message as read
 router.patch('/:messageId/read', authenticateToken, validate(markAsReadSchema), messageController.markAsRead);
 
+// Mark message as delivered
+router.patch('/:messageId/delivered', authenticateToken, validate(markAsDeliveredSchema), messageController.markAsDelivered);
+
 // Mark all messages in chat as read
 router.patch('/chat/:chatSessionId/read', authenticateToken, validate(markChatAsReadSchema), messageController.markChatAsRead);
+
+// Mark all messages in chat as delivered
+router.patch('/chat/:chatSessionId/delivered', authenticateToken, validate(markChatAsDeliveredSchema), messageController.markChatAsDelivered);
+
+// Get message delivery status
+router.get('/:messageId/status', authenticateToken, validate(getDeliveryStatusSchema), messageController.getDeliveryStatus);
 
 // Delete message
 router.delete('/:messageId', authenticateToken, validate(deleteMessageSchema), messageController.deleteMessage);

@@ -38,9 +38,11 @@ CREATE TABLE messages (
   message_type VARCHAR(20) NOT NULL DEFAULT 'text', -- text, image, file, system
   content TEXT NOT NULL,
   media_attachments JSONB, -- Array of media objects
+  is_delivered BOOLEAN DEFAULT false,
   is_read BOOLEAN DEFAULT false,
   is_deleted BOOLEAN DEFAULT false,
   sent_at TIMESTAMP DEFAULT NOW(),
+  delivered_at TIMESTAMP,
   read_at TIMESTAMP,
   created_at TIMESTAMP DEFAULT NOW()
 );
@@ -48,6 +50,7 @@ CREATE TABLE messages (
 -- Indexes for performance
 CREATE INDEX messages_chat_session_id_idx ON messages(chat_session_id);
 CREATE INDEX messages_sender_id_idx ON messages(sender_id);
+CREATE INDEX messages_is_delivered_idx ON messages(is_delivered);
 CREATE INDEX messages_is_read_idx ON messages(is_read);
 CREATE INDEX messages_sent_at_idx ON messages(sent_at);
 CREATE INDEX messages_message_type_idx ON messages(message_type);
@@ -84,7 +87,9 @@ interface MessageMedia {
 - **CDN Delivery**: Global Cloudinary CDN distribution
 
 ### 3. Message Management
+- **Delivery Status**: WhatsApp-style delivery tracking (sent → delivered → read)
 - **Read Receipts**: Track message read status with timestamps
+- **Delivery Receipts**: Track message delivery status with timestamps
 - **Soft Delete**: Messages marked as deleted, not physically removed
 - **Search**: Full-text search within chat sessions
 - **Pagination**: Efficient message loading with offset/limit
@@ -146,8 +151,11 @@ Form Data:
         "thumbnailUrl": "https://res.cloudinary.com/cloud/image/upload/w_150,h_150,c_fill,f_webp,q_auto/callqr/messages/user123_1640995200000_abc123"
       }
     ],
+    "isDelivered": false,
     "isRead": false,
-    "sentAt": "2024-01-01T12:00:00.000Z"
+    "sentAt": "2024-01-01T12:00:00.000Z",
+    "deliveredAt": null,
+    "readAt": null
   }
 }
 ```
@@ -156,6 +164,40 @@ Form Data:
 ```http
 GET /api/messages/:chatSessionId?limit=50&offset=0
 Authorization: Bearer <token>
+```
+
+### Mark Message as Delivered
+```http
+PATCH /api/messages/:messageId/delivered
+Authorization: Bearer <token>
+```
+
+### Mark All Chat Messages as Delivered
+```http
+PATCH /api/messages/chat/:chatSessionId/delivered
+Authorization: Bearer <token>
+```
+
+### Get Message Delivery Status
+```http
+GET /api/messages/:messageId/status
+Authorization: Bearer <token>
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Delivery status retrieved successfully",
+  "data": {
+    "sent": true,
+    "delivered": true,
+    "read": false,
+    "sentAt": "2024-01-01T12:00:00.000Z",
+    "deliveredAt": "2024-01-01T12:00:05.000Z",
+    "readAt": null
+  }
+}
 ```
 
 ### Mark Message as Read
@@ -194,8 +236,11 @@ Authorization: Bearer <token>
 **Core Methods:**
 - `sendMessage()` - Send text or image messages with validation
 - `getMessages()` - Retrieve paginated messages for a chat
+- `markAsDelivered()` - Mark individual message as delivered
+- `markChatMessagesAsDelivered()` - Mark all undelivered messages in chat as delivered
 - `markAsRead()` - Mark individual message as read
 - `markChatMessagesAsRead()` - Mark all unread messages in chat as read
+- `getDeliveryStatus()` - Get delivery and read status for a message
 - `deleteMessage()` - Soft delete message and cleanup media
 - `searchMessages()` - Search messages within a chat session
 - `getDailyMessageCount()` - Get user's daily message count for rate limiting
@@ -357,6 +402,13 @@ socket.to(chatSessionId).emit('new-message', {
   sentAt: message.sentAt
 });
 
+// Delivery receipt updates
+socket.to(chatSessionId).emit('message-delivered', {
+  messageId: message.id,
+  deliveredBy: userId,
+  deliveredAt: message.deliveredAt
+});
+
 // Read receipt updates
 socket.to(chatSessionId).emit('message-read', {
   messageId: message.id,
@@ -364,6 +416,16 @@ socket.to(chatSessionId).emit('message-read', {
   readAt: message.readAt
 });
 ```
+
+### Message Status Flow
+1. **Sent**: Message created in database (`sentAt` timestamp)
+2. **Delivered**: Recipient receives message (`isDelivered = true`, `deliveredAt` timestamp)
+3. **Read**: Recipient reads message (`isRead = true`, `readAt` timestamp)
+
+This follows WhatsApp-style delivery tracking with visual indicators:
+- ✓ Single check: Sent
+- ✓✓ Double check: Delivered  
+- ✓✓ Blue double check: Read
 
 ## Performance Optimizations
 

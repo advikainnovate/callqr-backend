@@ -1,0 +1,39 @@
+meta {
+  name: Mark Message as Delivered
+  type: http
+  seq: 11
+}
+
+patch {
+  url: {{baseUrl}}/api/messages/{{messageId}}/delivered
+  body: none
+  auth: bearer
+}
+
+params:path {
+  messageId: {{messageId}}
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+docs {
+  # Mark Message as Delivered
+  
+  This endpoint marks a specific message as delivered by the recipient.
+  
+  ## Usage:
+  - Called when recipient receives the message
+  - Updates `is_delivered = true` and sets `delivered_at` timestamp
+  - Only the recipient (not sender) can mark message as delivered
+  - Triggers Socket.IO event to notify sender
+  
+  ## Response:
+  Returns updated message delivery status with timestamps.
+  
+  ## Message Status Flow:
+  1. **Sent**: Message created in database
+  2. **Delivered**: Recipient receives message (this endpoint)
+  3. **Read**: Recipient reads message
+}

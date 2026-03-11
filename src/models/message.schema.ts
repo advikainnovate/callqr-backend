@@ -21,14 +21,17 @@ export const messages = pgTable('messages', {
   messageType: varchar('message_type', { length: 20 }).notNull().default('text'), // text, image, file, system
   content: text('content').notNull(),
   mediaAttachments: json('media_attachments').$type<MessageMedia[]>(), // Array of media objects
+  isDelivered: boolean('is_delivered').default(false),
   isRead: boolean('is_read').default(false),
   isDeleted: boolean('is_deleted').default(false),
   sentAt: timestamp('sent_at').defaultNow(),
+  deliveredAt: timestamp('delivered_at'),
   readAt: timestamp('read_at'),
   createdAt: timestamp('created_at').defaultNow(),
 }, (table) => ({
   chatSessionIdIdx: index('messages_chat_session_id_idx').on(table.chatSessionId),
   senderIdIdx: index('messages_sender_id_idx').on(table.senderId),
+  isDeliveredIdx: index('messages_is_delivered_idx').on(table.isDelivered),
   isReadIdx: index('messages_is_read_idx').on(table.isRead),
   sentAtIdx: index('messages_sent_at_idx').on(table.sentAt),
   messageTypeIdx: index('messages_message_type_idx').on(table.messageType),

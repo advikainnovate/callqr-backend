@@ -53,3 +53,21 @@ export const searchMessagesSchema = z.object({
     query: z.string().min(1),
   }),
 });
+
+export const markAsDeliveredSchema = z.object({
+  params: z.object({
+    messageId: z.string().uuid(),
+  }),
+});
+
+export const markChatAsDeliveredSchema = z.object({
+  params: z.object({
+    chatSessionId: z.string().uuid(),
+  }),
+});
+
+export const getDeliveryStatusSchema = z.object({
+  params: z.object({
+    messageId: z.string().uuid(),
+  }),
+});

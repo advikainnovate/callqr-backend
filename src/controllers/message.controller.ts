@@ -27,8 +27,11 @@ export class MessageController {
       messageType: message.messageType,
       content: message.content,
       mediaAttachments: message.mediaAttachments,
+      isDelivered: message.isDelivered,
       isRead: message.isRead,
       sentAt: message.sentAt,
+      deliveredAt: message.deliveredAt,
+      readAt: message.readAt,
     });
   });
 
@@ -48,8 +51,10 @@ export class MessageController {
         messageType: msg.messageType,
         content: msg.content,
         mediaAttachments: msg.mediaAttachments,
+        isDelivered: msg.isDelivered,
         isRead: msg.isRead,
         sentAt: msg.sentAt,
+        deliveredAt: msg.deliveredAt,
         readAt: msg.readAt,
       })),
       pagination: {
@@ -68,9 +73,44 @@ export class MessageController {
 
     sendSuccessResponse(res, 200, 'Message marked as read', {
       id: message.id,
+      isDelivered: message.isDelivered,
       isRead: message.isRead,
+      deliveredAt: message.deliveredAt,
       readAt: message.readAt,
     });
+  });
+
+  markAsDelivered = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const { messageId } = req.params;
+    const userId = req.user!.userId;
+
+    const message = await messageService.markAsDelivered(messageId, userId);
+
+    sendSuccessResponse(res, 200, 'Message marked as delivered', {
+      id: message.id,
+      isDelivered: message.isDelivered,
+      deliveredAt: message.deliveredAt,
+    });
+  });
+
+  markChatAsDelivered = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const { chatSessionId } = req.params;
+    const userId = req.user!.userId;
+
+    const count = await messageService.markChatMessagesAsDelivered(chatSessionId, userId);
+
+    sendSuccessResponse(res, 200, `${count} messages marked as delivered`, {
+      count,
+    });
+  });
+
+  getDeliveryStatus = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const { messageId } = req.params;
+    const userId = req.user!.userId;
+
+    const status = await messageService.getDeliveryStatus(messageId, userId);
+
+    sendSuccessResponse(res, 200, 'Delivery status retrieved successfully', status);
   });
 
   markChatAsRead = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
@@ -124,8 +164,10 @@ export class MessageController {
         messageType: msg.messageType,
         content: msg.content,
         mediaAttachments: msg.mediaAttachments,
+        isDelivered: msg.isDelivered,
         isRead: msg.isRead,
         sentAt: msg.sentAt,
+        deliveredAt: msg.deliveredAt,
         readAt: msg.readAt,
       })),
       query,
