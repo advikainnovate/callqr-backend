@@ -22,6 +22,7 @@
     "db:backup": "node scripts/backup-database.js",
     "db:restore": "node scripts/restore-database.js",
     "admin:create": "node scripts/create-admin.js",
+    "admin:fix-phone": "node scripts/fix-admin-phone-verification.js",
     "test:cloudinary": "node scripts/test-cloudinary.js",
     "deploy": "git pull && npm install && npm run build && pm2 restart callqr-backend"
   },

@@ -1,4 +1,4 @@
-import { eq, and, desc, sql, gte, like } from 'drizzle-orm';
+import { eq, and, desc, sql, gte, like, inArray } from 'drizzle-orm';
 import { db } from '../db';
 import { messages, type NewMessage, type Message, type MessageMedia } from '../models';
 import { v4 as uuidv4 } from 'uuid';
@@ -16,6 +16,11 @@ export class MessageService {
     messageType: 'text' | 'image' | 'file' | 'system' = 'text',
     mediaFiles?: Express.Multer.File[]
   ): Promise<Message> {
+    // Validate input parameters
+    if (!chatSessionId || !senderId) {
+      throw new BadRequestError('Chat session ID and sender ID are required');
+    }
+
     // Verify sender is participant in chat
     const isParticipant = await chatSessionService.verifyParticipant(chatSessionId, senderId);
     if (!isParticipant) {
@@ -211,19 +216,21 @@ export class MessageService {
   async getUnreadCount(userId: string): Promise<number> {
     // Get all chat sessions where user is participant
     const chatSessions = await chatSessionService.getUserChatSessions(userId);
-    const chatSessionIds = chatSessions.map((chat) => chat.id);
-
-    if (chatSessionIds.length === 0) {
+    
+    if (chatSessions.length === 0) {
       return 0;
     }
 
+    // Use Drizzle's inArray for safe parameter binding
+    const chatSessionIds = chatSessions.map((chat) => chat.id);
+    
     // Count unread messages in all user's chats (excluding user's own messages)
     const [result] = await db
       .select({ count: sql<number>`count(*)` })
       .from(messages)
       .where(
         and(
-          sql`${messages.chatSessionId} = ANY(${chatSessionIds})`,
+          inArray(messages.chatSessionId, chatSessionIds),
           eq(messages.isRead, false),
           eq(messages.isDeleted, false),
           sql`${messages.senderId} != ${userId}`

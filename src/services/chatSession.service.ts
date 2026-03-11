@@ -189,8 +189,20 @@ export class ChatSessionService {
   }
 
   async verifyParticipant(chatSessionId: string, userId: string): Promise<boolean> {
-    const chatSession = await this.getChatSessionById(chatSessionId);
-    return chatSession.participant1Id === userId || chatSession.participant2Id === userId;
+    // Validate UUID format first
+    if (!chatSessionId || typeof chatSessionId !== 'string') {
+      throw new BadRequestError('Invalid chat session ID format');
+    }
+    
+    try {
+      const chatSession = await this.getChatSessionById(chatSessionId);
+      return chatSession.participant1Id === userId || chatSession.participant2Id === userId;
+    } catch (error) {
+      if (error instanceof NotFoundError) {
+        return false; // Chat session doesn't exist, so user is not a participant
+      }
+      throw error; // Re-throw other errors
+    }
   }
 
   async getOtherParticipantId(chatSessionId: string, userId: string): Promise<string> {
