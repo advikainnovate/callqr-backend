@@ -325,6 +325,102 @@ export class MessageService {
 
     return message || null;
   }
+
+  async markAsDelivered(messageId: string, userId: string): Promise<Message> {
+    const [message] = await db
+      .select()
+      .from(messages)
+      .where(eq(messages.id, messageId))
+      .limit(1);
+
+    if (!message) {
+      throw new NotFoundError('Message not found');
+    }
+
+    // Verify user is participant in chat
+    const isParticipant = await chatSessionService.verifyParticipant(message.chatSessionId, userId);
+    if (!isParticipant) {
+      throw new ForbiddenError('You are not a participant in this chat');
+    }
+
+    // Only mark as delivered if user is not the sender and not already delivered
+    if (message.senderId === userId || message.isDelivered) {
+      return message;
+    }
+
+    const [updatedMessage] = await db
+      .update(messages)
+      .set({
+        isDelivered: true,
+        deliveredAt: new Date(),
+      })
+      .where(eq(messages.id, messageId))
+      .returning();
+
+    logger.info(`Message marked as delivered: ${messageId} by user ${userId}`);
+    return updatedMessage;
+  }
+
+  async markChatMessagesAsDelivered(chatSessionId: string, userId: string): Promise<number> {
+    // Verify user is participant in chat
+    const isParticipant = await chatSessionService.verifyParticipant(chatSessionId, userId);
+    if (!isParticipant) {
+      throw new ForbiddenError('You are not a participant in this chat');
+    }
+
+    // Mark all undelivered messages in this chat as delivered (except user's own messages)
+    const result = await db
+      .update(messages)
+      .set({
+        isDelivered: true,
+        deliveredAt: new Date(),
+      })
+      .where(
+        and(
+          eq(messages.chatSessionId, chatSessionId),
+          eq(messages.isDelivered, false),
+          sql`${messages.senderId} != ${userId}`
+        )
+      )
+      .returning();
+
+    logger.info(`Marked ${result.length} messages as delivered in chat ${chatSessionId}`);
+    return result.length;
+  }
+
+  async getDeliveryStatus(messageId: string, userId: string): Promise<{
+    sent: boolean;
+    delivered: boolean;
+    read: boolean;
+    sentAt: Date | null;
+    deliveredAt: Date | null;
+    readAt: Date | null;
+  }> {
+    const [message] = await db
+      .select()
+      .from(messages)
+      .where(eq(messages.id, messageId))
+      .limit(1);
+
+    if (!message) {
+      throw new NotFoundError('Message not found');
+    }
+
+    // Verify user is participant in chat
+    const isParticipant = await chatSessionService.verifyParticipant(message.chatSessionId, userId);
+    if (!isParticipant) {
+      throw new ForbiddenError('You are not a participant in this chat');
+    }
+
+    return {
+      sent: true, // If message exists, it was sent
+      delivered: message.isDelivered || false,
+      read: message.isRead || false,
+      sentAt: message.sentAt,
+      deliveredAt: message.deliveredAt,
+      readAt: message.readAt,
+    };
+  }
 }
 
 export const messageService = new MessageService();

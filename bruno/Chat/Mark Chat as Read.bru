@@ -5,13 +5,13 @@ meta {
 }
 
 patch {
-  url: {{baseUrl}}/api/messages/:chatSessionId/read-all
+  url: {{baseUrl}}/api/messages/chat/:chatSessionId/read
   body: none
   auth: bearer
 }
 
 params:path {
-  chatSessionId: your-chat-session-id
+  chatSessionId: {{chatSessionId}}
 }
 
 auth:bearer {

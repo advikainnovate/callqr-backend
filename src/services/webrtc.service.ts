@@ -208,6 +208,10 @@ export class WebRTCService {
         await this.handleMessageRead(socket, data);
       });
 
+      socket.on('message-delivered', async (data: { chatSessionId: string; messageId: string }) => {
+        await this.handleMessageDelivered(socket, data);
+      });
+
       // Handle disconnection
       socket.on('disconnect', () => {
         logger.info(`User disconnected from WebRTC: ${userId}`);
@@ -445,16 +449,43 @@ export class WebRTCService {
         senderId: socket.userId,
       });
       
-      // Confirm delivery to sender
-      socket.emit('message-delivered', {
+      // Confirm message was sent (not delivered yet)
+      socket.emit('message-sent', {
         chatSessionId,
         messageId,
+        status: 'sent',
+        sentAt: new Date().toISOString(),
       });
       
       logger.info(`Message ${messageId} sent in chat ${chatSessionId}`);
     } catch (error) {
       logger.error('Error handling chat message:', error);
       socket.emit('error', { message: 'Failed to send message' });
+    }
+  }
+
+  private async handleMessageDelivered(
+    socket: AuthenticatedSocket,
+    data: { messageId: string; chatSessionId: string }
+  ) {
+    try {
+      const { messageId, chatSessionId } = data;
+      
+      // Mark message as delivered in database
+      const { messageService } = await import('./message.service');
+      await messageService.markAsDelivered(messageId, socket.userId!);
+      
+      // Notify sender about delivery
+      socket.to(`chat:${chatSessionId}`).emit('message-delivered', {
+        messageId,
+        chatSessionId,
+        deliveredBy: socket.userId,
+        deliveredAt: new Date().toISOString(),
+      });
+      
+      logger.info(`Message ${messageId} delivered to user ${socket.userId}`);
+    } catch (error) {
+      logger.error('Error handling message delivery:', error);
     }
   }
 

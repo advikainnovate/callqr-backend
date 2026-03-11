@@ -1,0 +1,39 @@
+meta {
+  name: Get Message Status
+  type: http
+  seq: 13
+}
+
+get {
+  url: {{baseUrl}}/api/messages/{{messageId}}/status
+  body: none
+  auth: bearer
+}
+
+params:path {
+  messageId: {{messageId}}
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+docs {
+  # Get Message Delivery Status
+  
+  This endpoint retrieves the delivery and read status of a specific message.
+  
+  ## Usage:
+  - Check if message was sent, delivered, and read
+  - Get timestamps for each status change
+  - Useful for implementing WhatsApp-style message status indicators
+  
+  ## Response:
+  Returns delivery status object with:
+  - `sent`: Always true if message exists
+  - `delivered`: Boolean indicating if message was delivered
+  - `read`: Boolean indicating if message was read
+  - `sentAt`: Timestamp when message was sent
+  - `deliveredAt`: Timestamp when message was delivered (null if not delivered)
+  - `readAt`: Timestamp when message was read (null if not read)
+}
