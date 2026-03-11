@@ -61,8 +61,12 @@ export class AuthController {
 
     const user = await userService.authenticateUser(username, password);
 
-    // Check if phone is verified
-    if (user.isPhoneVerified !== 'true') {
+    // Check if user is admin (admins bypass phone verification)
+    const ADMIN_USER_IDS = (process.env.ADMIN_USER_IDS || '').split(',').filter(Boolean);
+    const isAdmin = ADMIN_USER_IDS.includes(user.id);
+
+    // Check if phone is verified (skip for admins)
+    if (!isAdmin && user.isPhoneVerified !== 'true') {
       res.status(403).json({
         success: false,
         message: 'Please verify your phone number before logging in',
@@ -75,8 +79,8 @@ export class AuthController {
       return;
     }
 
-    // Check if account is pending verification
-    if (user.status === 'pending_verification') {
+    // Check if account is pending verification (skip for admins)
+    if (!isAdmin && user.status === 'pending_verification') {
       res.status(403).json({
         success: false,
         message: 'Your account is pending phone verification',

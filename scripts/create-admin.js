@@ -102,8 +102,10 @@ async function createAdmin() {
     console.log(`   Username: ${username}`);
     console.log(`   User ID:  ${userId}`);
     console.log(`   Status:   active`);
-    console.log(`   Phone Verified: true (bypassed for admin)`);
+    console.log(`   Phone Verified: true (automatically set for admin)`);
     console.log(`   Plan:     free`);
+    console.log(`   Email:    ${email || 'not provided (optional for admin)'}`);
+    console.log(`   Phone:    ${phone || 'not provided (optional for admin)'}`);
 
     console.log('\n🔐 Next Steps:');
     console.log('1. Add this user ID to your .env file:');
@@ -116,6 +118,7 @@ async function createAdmin() {
     console.log(`   Password: [the password you entered]`);
     console.log('\n4. Test admin access:');
     console.log(`   GET /api/admin/users`);
+    console.log('\n💡 Note: Admin users bypass phone verification requirements!');
 
   } catch (error) {
     console.error('\n❌ Error creating admin user:', error.message);
