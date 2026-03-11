@@ -79,10 +79,11 @@ async function createAdmin() {
     const userId = uuidv4();
     await sql`
       INSERT INTO users (
-        id, username, password_hash, email, email_hash, phone, phone_hash, status, created_at, updated_at
+        id, username, password_hash, email, email_hash, phone, phone_hash, 
+        status, is_phone_verified, created_at, updated_at
       ) VALUES (
         ${userId}, ${username}, ${passwordHash}, ${emailEncrypted}, ${emailHash}, 
-        ${phoneEncrypted}, ${phoneHash}, 'active', NOW(), NOW()
+        ${phoneEncrypted}, ${phoneHash}, 'active', 'true', NOW(), NOW()
       )
     `;
 
@@ -101,7 +102,8 @@ async function createAdmin() {
     console.log(`   Username: ${username}`);
     console.log(`   User ID:  ${userId}`);
     console.log(`   Status:   active`);
-    console.log(`   Plan:     FREE`);
+    console.log(`   Phone Verified: true (bypassed for admin)`);
+    console.log(`   Plan:     free`);
 
     console.log('\n🔐 Next Steps:');
     console.log('1. Add this user ID to your .env file:');

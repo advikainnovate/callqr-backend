@@ -24,6 +24,9 @@ router.post(
   messageController.sendMessage
 );
 
+// Get unread count (MUST be before /:chatSessionId route)
+router.get('/unread/count', authenticateToken, messageController.getUnreadCount);
+
 // Get messages for a chat session
 router.get('/:chatSessionId', authenticateToken, validate(getMessagesSchema), messageController.getMessages);
 
@@ -36,10 +39,7 @@ router.patch('/chat/:chatSessionId/read', authenticateToken, validate(markChatAs
 // Delete message
 router.delete('/:messageId', authenticateToken, validate(deleteMessageSchema), messageController.deleteMessage);
 
-// Get unread count
-router.get('/unread/count', authenticateToken, messageController.getUnreadCount);
-
-// Search messages
+// Search messages (MUST be after /:chatSessionId route)
 router.get('/:chatSessionId/search', authenticateToken, validate(searchMessagesSchema), messageController.searchMessages);
 
 export default router;

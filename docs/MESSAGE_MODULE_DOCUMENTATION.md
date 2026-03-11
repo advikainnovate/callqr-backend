@@ -504,6 +504,18 @@ Error: You are not a participant in this chat
 Solution: Verify user has access to the chat session
 ```
 
+**5. Route Not Found (404)**
+```
+Error: Cannot GET /api/messages/unread/count
+Solution: Ensure correct endpoint URLs and route order
+```
+
+**6. Chat Session Errors (403)**
+```
+Error: You are not a participant in this chat
+Solution: Verify chatSessionId exists and user has access
+```
+
 ### Debug Commands
 ```bash
 # Check service health
@@ -517,7 +529,33 @@ npm run db:studio
 
 # View server logs
 npm run dev
+
+# Test specific endpoints
+curl -H "Authorization: Bearer TOKEN" http://localhost:9001/api/messages/unread/count
 ```
+
+## Recent Issues Fixed
+
+### Critical Route Conflicts (Fixed)
+**Issue**: Route order conflict causing endpoints to be unreachable.
+- `/api/messages/unread/count` was returning 404
+- `/api/messages/{chatSessionId}/search` was not working
+- **Fix**: Reordered routes to put specific paths before parameterized ones
+
+### SQL Security Improvements (Fixed)
+**Issue**: Potential SQL injection risk in `getUnreadCount()` method.
+- Unsafe `ANY()` SQL usage with user-provided data
+- **Fix**: Replaced with Drizzle's safe `inArray()` function
+
+### Performance Optimizations (Fixed)
+**Issue**: Inefficient database queries for users with many chat sessions.
+- Poor performance with large chat session arrays
+- **Fix**: Optimized queries using proper Drizzle ORM methods
+
+### Enhanced Input Validation (Fixed)
+**Issue**: Missing validation for chat session IDs.
+- Potential crashes with malformed UUIDs
+- **Fix**: Added comprehensive input validation and error handling
 
 ## Future Enhancements
 
