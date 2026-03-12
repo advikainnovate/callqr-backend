@@ -27,6 +27,12 @@ export class CallSessionService {
       throw new BadRequestError('Cannot call yourself');
     }
 
+    // NEW: Check if receiver has blocked the caller
+    const isBlocked = await userService.isUserBlocked(qrCode.assignedUserId, callerId);
+    if (isBlocked) {
+      throw new ForbiddenError('Unable to initiate call');
+    }
+
     // Check receiver's daily call limit
     await subscriptionService.checkDailyCallLimit(qrCode.assignedUserId);
 

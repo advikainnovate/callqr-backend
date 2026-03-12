@@ -6,6 +6,7 @@ import { logger, NotFoundError, BadRequestError, ForbiddenError, TooManyRequests
 import { chatSessionService } from './chatSession.service';
 import { subscriptionService } from './subscription.service';
 import { mediaService } from './media.service';
+import { userService } from './user.service';
 import { DAILY_MESSAGE_LIMITS } from '../constants/subscriptions';
 
 export class MessageService {
@@ -31,6 +32,16 @@ export class MessageService {
     const chatSession = await chatSessionService.getChatSessionById(chatSessionId);
     if (chatSession.status !== 'active') {
       throw new BadRequestError(`Cannot send message to ${chatSession.status} chat`);
+    }
+
+    // NEW: Check if either participant has blocked the other
+    const otherParticipantId = chatSession.participant1Id === senderId 
+      ? chatSession.participant2Id 
+      : chatSession.participant1Id;
+      
+    const isBlocked = await userService.isUserBlocked(otherParticipantId, senderId);
+    if (isBlocked) {
+      throw new ForbiddenError('Unable to send message');
     }
 
     // Check daily message limit

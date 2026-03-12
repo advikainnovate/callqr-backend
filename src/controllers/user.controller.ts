@@ -106,6 +106,49 @@ export class UserController {
       });
     }
   });
+
+  // ==================== USER BLOCKING ENDPOINTS ====================
+
+  blockUserById = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const blockerId = req.user!.userId;
+    const { userId: blockedUserId } = req.params;
+    const { reason } = req.body;
+
+    await userService.blockUserById(blockerId, blockedUserId, reason);
+
+    sendSuccessResponse(res, 200, 'User blocked successfully', {
+      blockedUserId,
+      reason,
+    });
+  });
+
+  unblockUserById = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const blockerId = req.user!.userId;
+    const { userId: blockedUserId } = req.params;
+
+    await userService.unblockUserById(blockerId, blockedUserId);
+
+    sendSuccessResponse(res, 200, 'User unblocked successfully', {
+      unblockedUserId: blockedUserId,
+    });
+  });
+
+  getBlockedUsers = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const blockerId = req.user!.userId;
+    const limit = req.query.limit ? parseInt(req.query.limit as string) : 50;
+    const offset = req.query.offset ? parseInt(req.query.offset as string) : 0;
+
+    const blockedUsers = await userService.getBlockedUsers(blockerId, limit, offset);
+
+    sendSuccessResponse(res, 200, 'Blocked users retrieved successfully', {
+      users: blockedUsers.map(user => ({
+        id: user.id,
+        username: user.username,
+        status: user.status,
+      })),
+      count: blockedUsers.length,
+    });
+  });
 }
 
 export const userController = new UserController();
