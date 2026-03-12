@@ -28,6 +28,12 @@ export class ChatSessionService {
       throw new BadRequestError('Cannot chat with yourself');
     }
 
+    // NEW: Check if receiver has blocked the initiator
+    const isBlocked = await userService.isUserBlocked(qrCode.assignedUserId, initiatorId);
+    if (isBlocked) {
+      throw new ForbiddenError('Unable to initiate chat');
+    }
+
     // Check if chat session already exists between these users
     const existingChat = await this.getChatSessionByParticipants(initiatorId, qrCode.assignedUserId);
     if (existingChat && existingChat.status === 'active') {

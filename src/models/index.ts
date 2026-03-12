@@ -6,3 +6,4 @@ export * from './report.schema';
 export * from './chatSession.schema';
 export * from './message.schema';
 export * from './payment.schema';
+export * from './userBlock.schema';

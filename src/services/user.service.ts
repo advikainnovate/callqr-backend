@@ -1,6 +1,6 @@
-import { eq, or } from 'drizzle-orm';
+import { eq, or, and } from 'drizzle-orm';
 import { db } from '../db';
-import { users, type NewUser, type User } from '../models';
+import { users, userBlocks, type NewUser, type User, type NewUserBlock } from '../models';
 import { v4 as uuidv4 } from 'uuid';
 import { logger, ConflictError, NotFoundError, BadRequestError, UnauthorizedError, ForbiddenError } from '../utils';
 import crypto from 'crypto';
@@ -576,6 +576,111 @@ export class UserService {
       .where(eq(users.id, userId));
 
     logger.info(`Password reset successfully for user ${userId}`);
+  }
+
+  // ==================== USER BLOCKING METHODS ====================
+
+  async blockUserById(blockerId: string, blockedUserId: string, reason?: string): Promise<void> {
+    if (blockerId === blockedUserId) {
+      throw new BadRequestError('Cannot block yourself');
+    }
+
+    // Verify both users exist
+    await this.getUserById(blockerId);
+    await this.getUserById(blockedUserId);
+
+    try {
+      await db.insert(userBlocks).values({
+        id: uuidv4(),
+        blockerId,
+        blockedUserId,
+        reason,
+      });
+
+      logger.info(`User ${blockerId} blocked user ${blockedUserId}${reason ? ` for reason: ${reason}` : ''}`);
+    } catch (error: any) {
+      // Handle unique constraint violation (user already blocked)
+      if (error.code === '23505') {
+        throw new BadRequestError('User is already blocked');
+      }
+      throw error;
+    }
+  }
+
+  async unblockUserById(blockerId: string, blockedUserId: string): Promise<void> {
+    const result = await db
+      .delete(userBlocks)
+      .where(
+        and(
+          eq(userBlocks.blockerId, blockerId),
+          eq(userBlocks.blockedUserId, blockedUserId)
+        )
+      );
+
+    logger.info(`User ${blockerId} unblocked user ${blockedUserId}`);
+  }
+
+  async isUserBlocked(blockerId: string, blockedUserId: string): Promise<boolean> {
+    const [block] = await db
+      .select()
+      .from(userBlocks)
+      .where(
+        and(
+          eq(userBlocks.blockerId, blockerId),
+          eq(userBlocks.blockedUserId, blockedUserId)
+        )
+      )
+      .limit(1);
+
+    return !!block;
+  }
+
+  async getBlockedUsers(blockerId: string, limit: number = 50, offset: number = 0): Promise<User[]> {
+    const blockedUserIds = await db
+      .select({ blockedUserId: userBlocks.blockedUserId })
+      .from(userBlocks)
+      .where(eq(userBlocks.blockerId, blockerId))
+      .limit(limit)
+      .offset(offset);
+
+    if (blockedUserIds.length === 0) {
+      return [];
+    }
+
+    const userIds = blockedUserIds.map(b => b.blockedUserId);
+    return db
+      .select()
+      .from(users)
+      .where(
+        and(
+          eq(users.status, 'active'),
+          or(...userIds.map(id => eq(users.id, id)))
+        )
+      );
+  }
+
+  async getUsersWhoBlockedMe(userId: string, limit: number = 50, offset: number = 0): Promise<User[]> {
+    const blockerIds = await db
+      .select({ blockerId: userBlocks.blockerId })
+      .from(userBlocks)
+      .where(eq(userBlocks.blockedUserId, userId))
+      .limit(limit)
+      .offset(offset);
+
+    if (blockerIds.length === 0) {
+      return [];
+    }
+
+    const userIds = blockerIds.map(b => b.blockerId);
+    return db
+      .select()
+      .from(users)
+      .where(
+        and(
+          eq(users.status, 'active'),
+          or(...userIds.map(id => eq(users.id, id)))
+        )
+      );
   }
 }
 

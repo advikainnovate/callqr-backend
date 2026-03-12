@@ -10,6 +10,11 @@ import {
   verifyPhoneSchema,
   verifyEmailSchema,
 } from '../schemas/user.schema';
+import {
+  blockUserSchema,
+  unblockUserSchema,
+  getBlockedUsersSchema,
+} from '../schemas/userBlock.schema';
 
 const router = Router();
 
@@ -33,5 +38,16 @@ router.post('/verify/phone', validate(verifyPhoneSchema), userController.verifyP
 
 // Verify email
 router.post('/verify/email', validate(verifyEmailSchema), userController.verifyEmail);
+
+// ==================== USER BLOCKING ROUTES ====================
+
+// Block a user (user-to-user blocking)
+router.post('/:userId/user-block', authenticateToken, validate(blockUserSchema), userController.blockUserById);
+
+// Unblock a user
+router.delete('/:userId/user-unblock', authenticateToken, validate(unblockUserSchema), userController.unblockUserById);
+
+// Get list of blocked users
+router.get('/blocked/list', authenticateToken, validate(getBlockedUsersSchema), userController.getBlockedUsers);
 
 export default router;
