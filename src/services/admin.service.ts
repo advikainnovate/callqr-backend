@@ -2,8 +2,23 @@ import { eq, and, desc, sql, gte, lte, or, count } from 'drizzle-orm';
 import { db } from '../db';
 import { users, qrCodes, callSessions, chatSessions, messages, subscriptions, bugReports } from '../models';
 import { logger, NotFoundError, ForbiddenError } from '../utils';
+import { appConfig } from '../config';
+import crypto from 'crypto';
 
 export class AdminService {
+  // Decryption method for admin access to user data
+  private decryptData(encryptedData: string): string {
+    const algorithm = 'aes-256-cbc';
+    const key = Buffer.from(appConfig.encryptionKey, 'hex');
+    const parts = encryptedData.split(':');
+    const iv = Buffer.from(parts[0], 'hex');
+    const encrypted = parts[1];
+    const decipher = crypto.createDecipheriv(algorithm, key, iv);
+    let decrypted = decipher.update(encrypted, 'hex', 'utf8');
+    decrypted += decipher.final('utf8');
+    return decrypted;
+  }
+
   // ==================== OVERVIEW STATS ====================
   
   async getOverviewStats() {
@@ -126,7 +141,19 @@ export class AdminService {
       .where(conditions.length > 0 ? and(...conditions) : undefined);
 
     return {
-      users: usersList,
+      users: usersList.map(user => ({
+        id: user.id,
+        username: user.username,
+        phone: user.phone ? this.decryptData(user.phone) : null,
+        email: user.email ? this.decryptData(user.email) : null,
+        status: user.status,
+        isPhoneVerified: user.isPhoneVerified,
+        isGloballyBlocked: user.isGloballyBlocked,
+        globalBlockReason: user.globalBlockReason,
+        globalBlockedAt: user.globalBlockedAt,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt,
+      })),
       total: Number(totalResult.count),
       limit,
       offset,
@@ -1089,9 +1116,11 @@ export class AdminService {
     return usersList.map((user) => ({
       id: user.id,
       username: user.username,
-      phoneHash: user.phoneHash,
-      emailHash: user.emailHash,
+      phone: user.phone ? this.decryptData(user.phone) : null,
+      email: user.email ? this.decryptData(user.email) : null,
       status: user.status,
+      isPhoneVerified: user.isPhoneVerified,
+      isGloballyBlocked: user.isGloballyBlocked,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
     }));
