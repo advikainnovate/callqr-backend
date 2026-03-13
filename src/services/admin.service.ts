@@ -1,6 +1,14 @@
 import { eq, and, desc, sql, gte, lte, or, count } from 'drizzle-orm';
 import { db } from '../db';
-import { users, qrCodes, callSessions, chatSessions, messages, subscriptions, bugReports } from '../models';
+import {
+  users,
+  qrCodes,
+  callSessions,
+  chatSessions,
+  messages,
+  subscriptions,
+  bugReports,
+} from '../models';
 import { logger, NotFoundError, ForbiddenError } from '../utils';
 import { appConfig } from '../config';
 import crypto from 'crypto';
@@ -8,19 +16,30 @@ import crypto from 'crypto';
 export class AdminService {
   // Decryption method for admin access to user data
   private decryptData(encryptedData: string): string {
-    const algorithm = 'aes-256-cbc';
-    const key = Buffer.from(appConfig.encryptionKey, 'hex');
-    const parts = encryptedData.split(':');
-    const iv = Buffer.from(parts[0], 'hex');
-    const encrypted = parts[1];
-    const decipher = crypto.createDecipheriv(algorithm, key, iv);
-    let decrypted = decipher.update(encrypted, 'hex', 'utf8');
-    decrypted += decipher.final('utf8');
-    return decrypted;
+    try {
+      const algorithm = 'aes-256-cbc';
+      const key = Buffer.from(appConfig.encryptionKey, 'hex');
+      const parts = encryptedData.split(':');
+
+      if (parts.length !== 2) {
+        logger.warn('Invalid encrypted data format');
+        return '[INVALID_DATA]';
+      }
+
+      const iv = Buffer.from(parts[0], 'hex');
+      const encrypted = parts[1];
+      const decipher = crypto.createDecipheriv(algorithm, key, iv);
+      let decrypted = decipher.update(encrypted, 'hex', 'utf8');
+      decrypted += decipher.final('utf8');
+      return decrypted;
+    } catch (error) {
+      logger.error('Decryption failed:', error);
+      return '[DECRYPTION_ERROR]';
+    }
   }
 
   // ==================== OVERVIEW STATS ====================
-  
+
   async getOverviewStats() {
     // Get user counts by status
     const userStats = await db
@@ -79,16 +98,16 @@ export class AdminService {
     return {
       users: {
         total: userStats.reduce((sum, stat) => sum + Number(stat.count), 0),
-        active: userStats.find((s) => s.status === 'active')?.count || 0,
-        blocked: userStats.find((s) => s.status === 'blocked')?.count || 0,
-        deleted: userStats.find((s) => s.status === 'deleted')?.count || 0,
+        active: userStats.find(s => s.status === 'active')?.count || 0,
+        blocked: userStats.find(s => s.status === 'blocked')?.count || 0,
+        deleted: userStats.find(s => s.status === 'deleted')?.count || 0,
       },
       qrCodes: {
         total: qrStats.reduce((sum, stat) => sum + Number(stat.count), 0),
-        unassigned: qrStats.find((s) => s.status === 'unassigned')?.count || 0,
-        active: qrStats.find((s) => s.status === 'active')?.count || 0,
-        disabled: qrStats.find((s) => s.status === 'disabled')?.count || 0,
-        revoked: qrStats.find((s) => s.status === 'revoked')?.count || 0,
+        unassigned: qrStats.find(s => s.status === 'unassigned')?.count || 0,
+        active: qrStats.find(s => s.status === 'active')?.count || 0,
+        disabled: qrStats.find(s => s.status === 'disabled')?.count || 0,
+        revoked: qrStats.find(s => s.status === 'revoked')?.count || 0,
       },
       calls: {
         today: Number(todayCalls.count),
@@ -181,7 +200,12 @@ export class AdminService {
     const [subscription] = await db
       .select()
       .from(subscriptions)
-      .where(and(eq(subscriptions.userId, userId), eq(subscriptions.status, 'active')))
+      .where(
+        and(
+          eq(subscriptions.userId, userId),
+          eq(subscriptions.status, 'active')
+        )
+      )
       .limit(1);
 
     // Get call stats
@@ -190,7 +214,12 @@ export class AdminService {
         totalCalls: sql<number>`count(*)`,
       })
       .from(callSessions)
-      .where(or(eq(callSessions.callerId, userId), eq(callSessions.receiverId, userId)));
+      .where(
+        or(
+          eq(callSessions.callerId, userId),
+          eq(callSessions.receiverId, userId)
+        )
+      );
 
     // Get chat stats
     const [chatStats] = await db
@@ -199,7 +228,10 @@ export class AdminService {
       })
       .from(chatSessions)
       .where(
-        or(eq(chatSessions.participant1Id, userId), eq(chatSessions.participant2Id, userId))
+        or(
+          eq(chatSessions.participant1Id, userId),
+          eq(chatSessions.participant2Id, userId)
+        )
       );
 
     // Get message stats
@@ -322,7 +354,14 @@ export class AdminService {
     limit?: number;
     offset?: number;
   }) {
-    const { startDate, endDate, status, userId, limit = 50, offset = 0 } = filters || {};
+    const {
+      startDate,
+      endDate,
+      status,
+      userId,
+      limit = 50,
+      offset = 0,
+    } = filters || {};
 
     let query = db
       .select({
@@ -342,7 +381,10 @@ export class AdminService {
       })
       .from(callSessions)
       .leftJoin(users, eq(callSessions.callerId, users.id))
-      .leftJoin(sql`users as receiver`, sql`${callSessions.receiverId} = receiver.id`)
+      .leftJoin(
+        sql`users as receiver`,
+        sql`${callSessions.receiverId} = receiver.id`
+      )
       .leftJoin(qrCodes, eq(callSessions.qrId, qrCodes.id));
 
     const conditions = [];
@@ -357,7 +399,10 @@ export class AdminService {
     }
     if (userId) {
       conditions.push(
-        or(eq(callSessions.callerId, userId), eq(callSessions.receiverId, userId))
+        or(
+          eq(callSessions.callerId, userId),
+          eq(callSessions.receiverId, userId)
+        )
       );
     }
 
@@ -442,7 +487,14 @@ export class AdminService {
     limit?: number;
     offset?: number;
   }) {
-    const { startDate, endDate, status, userId, limit = 50, offset = 0 } = filters || {};
+    const {
+      startDate,
+      endDate,
+      status,
+      userId,
+      limit = 50,
+      offset = 0,
+    } = filters || {};
 
     let query = db
       .select({
@@ -462,7 +514,10 @@ export class AdminService {
       })
       .from(chatSessions)
       .leftJoin(users, eq(chatSessions.participant1Id, users.id))
-      .leftJoin(sql`users as participant2`, sql`${chatSessions.participant2Id} = participant2.id`)
+      .leftJoin(
+        sql`users as participant2`,
+        sql`${chatSessions.participant2Id} = participant2.id`
+      )
       .leftJoin(qrCodes, eq(chatSessions.qrId, qrCodes.id));
 
     const conditions = [];
@@ -612,24 +667,26 @@ export class AdminService {
       .orderBy(sql`EXTRACT(HOUR FROM ${callSessions.startedAt})`);
 
     // Success rate
-    const connectedCalls = callsByStatus.find((s) => s.status === 'connected')?.count || 0;
-    const successRate = Number(totalCalls.count) > 0 
-      ? (Number(connectedCalls) / Number(totalCalls.count)) * 100 
-      : 0;
+    const connectedCalls =
+      callsByStatus.find(s => s.status === 'connected')?.count || 0;
+    const successRate =
+      Number(totalCalls.count) > 0
+        ? (Number(connectedCalls) / Number(totalCalls.count)) * 100
+        : 0;
 
     return {
       totalCalls: Number(totalCalls.count),
       averageDuration: Math.round(Number(avgDuration.avgDuration) || 0),
       successRate: Math.round(successRate * 100) / 100,
-      callsByStatus: callsByStatus.map((s) => ({
+      callsByStatus: callsByStatus.map(s => ({
         status: s.status,
         count: Number(s.count),
       })),
-      callsOverTime: callsOverTime.map((c) => ({
+      callsOverTime: callsOverTime.map(c => ({
         date: c.date,
         count: Number(c.count),
       })),
-      callsByHour: callsByHour.map((c) => ({
+      callsByHour: callsByHour.map(c => ({
         hour: Number(c.hour),
         count: Number(c.count),
       })),
@@ -653,9 +710,10 @@ export class AdminService {
       .where(gte(messages.sentAt, startDate));
 
     // Average messages per chat
-    const avgMessagesPerChat = Number(totalChats.count) > 0
-      ? Number(totalMessages.count) / Number(totalChats.count)
-      : 0;
+    const avgMessagesPerChat =
+      Number(totalChats.count) > 0
+        ? Number(totalMessages.count) / Number(totalChats.count)
+        : 0;
 
     // Chats by status
     const chatsByStatus = await db
@@ -708,28 +766,29 @@ export class AdminService {
       .from(messages)
       .where(gte(messages.sentAt, startDate));
 
-    const readRate = Number(readStats.total) > 0
-      ? (Number(readStats.read) / Number(readStats.total)) * 100
-      : 0;
+    const readRate =
+      Number(readStats.total) > 0
+        ? (Number(readStats.read) / Number(readStats.total)) * 100
+        : 0;
 
     return {
       totalChats: Number(totalChats.count),
       totalMessages: Number(totalMessages.count),
       averageMessagesPerChat: Math.round(avgMessagesPerChat * 100) / 100,
       readRate: Math.round(readRate * 100) / 100,
-      chatsByStatus: chatsByStatus.map((s) => ({
+      chatsByStatus: chatsByStatus.map(s => ({
         status: s.status,
         count: Number(s.count),
       })),
-      messagesOverTime: messagesOverTime.map((m) => ({
+      messagesOverTime: messagesOverTime.map(m => ({
         date: m.date,
         count: Number(m.count),
       })),
-      messagesByHour: messagesByHour.map((m) => ({
+      messagesByHour: messagesByHour.map(m => ({
         hour: Number(m.hour),
         count: Number(m.count),
       })),
-      messagesByType: messagesByType.map((m) => ({
+      messagesByType: messagesByType.map(m => ({
         type: m.type,
         count: Number(m.count),
       })),
@@ -752,7 +811,7 @@ export class AdminService {
       .orderBy(sql`DATE(${users.createdAt})`);
 
     return {
-      userGrowth: userGrowth.map((u) => ({
+      userGrowth: userGrowth.map(u => ({
         date: u.date,
         count: Number(u.count),
       })),
@@ -830,11 +889,11 @@ export class AdminService {
       .groupBy(sql`severity`);
 
     return {
-      byStatus: reportsByStatus.map((r) => ({
+      byStatus: reportsByStatus.map(r => ({
         status: r.status,
         count: Number(r.count),
       })),
-      bySeverity: reportsBySeverity.map((r) => ({
+      bySeverity: reportsBySeverity.map(r => ({
         severity: r.severity,
         count: Number(r.count),
       })),
@@ -877,11 +936,11 @@ export class AdminService {
 
     return {
       totalActive: Number(totalActive.count),
-      usersByPlan: usersByPlan.map((u) => ({
+      usersByPlan: usersByPlan.map(u => ({
         plan: u.plan,
         count: Number(u.count),
       })),
-      subscriptionChanges: subscriptionChanges.map((s) => ({
+      subscriptionChanges: subscriptionChanges.map(s => ({
         date: s.date,
         plan: s.plan,
         count: Number(s.count),
@@ -955,7 +1014,10 @@ export class AdminService {
       })
       .from(callSessions)
       .leftJoin(users, eq(callSessions.callerId, users.id))
-      .leftJoin(sql`users as receiver`, sql`${callSessions.receiverId} = receiver.id`)
+      .leftJoin(
+        sql`users as receiver`,
+        sql`${callSessions.receiverId} = receiver.id`
+      )
       .where(
         or(
           eq(callSessions.status, 'initiated'),
@@ -965,7 +1027,7 @@ export class AdminService {
       )
       .orderBy(desc(callSessions.startedAt));
 
-    return activeCalls.map((c) => ({
+    return activeCalls.map(c => ({
       ...c.call,
       caller: c.caller,
       receiver: c.receiver,
@@ -990,11 +1052,14 @@ export class AdminService {
       })
       .from(chatSessions)
       .leftJoin(users, eq(chatSessions.participant1Id, users.id))
-      .leftJoin(sql`users as participant2`, sql`${chatSessions.participant2Id} = participant2.id`)
+      .leftJoin(
+        sql`users as participant2`,
+        sql`${chatSessions.participant2Id} = participant2.id`
+      )
       .where(eq(chatSessions.status, 'active'))
       .orderBy(desc(chatSessions.lastMessageAt));
 
-    return activeChats.map((c) => ({
+    return activeChats.map(c => ({
       ...c.chat,
       participant1: c.participant1,
       participant2: c.participant2,
@@ -1069,10 +1134,18 @@ export class AdminService {
       const dbHealthy = true;
 
       // Get counts for health check
-      const [userCount] = await db.select({ count: sql<number>`count(*)` }).from(users);
-      const [qrCount] = await db.select({ count: sql<number>`count(*)` }).from(qrCodes);
-      const [callCount] = await db.select({ count: sql<number>`count(*)` }).from(callSessions);
-      const [chatCount] = await db.select({ count: sql<number>`count(*)` }).from(chatSessions);
+      const [userCount] = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(users);
+      const [qrCount] = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(qrCodes);
+      const [callCount] = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(callSessions);
+      const [chatCount] = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(chatSessions);
 
       return {
         status: 'healthy',
@@ -1113,7 +1186,7 @@ export class AdminService {
 
     const usersList = await query.orderBy(desc(users.createdAt));
 
-    return usersList.map((user) => ({
+    return usersList.map(user => ({
       id: user.id,
       username: user.username,
       phone: user.phone ? this.decryptData(user.phone) : null,
@@ -1137,7 +1210,7 @@ export class AdminService {
 
     const qrCodesList = await query.orderBy(desc(qrCodes.createdAt));
 
-    return qrCodesList.map((qr) => ({
+    return qrCodesList.map(qr => ({
       id: qr.id,
       token: qr.token,
       humanToken: qr.humanToken,
@@ -1172,7 +1245,10 @@ export class AdminService {
       })
       .from(callSessions)
       .leftJoin(users, eq(callSessions.callerId, users.id))
-      .leftJoin(sql`users as receiver`, sql`${callSessions.receiverId} = receiver.id`)
+      .leftJoin(
+        sql`users as receiver`,
+        sql`${callSessions.receiverId} = receiver.id`
+      )
       .leftJoin(qrCodes, eq(callSessions.qrId, qrCodes.id));
 
     const conditions = [];
@@ -1192,7 +1268,7 @@ export class AdminService {
 
     const calls = await query.orderBy(desc(callSessions.startedAt));
 
-    return calls.map((c) => ({
+    return calls.map(c => ({
       callId: c.call.id,
       callerUsername: c.caller?.username,
       receiverUsername: c.receiver?.username,
@@ -1203,7 +1279,9 @@ export class AdminService {
       endedAt: c.call.endedAt,
       duration:
         c.call.startedAt && c.call.endedAt
-          ? Math.floor((c.call.endedAt.getTime() - c.call.startedAt.getTime()) / 1000)
+          ? Math.floor(
+              (c.call.endedAt.getTime() - c.call.startedAt.getTime()) / 1000
+            )
           : null,
     }));
   }
@@ -1232,7 +1310,10 @@ export class AdminService {
       })
       .from(chatSessions)
       .leftJoin(users, eq(chatSessions.participant1Id, users.id))
-      .leftJoin(sql`users as participant2`, sql`${chatSessions.participant2Id} = participant2.id`)
+      .leftJoin(
+        sql`users as participant2`,
+        sql`${chatSessions.participant2Id} = participant2.id`
+      )
       .leftJoin(qrCodes, eq(chatSessions.qrId, qrCodes.id));
 
     const conditions = [];
@@ -1254,7 +1335,7 @@ export class AdminService {
 
     // Get message counts for each chat
     const chatsWithMessageCount = await Promise.all(
-      chats.map(async (c) => {
+      chats.map(async c => {
         const [msgCount] = await db
           .select({ count: sql<number>`count(*)` })
           .from(messages)
@@ -1290,7 +1371,9 @@ export class AdminService {
       .groupBy(sql`DATE(${users.createdAt})`)
       .orderBy(sql`DATE(${users.createdAt})`);
 
-    const [totalUsers] = await db.select({ count: sql<number>`count(*)` }).from(users);
+    const [totalUsers] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(users);
 
     const [newUsers] = await db
       .select({ count: sql<number>`count(*)` })
@@ -1301,7 +1384,7 @@ export class AdminService {
       period: `${days} days`,
       totalUsers: Number(totalUsers.count),
       newUsers: Number(newUsers.count),
-      dailyGrowth: userGrowth.map((u) => ({
+      dailyGrowth: userGrowth.map(u => ({
         date: u.date,
         count: Number(u.count),
       })),
