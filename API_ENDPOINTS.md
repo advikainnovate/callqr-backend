@@ -647,9 +647,32 @@ POST /api/calls/initiate
 
 ```json
 {
-  "qrToken": "string (required)"
+  "qrToken": "string (required, 64-character machine token)"
 }
 ```
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "message": "Call initiated successfully",
+  "data": {
+    "callId": "uuid",
+    "callerId": "uuid",
+    "receiverId": "uuid",
+    "status": "initiated",
+    "startedAt": "ISO date"
+  }
+}
+```
+
+**Important Notes:**
+
+- Requires the 64-character **machine token**, not the 12-character human token
+- Human token example: `QR-94NT-FN43` (for display only)
+- Machine token example: `6d89188c425cdb932a9657beea44461e858e259e6d36dd05debbfe345fab09a44` (for API calls)
+- After successful call creation, use the returned `callId` with WebSocket `initiate-call` event
 
 ### Get Call Details
 
@@ -1825,6 +1848,190 @@ GET /api/webrtc/config
 
 **Auth:** Required  
 **Response:** STUN/TURN server configuration
+
+---
+
+## WebRTC Socket.IO Events
+
+### Connection
+
+Connect to WebSocket server with JWT authentication:
+
+```javascript
+const socket = io('http://localhost:4000', {
+  path: '/socket.io',
+  transports: ['websocket'],
+  auth: { token: 'your-jwt-token' },
+});
+```
+
+### Call Events
+
+#### Initiate Call (Client → Server)
+
+```javascript
+socket.emit('initiate-call', { callId: 'uuid' });
+```
+
+**Response Events:**
+
+- `incoming-call` - Sent to receiver
+- `error` - If unauthorized or call not found
+
+#### Accept Call (Client → Server)
+
+```javascript
+socket.emit('accept-call', { callId: 'uuid' });
+```
+
+**Response Events:**
+
+- `call-accepted` - Sent to caller
+- `call-connected` - Sent to receiver
+- `error` - If unauthorized
+
+#### Reject Call (Client → Server)
+
+```javascript
+socket.emit('reject-call', { callId: 'uuid' });
+```
+
+**Response Events:**
+
+- `call-rejected` - Sent to caller
+- `error` - If unauthorized
+
+#### End Call (Client → Server)
+
+```javascript
+socket.emit('end-call', { callId: 'uuid' });
+```
+
+**Response Events:**
+
+- `call-ended` - Sent to both parties
+- `error` - If unauthorized
+
+### WebRTC Signaling Events
+
+#### WebRTC Offer (Client ↔ Server)
+
+```javascript
+// Send offer
+socket.emit('webrtc-offer', {
+  callId: 'uuid',
+  offer: rtcPeerConnection.localDescription,
+});
+
+// Receive offer
+socket.on('webrtc-offer', ({ callId, fromUserId, offer }) => {
+  // Handle incoming offer
+});
+```
+
+#### WebRTC Answer (Client ↔ Server)
+
+```javascript
+// Send answer
+socket.emit('webrtc-answer', {
+  callId: 'uuid',
+  answer: rtcPeerConnection.localDescription,
+});
+
+// Receive answer
+socket.on('webrtc-answer', ({ callId, fromUserId, answer }) => {
+  // Handle incoming answer
+});
+```
+
+#### ICE Candidates (Client ↔ Server)
+
+```javascript
+// Send ICE candidate
+socket.emit('webrtc-ice-candidate', {
+  callId: 'uuid',
+  candidate: event.candidate,
+});
+
+// Receive ICE candidate
+socket.on('webrtc-ice-candidate', ({ callId, fromUserId, candidate }) => {
+  // Handle incoming ICE candidate
+});
+```
+
+### Server Events (Server → Client)
+
+#### Incoming Call
+
+```javascript
+socket.on('incoming-call', ({ callId, callerId, callerUsername }) => {
+  // Show incoming call UI
+});
+```
+
+#### Call Status Updates
+
+```javascript
+socket.on('call-accepted', ({ callId, receiverId }) => {
+  // Call was accepted, start WebRTC negotiation
+});
+
+socket.on('call-rejected', ({ callId, receiverId }) => {
+  // Call was rejected
+});
+
+socket.on('call-ended', ({ callId, endedBy }) => {
+  // Call was ended by other party
+});
+```
+
+#### Error Handling
+
+```javascript
+socket.on('error', ({ message }) => {
+  // Handle WebSocket errors
+});
+
+socket.on('rate-limit-exceeded', ({ event, message, retryAfter }) => {
+  // Handle rate limiting
+});
+```
+
+### Complete Call Flow Example
+
+```javascript
+// 1. Create call via REST API
+const response = await fetch('/api/calls/initiate', {
+  method: 'POST',
+  headers: {
+    'Authorization': `Bearer ${token}`,
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({ qrToken: '64-char-machine-token' })
+});
+const { callId } = response.data;
+
+// 2. Initiate call via WebSocket
+socket.emit('initiate-call', { callId });
+
+// 3. Handle receiver acceptance
+socket.on('call-accepted', ({ callId }) => {
+  // Start WebRTC offer
+  const offer = await peerConnection.createOffer();
+  await peerConnection.setLocalDescription(offer);
+  socket.emit('webrtc-offer', { callId, offer });
+});
+
+// 4. Handle WebRTC answer
+socket.on('webrtc-answer', async ({ answer }) => {
+  await peerConnection.setRemoteDescription(answer);
+});
+
+// 5. Handle ICE candidates
+socket.on('webrtc-ice-candidate', async ({ candidate }) => {
+  await peerConnection.addIceCandidate(candidate);
+});
+```
 
 ---
 

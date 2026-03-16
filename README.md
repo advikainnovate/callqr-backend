@@ -95,6 +95,9 @@ ALLOWED_ORIGINS=*
 
 ### Management
 - QR code lifecycle (create, assign, scan, revoke)
+- **QR Token Types**: 
+  - Human Token (12 chars): `QR-94NT-FN43` - For display/manual entry
+  - Machine Token (64 chars): `6d89188c...` - For API calls (required for `/api/calls/initiate`)
 - Subscription tiers (Free, Pro, Enterprise)
 - Razorpay payment integration
 - Admin dashboard with analytics
@@ -252,6 +255,35 @@ See [WORKFLOW.md](WORKFLOW.md#6-payment--subscription-workflow) for complete pay
 
 ## 🔌 WebRTC Integration
 
+### Complete WebRTC Event Flow
+
+The system supports the full WebRTC signaling flow:
+
+```
+Caller → initiate-call → Server creates call room
+Server → incoming-call → Receiver  
+Receiver → accept-call → Server: both join call:${callId}
+Caller → webrtc-offer → Server → Receiver (via call room)
+Receiver → webrtc-answer → Server → Caller (via call room)
+Both → webrtc-ice-candidate → Server → Other party (via call room)
+```
+
+### Supported WebRTC Events
+
+| Event | Direction | Description |
+|-------|-----------|-------------|
+| `initiate-call` | Client → Server | Start call process |
+| `incoming-call` | Server → Client | Notify receiver of incoming call |
+| `accept-call` | Client → Server | Accept incoming call |
+| `reject-call` | Client → Server | Reject incoming call |
+| `end-call` | Client → Server | End active call |
+| `webrtc-offer` | Client ↔ Server | WebRTC offer signaling |
+| `webrtc-answer` | Client ↔ Server | WebRTC answer signaling |
+| `webrtc-ice-candidate` | Client ↔ Server | ICE candidate exchange |
+| `call-accepted` | Server → Client | Call was accepted |
+| `call-rejected` | Server → Client | Call was rejected |
+| `call-ended` | Server → Client | Call was ended |
+
 ### Socket.IO Rate Limiting
 
 All Socket.IO events are protected with rate limiting to prevent abuse:
@@ -266,7 +298,7 @@ All Socket.IO events are protected with rate limiting to prevent abuse:
 | Read Receipts | 50 requests | 1 minute |
 | Connections (per IP) | 10 connections | 1 minute |
 
-See [SOCKET_RATE_LIMITING.md](SOCKET_RATE_LIMITING.md) for details.
+See [docs/RATE_LIMITING.md](docs/RATE_LIMITING.md) for details.
 
 ### Client Setup
 

@@ -128,14 +128,6 @@ export class WebRTCService {
       // Join user to their personal room
       socket.join(userId);
 
-      // DEBUG: Log every incoming packet
-      socket.onAny((eventName, ...args) => {
-        console.log(
-          `[DEBUG] Socket received event: ${eventName}`,
-          JSON.stringify(args)
-        );
-      });
-
       /*
       // Handle WebRTC signaling with rate limiting
       socket.use((packet, next) => {
@@ -236,15 +228,6 @@ export class WebRTCService {
         );
         this.connectedUsers.delete(userId);
       });
-
-      // Handle Ping for debugging
-      socket.on('ping-server', data => {
-        console.log(
-          `[DEBUG] Received ping from ${userId}:`,
-          JSON.stringify(data)
-        );
-        socket.emit('pong-server', { timestamp: Date.now(), received: data });
-      });
     });
   }
 
@@ -287,9 +270,6 @@ export class WebRTCService {
   ) {
     try {
       const { callId, offer } = data;
-      console.log(
-        `[DEBUG] WebRTC: Received offer for call ${callId} from ${socket.userId}`
-      );
 
       // Verify user is part of the call
       const call = await callSessionService.getCallSessionById(callId);
@@ -304,9 +284,6 @@ export class WebRTCService {
       }
 
       // Forward offer to call room (other participant)
-      console.log(
-        `[DEBUG] WebRTC: Forwarding offer to call room: call:${callId}`
-      );
       socket.to(`call:${callId}`).emit('webrtc-offer', {
         callId,
         fromUserId: socket.userId,
@@ -324,9 +301,6 @@ export class WebRTCService {
   ) {
     try {
       const { callId, answer } = data;
-      console.log(
-        `[DEBUG] WebRTC: Received answer for call ${callId} from ${socket.userId}`
-      );
 
       // Verify user is part of the call
       const call = await callSessionService.getCallSessionById(callId);
@@ -341,9 +315,6 @@ export class WebRTCService {
       }
 
       // Forward answer to call room (other participant)
-      console.log(
-        `[DEBUG] WebRTC: Forwarding answer to call room: call:${callId}`
-      );
       socket.to(`call:${callId}`).emit('webrtc-answer', {
         callId,
         fromUserId: socket.userId,
@@ -361,9 +332,6 @@ export class WebRTCService {
   ) {
     try {
       const { callId, candidate } = data;
-      console.log(
-        `[DEBUG] WebRTC: Received ICE candidate for call ${callId} from ${socket.userId}`
-      );
 
       // Verify user is part of the call
       const call = await callSessionService.getCallSessionById(callId);
@@ -395,16 +363,10 @@ export class WebRTCService {
   ) {
     try {
       const { callId } = data;
-      console.log(
-        `[DEBUG] WebRTC: Received initiate-call for ${callId} from user ${socket.userId}`
-      );
 
       // Verify call and get details
       const call = await callSessionService.getCallSessionById(callId);
       if (!call || call.callerId !== socket.userId) {
-        console.log(
-          `[DEBUG] WebRTC: Initiation failed - Call not found or unauthorized. Call: ${JSON.stringify(call)}`
-        );
         socket.emit('error', { message: 'Unauthorized to initiate this call' });
         return;
       }

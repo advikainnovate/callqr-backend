@@ -10,7 +10,7 @@ class SMSService {
     const accountSid = process.env.TWILIO_ACCOUNT_SID;
     const authToken = process.env.TWILIO_AUTH_TOKEN;
     this.fromNumber = process.env.TWILIO_PHONE_NUMBER || '';
-    
+
     // Check if Twilio is configured
     this.isEnabled = !!(accountSid && authToken && this.fromNumber);
 
@@ -18,7 +18,9 @@ class SMSService {
       this.client = twilio(accountSid, authToken);
       logger.info('Twilio SMS service initialized');
     } else {
-      logger.warn('Twilio SMS service not configured - SMS will be logged to console only');
+      logger.warn(
+        'Twilio SMS service not configured - SMS will be logged to console only'
+      );
     }
   }
 
@@ -29,7 +31,7 @@ class SMSService {
       if (!this.isEnabled || !this.client) {
         // Development mode - log OTP to console
         logger.info(`[DEV MODE] SMS to ${phoneNumber}: ${message}`);
-        console.log(`\n📱 SMS OTP for ${phoneNumber}: ${otp}\n`);
+        logger.info(`📱 SMS OTP for ${phoneNumber}: ${otp}`);
         return true;
       }
 
@@ -40,7 +42,9 @@ class SMSService {
         to: phoneNumber,
       });
 
-      logger.info(`SMS sent successfully to ${phoneNumber}, SID: ${result.sid}`);
+      logger.info(
+        `SMS sent successfully to ${phoneNumber}, SID: ${result.sid}`
+      );
       return true;
     } catch (error) {
       logger.error('Failed to send SMS:', error);
@@ -52,7 +56,6 @@ class SMSService {
     try {
       if (!this.isEnabled || !this.client) {
         logger.info(`[DEV MODE] SMS to ${phoneNumber}: ${message}`);
-        console.log(`\n📱 SMS to ${phoneNumber}: ${message}\n`);
         return true;
       }
 
@@ -62,7 +65,9 @@ class SMSService {
         to: phoneNumber,
       });
 
-      logger.info(`SMS sent successfully to ${phoneNumber}, SID: ${result.sid}`);
+      logger.info(
+        `SMS sent successfully to ${phoneNumber}, SID: ${result.sid}`
+      );
       return true;
     } catch (error) {
       logger.error('Failed to send SMS:', error);

@@ -22,11 +22,7 @@ const app = express();
 // Trust proxy for rate limiting when behind reverse proxy
 app.set('trust proxy', 1);
 
-// Debug Logger to trace socket path issues
-app.use((req, res, next) => {
-  console.log(`[DEBUG] Incoming Request: ${req.method} ${req.originalUrl}`);
-  next();
-});
+// Debug Logger removed for production
 
 // Core Middlewares
 app.use(
