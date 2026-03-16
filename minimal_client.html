@@ -4,503 +4,746 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>QR Call - Minimal Client</title>
+    <title>CallQR - Pro Test Client</title>
     <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
     <style>
         :root {
-            --primary: #2563eb;
+            --primary: #6366f1;
+            --primary-hover: #4f46e5;
             --bg: #0f172a;
             --surface: #1e293b;
+            --surface-accent: #334155;
             --text: #f8fafc;
+            --text-dim: #94a3b8;
+            --success: #10b981;
+            --error: #ef4444;
+            --warning: #f59e0b;
+        }
+
+        * {
+            box-sizing: border-box;
         }
 
         body {
-            font-family: system-ui, -apple-system, sans-serif;
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
             background: var(--bg);
             color: var(--text);
             margin: 0;
             padding: 20px;
-            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
         }
 
         .container {
-            max-width: 800px;
-            margin: 0 auto;
+            width: 100%;
+            max-width: 900px;
+            animation: fadeIn 0.5s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 2rem;
+            background: linear-gradient(135deg, #818cf8 0%, #6366f1 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 10px 15px rgba(99, 102, 241, 0.2);
         }
 
         .card {
             background: var(--surface);
             padding: 2rem;
-            border-radius: 12px;
+            border-radius: 16px;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            transition: transform 0.2s;
+        }
+
+        .card:hover {
+            transform: translateY(-2px);
+        }
+
+        h2 {
+            margin-top: 0;
+            color: var(--text);
+            font-size: 1.25rem;
+        }
+
+        .input-group {
             margin-bottom: 1rem;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            text-align: left;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-size: 0.875rem;
+            color: var(--text-dim);
         }
 
         input {
             width: 100%;
-            padding: 10px;
-            margin: 10px 0;
-            background: #334155;
-            border: 1px solid #475569;
+            padding: 12px 16px;
+            background: var(--surface-accent);
+            border: 1px solid rgba(255, 255, 255, 0.1);
             color: white;
-            border-radius: 6px;
+            border-radius: 8px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        input:focus {
+            border-color: var(--primary);
+        }
+
+        .btn-row {
+            display: flex;
+            gap: 12px;
+            margin-top: 1.5rem;
         }
 
         button {
+            flex: 1;
             background: var(--primary);
             color: white;
             border: none;
-            padding: 10px 20px;
-            border-radius: 6px;
+            padding: 12px 24px;
+            border-radius: 8px;
             cursor: pointer;
             font-weight: 600;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
         }
 
         button:hover {
-            opacity: 0.9;
+            background: var(--primary-hover);
+            transform: translateY(-1px);
         }
 
-        .video-grid {
+        button:active {
+            transform: translateY(0);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-alt {
+            background: var(--surface-accent);
+        }
+
+        .btn-success {
+            background: var(--success);
+        }
+
+        .btn-error {
+            background: var(--error);
+        }
+
+        .video-container {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 1rem;
-            margin-top: 1rem;
+            gap: 1.5rem;
+            margin: 1.5rem 0;
+        }
+
+        .video-box {
+            position: relative;
+            background: #000;
+            border-radius: 12px;
+            overflow: hidden;
+            aspect-ratio: 4/3;
+            border: 1px solid rgba(255, 255, 255, 0.1);
         }
 
         video {
             width: 100%;
-            border-radius: 8px;
-            background: #000;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .video-label {
+            position: absolute;
+            bottom: 12px;
+            left: 12px;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            backdrop-filter: blur(4px);
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            margin-left: 8px;
+        }
+
+        .badge-pending {
+            background: var(--warning);
+            color: #000;
+        }
+
+        .badge-success {
+            background: var(--success);
+            color: #fff;
         }
 
         .hidden {
             display: none;
         }
 
-        .success {
-            color: #4ade80;
+        .status-msg {
+            margin-top: 1rem;
+            font-size: 0.875rem;
+            min-height: 1.25rem;
         }
 
-        .error {
-            color: #ef4444;
+        #qr-container img {
+            max-width: 250px;
+            border-radius: 12px;
+            border: 8px solid white;
+        }
+
+        .call-banner {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #064e3b;
+            padding: 1.5rem 2.5rem;
+            border-radius: 16px;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+            border: 1px solid var(--success);
+            z-index: 1000;
+            animation: slideDown 0.3s ease-out;
+        }
+
+        @keyframes slideDown {
+            from {
+                transform: translate(-50%, -100%);
+                opacity: 0;
+            }
+
+            to {
+                transform: translate(-50%, 0);
+                opacity: 1;
+            }
         }
     </style>
 </head>
 
 <body>
 
-    <div class="container">
-        <h1>QR Call System</h1>
+    <div class="container text-center">
+        <h1>CallQR <span>Testbed</span></h1>
 
-        <!-- Connection Setup -->
+        <!-- 1. Connection Section -->
         <div id="setup-panel" class="card">
-            <h2>1. Connect to Server</h2>
-            <input type="text" id="server-url" placeholder="Enter Server URL (e.g. http://localhost:4000)"
-                value="http://localhost:4000">
-            <button onclick="connectServer()">Set Server</button>
-            <p style="font-size: 0.8rem; color: #94a3b8; margin-top: 0.5rem;">Default is set to localhost:4000</p>
+            <h2>🔗 API Connection</h2>
+            <div class="input-group">
+                <label>Server Endpoint</label>
+                <input type="text" id="api-url" value="http://localhost:4000" placeholder="http://domain.com:4000">
+            </div>
+            <button onclick="connectServer()">Connect to Backend</button>
+            <div id="setup-status" class="status-msg"></div>
         </div>
 
-        <!-- Auth -->
+        <!-- 2. Authentication Section -->
         <div id="auth-panel" class="card hidden">
-            <h2>2. Login / Register</h2>
-            <div id="register-fields">
-                <input type="text" id="reg-username" placeholder="Username (for registration)">
-                <input type="text" id="reg-phone" placeholder="Phone Number (e.g. +919876543210)">
-                <select id="reg-vehicle"
-                    style="width: 100%; padding: 10px; margin: 10px 0; background: #334155; border: 1px solid #475569; color: white; border-radius: 6px;">
-                    <option value="two_wheeler">Two Wheeler</option>
-                    <option value="four_wheeler">Four Wheeler</option>
-                    <option value="public_vehicle">Public Vehicle</option>
-                </select>
+            <h2 id="auth-title">🔐 Join the Network</h2>
+
+            <div id="auth-form">
+                <div class="input-group">
+                    <label>Username</label>
+                    <input type="text" id="username" placeholder="johndoe">
+                </div>
+                <div id="reg-specific" class="hidden">
+                    <div class="input-group">
+                        <label>Phone Number (with +country)</label>
+                        <input type="text" id="phone" placeholder="+1234567890">
+                    </div>
+                </div>
+                <div class="input-group">
+                    <label>Password</label>
+                    <input type="password" id="password" placeholder="••••••••">
+                </div>
+
+                <div class="btn-row">
+                    <button id="btn-login" onclick="login()">Login</button>
+                    <button id="btn-toggle" class="btn-alt" onclick="toggleAuthMode()">I need an account</button>
+                </div>
             </div>
-            <input type="email" id="email" placeholder="Email">
-            <input type="password" id="password" placeholder="Password">
-            <div style="display: flex; gap: 10px; justify-content: center; margin-top: 10px;">
-                <button onclick="register()">Register New User</button>
-                <button onclick="login()" style="background: #10b981;">Login</button>
+
+            <!-- OTP Verification View -->
+            <div id="verify-form" class="hidden">
+                <p>An OTP has been sent to your phone. Enter it below to activate your account.</p>
+                <div class="input-group">
+                    <label>6-Digit OTP</label>
+                    <input type="text" id="otp" placeholder="123456" maxlength="6"
+                        style="text-align: center; font-size: 2rem; letter-spacing: 0.5rem;">
+                </div>
+                <button class="btn-success" onclick="verifyOTP()">Verify & Activate</button>
+                <p style="margin-top: 1rem; font-size: 0.8rem;"><a href="#" onclick="resendOTP()"
+                        style="color: var(--primary);">Resend OTP</a></p>
             </div>
-            <p id="auth-msg"></p>
+
+            <div id="auth-status" class="status-msg"></div>
         </div>
 
-        <!-- Dashboard -->
+        <!-- 3. Dashboard Section -->
         <div id="dashboard-panel" class="card hidden">
-            <h2>3. Dashboard</h2>
-            <p>Logged in as: <span id="user-email-display"></span></p>
-
-            <div
-                style="display: flex; gap: 20px; justify-content: center; border-bottom: 1px solid #334155; padding-bottom: 20px; margin-bottom: 20px;">
-                <!-- Creator Flow -->
-                <div style="flex: 1;">
-                    <h3>My Identity</h3>
-                    <button onclick="createQR()">Show My QR Code</button>
-                    <div id="qr-result" style="margin-top: 10px; word-break: break-all;"></div>
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 2rem;">
+                <div>
+                    <h2 style="margin-bottom: 0.25rem;">👋 Welcome, <span id="display-name">...</span></h2>
+                    <p style="margin: 0; color: var(--text-dim); font-size: 0.875rem;">Account: <span
+                            id="display-status">...</span> | Socket: <span id="socket-status"
+                            style="color: var(--error)">Disconnected</span></p>
                 </div>
-
-                <!-- Scanner Flow -->
-                <div style="flex: 1; border-left: 1px solid #334155;">
-                    <h3>Scan Identity</h3>
-                    <input type="text" id="scan-token" placeholder="Enter Friend's QR Token">
-                    <button onclick="scanQR()">Scan & Call</button>
+                <div style="display: flex; gap: 8px;">
+                    <button class="btn-alt" style="flex: 0; padding: 8px 16px; font-size: 0.8rem;"
+                        onclick="testSocket()">Test Signal</button>
+                    <button class="btn-alt" style="flex: 0; padding: 8px 16px; font-size: 0.8rem;"
+                        onclick="logout()">Logout</button>
                 </div>
             </div>
 
-            <!-- Active Call UI -->
-            <div id="call-ui" class="hidden">
-                <h3 class="success">📞 Call Active</h3>
-                <div class="video-grid">
-                    <video id="localVideo" autoplay muted playsinline></video>
-                    <video id="remoteVideo" autoplay playsinline></video>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem;">
+                <!-- Identity (QR Generation) -->
+                <div>
+                    <h3>🆔 My Identity</h3>
+                    <div id="qr-container"
+                        style="min-height: 250px; display: flex; flex-direction: column; align-items: center; justify-content: center; background: var(--surface-accent); border-radius: 12px; margin-bottom: 1rem;">
+                        <span id="qr-loader">Loading QR...</span>
+                    </div>
+                    <button onclick="fetchMyQR()">Refresh QR Code</button>
+                    <p id="my-token-display" style="font-size: 0.75rem; color: var(--text-dim); margin-top: 0.5rem;">
+                    </p>
                 </div>
-                <button onclick="endCall()" style="background: #ef4444; margin-top: 1rem;">End Call</button>
+
+                <!-- Interaction (Call/Scan) -->
+                <div style="border-left: 1px solid rgba(255,255,255,0.1); padding-left: 2rem;">
+                    <h3>🔦 Interact</h3>
+                    <p style="color: var(--text-dim); font-size: 0.875rem;">Enter a Friend's QR token to start a call.
+                    </p>
+                    <div class="input-group">
+                        <label>Friend's QR Token</label>
+                        <input type="text" id="target-token" placeholder="ABC-123-XYZ">
+                    </div>
+                    <button class="btn-success" onclick="startCallFlow()">Scan & Call</button>
+
+                    <div id="call-status-box" class="status-msg" style="margin-top: 2rem;"></div>
+                </div>
             </div>
 
-            <div id="incoming-call" class="hidden" style="background: #064e3b; padding: 10px; border-radius: 8px;">
-                <h3>📞 Incoming Call...</h3>
-                <button onclick="acceptCall()">Accept</button>
-                <button onclick="rejectCall()" style="background: #ef4444;">Reject</button>
+            <!-- Active Call View -->
+            <div id="call-active-panel" class="hidden"
+                style="margin-top: 2.5rem; border-top: 2px solid var(--primary); padding-top: 2rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <h2 style="color: var(--success); margin: 0;">🟢 Ongoing WebRTC Session</h2>
+                    <span id="call-timer" style="font-family: monospace; font-size: 1.2rem;">00:00</span>
+                </div>
+
+                <div class="video-container">
+                    <div class="video-box">
+                        <video id="localVideo" autoplay muted playsinline></video>
+                        <div class="video-label">You</div>
+                    </div>
+                    <div class="video-box">
+                        <video id="remoteVideo" autoplay playsinline></video>
+                        <div class="video-label">Remote Peer</div>
+                    </div>
+                </div>
+
+                <div class="btn-row">
+                    <button class="btn-error" onclick="endCall()">End Session</button>
+                </div>
             </div>
         </div>
+
+        <!-- Call Request Overlay -->
+        <div id="incoming-call-box" class="call-banner hidden">
+            <h2 style="margin-bottom: 0.5rem;">Incoming Call! 📞</h2>
+            <p id="caller-name" style="margin-bottom: 1.5rem;">Someone is trying to reach you...</p>
+            <div class="btn-row">
+                <button class="btn-success" onclick="acceptCall()">Accept</button>
+                <button class="btn-error" onclick="rejectCall()">Decline</button>
+            </div>
+        </div>
+
     </div>
 
     <script>
+        // --- Globals ---
         let API_URL = '';
-        let token = '';
-        let socket = null;
-        let myUserId = '';
-        let remoteUserId = '';
-        let currentCallId = '';
+        let TOKEN = '';
+        let USER_ID = '';
+        let USERNAME = '';
+        let IS_REGISTERING = false;
 
-        // WebRTC globals
+        let socket = null;
         let peerConnection = null;
         let localStream = null;
-        let iceConfig = {
-            iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
-            iceTransportPolicy: 'all',
-            iceCandidatePoolSize: 10
-        };
+        let currentCallId = null;
+        let remoteUserId = null;
+        let iceConfig = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+
+        // --- Core Functions ---
+
+        function connectServer() {
+            API_URL = document.getElementById('api-url').value.replace(/\/$/, '');
+            document.getElementById('setup-panel').classList.add('hidden');
+            document.getElementById('auth-panel').classList.remove('hidden');
+            logStatus('setup', 'Connected to UI. Ready for authentication.', 'success');
+        }
+
+        function toggleAuthMode() {
+            IS_REGISTERING = !IS_REGISTERING;
+            document.getElementById('auth-title').innerText = IS_REGISTERING ? '✨ Create Account' : '🔐 Join the Network';
+            document.getElementById('reg-specific').classList.toggle('hidden', !IS_REGISTERING);
+            document.getElementById('btn-login').innerText = IS_REGISTERING ? 'Register & Verify' : 'Login';
+            document.getElementById('btn-toggle').innerText = IS_REGISTERING ? 'Already have an account?' : 'I need an account';
+        }
+
+        async function login() {
+            if (IS_REGISTERING) return register();
+
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+
+            try {
+                const res = await fetch(`${API_URL}/api/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+
+                const data = await res.json();
+                if (data.success) {
+                    onAuthSuccess(data.data);
+                } else if (data.status === 403 || data.message.includes('verify')) {
+                    TOKEN = data.data.token || ''; // Might not have token yet
+                    USER_ID = data.data.userId;
+                    showVerifyForm();
+                } else {
+                    throw new Error(data.message || 'Login failed');
+                }
+            } catch (err) {
+                logStatus('auth', err.message, 'error');
+            }
+        }
+
+        async function register() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const phone = document.getElementById('phone').value;
+
+            try {
+                const res = await fetch(`${API_URL}/api/auth/register`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password, phone })
+                });
+
+                const data = await res.json();
+                if (data.success) {
+                    TOKEN = data.data.token;
+                    USER_ID = data.data.user.id;
+                    USERNAME = data.data.user.username;
+                    showVerifyForm();
+                    logStatus('auth', 'Registration successful! Check your phone for OTP.', 'success');
+                } else {
+                    throw new Error(data.message || 'Registration failed');
+                }
+            } catch (err) {
+                logStatus('auth', err.message, 'error');
+            }
+        }
+
+        function showVerifyForm() {
+            document.getElementById('auth-form').classList.add('hidden');
+            document.getElementById('verify-form').classList.remove('hidden');
+        }
+
+        async function verifyOTP() {
+            const otp = document.getElementById('otp').value;
+            try {
+                const res = await fetch(`${API_URL}/api/auth/verify-phone`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${TOKEN}`
+                    },
+                    body: JSON.stringify({ otp })
+                });
+
+                const data = await res.json();
+                if (data.success) {
+                    logStatus('auth', 'Verified! Please login now.', 'success');
+                    setTimeout(() => {
+                        document.getElementById('verify-form').classList.add('hidden');
+                        document.getElementById('auth-form').classList.remove('hidden');
+                        IS_REGISTERING = false;
+                        toggleAuthMode(); // Reset to login view
+                    }, 2000);
+                } else {
+                    throw new Error(data.message || 'Verification failed');
+                }
+            } catch (err) {
+                logStatus('auth', err.message, 'error');
+            }
+        }
+
+        async function onAuthSuccess(authData) {
+            TOKEN = authData.token;
+            USER_ID = authData.user.id;
+            USERNAME = authData.user.username;
+
+            document.getElementById('auth-panel').classList.add('hidden');
+            document.getElementById('dashboard-panel').classList.remove('hidden');
+            document.getElementById('display-name').innerText = USERNAME;
+            document.getElementById('display-status').innerHTML = `<span class="badge badge-success">Active Room</span>`;
+
+            initSocket();
+            fetchMyQR();
+            fetchIceConfig();
+        }
 
         async function fetchIceConfig() {
             try {
                 const res = await fetch(`${API_URL}/api/webrtc/config`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                const result = await res.json();
-                if (result.success) {
-                    iceConfig = result.data;
-                    console.log('✅ WebRTC ICE Config loaded:', iceConfig);
-                }
-            } catch (e) {
-                console.error('❌ Failed to fetch ICE config:', e);
-            }
-        }
-
-        function connectServer() {
-            API_URL = document.getElementById('server-url').value.replace(/\/$/, '');
-            document.getElementById('setup-panel').classList.add('hidden');
-            document.getElementById('auth-panel').classList.remove('hidden');
-        }
-
-        async function register() {
-            const email = document.getElementById('email').value;
-            const password = document.getElementById('password').value;
-            const username = document.getElementById('reg-username').value;
-            const phoneNo = document.getElementById('reg-phone').value;
-            const vehicleType = document.getElementById('reg-vehicle').value;
-
-            if (!username || !phoneNo) {
-                alert('Username and Phone Number are required for registration');
-                return;
-            }
-
-            try {
-                const res = await fetch(`${API_URL}/api/users/register`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        email,
-                        password,
-                        username,
-                        phoneNo,
-                        vehicleType
-                    })
+                    headers: { 'Authorization': `Bearer ${TOKEN}` }
                 });
                 const data = await res.json();
                 if (data.success) {
-                    document.getElementById('auth-msg').innerText = 'Registered! Please login.';
-                    document.getElementById('auth-msg').className = 'success';
-                    // Clear registration specific fields
-                    document.getElementById('reg-username').value = '';
-                    document.getElementById('reg-phone').value = '';
-                } else {
-                    throw new Error(data.message || (data.errors ? data.errors[0].message : 'Registration failed'));
+                    iceConfig = data.data;
+                    console.log('✅ WebRTC Config:', iceConfig);
                 }
             } catch (e) {
-                document.getElementById('auth-msg').innerText = e.message;
-                document.getElementById('auth-msg').className = 'error';
-            }
-        }
-
-        async function login() {
-            const email = document.getElementById('email').value;
-            const password = document.getElementById('password').value;
-            try {
-                const res = await fetch(`${API_URL}/api/users/login`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email, password })
-                });
-                const data = await res.json();
-                if (data.success) {
-                    token = data.data.token;
-                    myUserId = data.data.user.id;
-                    document.getElementById('user-email-display').innerText = email;
-
-                    // Fetch TURN server credentials
-                    await fetchIceConfig();
-
-                    initSocket();
-                    document.getElementById('auth-panel').classList.add('hidden');
-                    document.getElementById('dashboard-panel').classList.remove('hidden');
-
-                    // Automatically show/fetch the user's permanent QR code
-                    createQR();
-                }
-            } catch (e) {
-                document.getElementById('auth-msg').innerText = 'Login failed';
+                console.warn('Fallback ICE used:', e);
             }
         }
 
         function initSocket() {
-            // Intelligent path handling for subpath deployments
-            let socketUrl = API_URL;
-            let socketOptions = {
-                auth: { token },
-                transports: ['websocket'], // FORCE websocket only
-            };
-
-            // Visual indicator of version
-            document.querySelector('h1').innerText = 'QR Call System (v2 - WebSocket)';
-
-            try {
-                const urlObj = new URL(API_URL);
-                const pathName = urlObj.pathname.replace(/\/$/, '');
-
-                socketUrl = urlObj.origin;
-
-                // If path is /callqr-backend, we use /callqr-backend/socket.io
-                if (pathName && pathName !== '/') {
-                    socketOptions.path = `${pathName}/socket.io`;
-                    console.log('Using custom socket params -> URL:', socketUrl, 'Path:', socketOptions.path);
-                }
-            } catch (e) {
-                console.warn('Error parsing API URL for socket path:', e);
-            }
-
-            console.log('Connecting to socket at:', socketUrl, 'with options:', socketOptions);
-            socket = io(socketUrl, socketOptions);
-
-            socket.on('connect', () => {
-                console.log('✅ Connected to socket:', socket.id);
-                document.getElementById('auth-msg').innerText = 'Socket Connected (Polling)';
-                document.getElementById('auth-msg').className = 'success';
+            socket = io(API_URL, {
+                auth: { token: TOKEN },
+                transports: ['websocket']
             });
 
-            socket.on('connect_error', (err) => {
-                console.error('❌ Socket Connection Error:', err);
-                document.getElementById('auth-msg').innerText = 'Socket Error: ' + err.message;
-                document.getElementById('auth-msg').className = 'error';
+            socket.on('connect', () => {
+                console.log('🔌 Socket Connected:', socket.id);
+                document.getElementById('socket-status').innerText = 'Connected ✅';
+                document.getElementById('socket-status').style.color = 'var(--success)';
+            });
+
+            socket.on('disconnect', (reason) => {
+                console.warn('🔌 Socket Disconnected:', reason);
+                document.getElementById('socket-status').innerText = `Disconnected (${reason})`;
+                document.getElementById('socket-status').style.color = 'var(--error)';
+            });
+
+            socket.on('connect_error', (er) => {
+                console.error('🔌 Socket Connect Error:', er);
+                document.getElementById('socket-status').innerText = 'Connect Error ❌';
+                document.getElementById('socket-status').style.color = 'var(--error)';
+            });
+
+            socket.on('pong-server', (data) => {
+                console.log('🏓 Pong from server:', data);
+                logStatus('call', 'Socket Pipe OK! 🏓', 'success');
             });
 
             socket.on('incoming-call', (data) => {
+                console.log('📞 INCOMING CALL DETECTED:', data);
                 currentCallId = data.callId;
-                remoteUserId = data.callerId; // In incoming call, the other person is the caller
-                console.log('Incoming call from:', remoteUserId);
-                document.getElementById('incoming-call').classList.remove('hidden');
+                remoteUserId = data.callerId;
+                document.getElementById('caller-name').innerText = `${data.callerUsername} is calling you via QR...`;
+                document.getElementById('incoming-call-box').classList.remove('hidden');
             });
 
-            socket.on('call-accepted', async (data) => {
-                console.log('Call accepted by remote!', data);
-                // We are the Caller. The Callee accepted.
-                // Now we start the WebRTC negotiation.
-                await createOffer();
+            socket.on('call-accepted', () => {
+                console.log('🟢 Call accepted! Starting RTC negotiation...');
+                createOffer();
             });
 
-            socket.on('call-connected', (data) => {
-                console.log('Call connected confirmed by server', data);
-                // We are the Callee. Server confirmed we joined.
-                // We wait for the Offer from the Caller now.
+            socket.on('call-rejected', () => {
+                logStatus('call', 'Call was declined.', 'error');
+                cleanupCall();
             });
 
-            socket.on('call-rejected', (data) => {
-                console.log('Call rejected');
-                alert('Call was rejected by the user.');
+            socket.on('call-ended', () => {
+                console.log('🔴 Session ended by peer.');
                 cleanupCall();
             });
 
             socket.on('webrtc-signal', async (signal) => {
-                if (signal.type === 'offer') {
-                    await handleOffer(signal.data, signal.fromUserId);
-                } else if (signal.type === 'answer') {
-                    await handleAnswer(signal.data);
-                } else if (signal.type === 'ice-candidate') {
-                    await handleCandidate(signal.data);
+                console.log('📶 Signal Received:', signal.type, 'from:', signal.fromUserId);
+                if (signal.type === 'offer') await handleOffer(signal.data, signal.fromUserId);
+                if (signal.type === 'answer') await handleAnswer(signal.data);
+                if (signal.type === 'ice-candidate') await handleCandidate(signal.data);
+            });
+        }
+
+        async function fetchMyQR() {
+            try {
+                // First get existing codes
+                const res = await fetch(`${API_URL}/api/qr-codes/my-codes`, {
+                    headers: { 'Authorization': `Bearer ${TOKEN}` }
+                });
+                const data = await res.json();
+                let qr = null;
+
+                if (data.success && data.data.qrCodes.length > 0) {
+                    qr = data.data.qrCodes[0];
+                } else {
+                    // Create one if none exists (fallback)
+                    const createRes = await fetch(`${API_URL}/api/qr-codes/create`, {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${TOKEN}` }
+                    });
+                    const createData = await createRes.json();
+                    qr = createData.data;
                 }
-            });
 
-            socket.on('call-ended', () => {
-                console.log('Call ended by remote');
-                cleanupCall();
-            });
-        }
+                if (qr) {
+                    // Fetch the actual image
+                    const imgRes = await fetch(`${API_URL}/api/qr-codes/image/${qr.token}`);
+                    const imgData = await imgRes.json();
 
-        // --- QR Logic ---
-
-        async function createQR() {
-            const res = await fetch(`${API_URL}/api/qr-codes/create`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify({}) // Send empty body to satisfy validator if needed
-            });
-            const data = await res.json();
-            if (data.success) {
-                const qrToken = data.data.qrCode.token;
-                const qrImage = data.data.qrCodeDataURL;
-                document.getElementById('qr-result').innerHTML = `
-                <div style="background: white; padding: 10px; display: inline-block; border-radius: 8px; margin: 10px 0;">
-                    <img src="${qrImage}" alt="QR Code" style="width: 200px; height: 200px;">
-                </div>
-                <p><strong>Your Token:</strong> <code style="background: #334155; padding: 2px 5px; border-radius: 4px;">${qrToken}</code></p>
-                <p style="font-size: 0.8em; color: #94a3b8;">Share this token or show this QR to your friend.</p>
-            `;
-            } else {
-                alert('Failed to create QR: ' + (data.message || 'Unknown error'));
+                    document.getElementById('qr-container').innerHTML = `<img src="${imgData.data.image}" alt="Your QR Code">`;
+                    document.getElementById('my-token-display').innerHTML = `
+                        <b>Human:</b> ${qr.humanToken}<br>
+                        <b>Full:</b> <span style="font-size: 0.6rem; opacity: 0.7">${qr.token}</span>
+                    `;
+                }
+            } catch (err) {
+                console.error('QR Fetch failed:', err);
+                document.getElementById('qr-container').innerText = 'Failed to load QR';
             }
         }
 
-        async function scanQR() {
-            if (!socket || !socket.connected) {
-                alert('Socket not connected! Cannot scan. Check console logs.');
-                return;
-            }
+        async function startCallFlow() {
+            const tokenInput = document.getElementById('target-token').value.trim();
+            if (!tokenInput) return alert('Enter a token first!');
 
-            const qrToken = document.getElementById('scan-token').value;
-            // 1. Scan to get user ID
-            const res = await fetch(`${API_URL}/api/qr-codes/scan`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify({ token: qrToken })
-            });
-            const data = await res.json();
+            logStatus('call', 'Scanning QR Token...', 'warning');
 
-            if (data.success) {
-                const targetUserId = data.data.user.id;
-                console.log('Found user:', targetUserId);
-                remoteUserId = targetUserId;
-                startCall(targetUserId, qrToken);
-            } else {
-                alert('Invalid QR Token');
+            try {
+                // Determine if it's a Human Token (QR-XXXX-XXXX) or a Secure Token
+                const isHuman = tokenInput.startsWith('QR-');
+                const scanPayload = isHuman ? { humanToken: tokenInput } : { token: tokenInput };
+
+                // 1. Scan the token to get Target User ID
+                const scanRes = await fetch(`${API_URL}/api/qr-codes/scan`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${TOKEN}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(scanPayload)
+                });
+                const scanData = await scanRes.json();
+
+                if (!scanData.success) {
+                    const errMsg = scanData.errors ? scanData.errors.map(e => e.message).join(', ') : scanData.message;
+                    throw new Error(errMsg || 'Invalid QR Token');
+                }
+
+                const secureToken = scanData.data.qrCode.token;
+                remoteUserId = scanData.data.user.id;
+                logStatus('call', `User found: ${scanData.data.user.username}. Requesting session...`, 'warning');
+
+                // 2. Initiate Call in DB - MUST use the 64-char secure token
+                const initRes = await fetch(`${API_URL}/api/calls/initiate`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${TOKEN}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ qrToken: secureToken, callType: 'webrtc' })
+                });
+                const initData = await initRes.json();
+
+                if (!initData.success) throw new Error(initData.message || 'Initiation failed');
+
+                currentCallId = initData.data.call.id;
+                console.log('📞 Call Record Created:', currentCallId);
+
+                // 3. Inform Socket Server
+                console.log('🔌 Emitting initiate-call to socket...');
+                socket.emit('initiate-call', { callId: currentCallId });
+                logStatus('call', 'Ringing (Waiting for reply)...', 'success');
+
+                // Prepare media
+                await setupMedia();
+
+            } catch (err) {
+                logStatus('call', err.message, 'error');
             }
         }
 
-        // --- WebRTC Logic ---
-
-        async function setupLocalMedia() {
-            localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-            document.getElementById('localVideo').srcObject = localStream;
-            document.getElementById('call-ui').classList.remove('hidden');
-        }
-
-        async function startCall(targetUserId, qrTokenInput) {
-            await setupLocalMedia();
-
-            // 1. Initiate Call on Backend
-            const res = await fetch(`${API_URL}/api/calls/initiate`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify({
-                    qrToken: qrTokenInput,
-                    callType: 'webrtc'
-                })
-            });
-            const data = await res.json();
-
-            if (!data.success) {
-                console.error('Initiate call failed:', data);
-                alert(`Failed to initiate call: ${data.message || 'Unknown error'}`);
-                return;
+        async function setupMedia() {
+            try {
+                localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                document.getElementById('localVideo').srcObject = localStream;
+                document.getElementById('call-active-panel').classList.remove('hidden');
+            } catch (e) {
+                alert('Media fail: ' + e.message);
             }
-
-            currentCallId = data.data.call.id;
-
-            // 2. Signal Initiation via Socket
-            socket.emit('initiate-call', { callId: currentCallId });
-            console.log('Call initiated, waiting for acceptance...');
         }
 
         async function acceptCall() {
-            document.getElementById('incoming-call').classList.add('hidden');
-            await setupLocalMedia();
-
+            document.getElementById('incoming-call-box').classList.add('hidden');
+            await setupMedia();
             socket.emit('accept-call', { callId: currentCallId });
         }
+
+        function rejectCall() {
+            socket.emit('reject-call', { callId: currentCallId });
+            document.getElementById('incoming-call-box').classList.add('hidden');
+            currentCallId = null;
+        }
+
+        // --- WebRTC Protocol Implementation ---
 
         async function createOffer() {
             peerConnection = new RTCPeerConnection(iceConfig);
             localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
 
-            peerConnection.onicecandidate = (event) => {
-                if (event.candidate) {
-                    let candidateType = '🏠 Local (Host)';
-                    if (event.candidate.candidate.includes('typ srflx')) candidateType = '🌍 Public (STUN)';
-                    if (event.candidate.candidate.includes('typ relay')) candidateType = '🔄 Relay (TURN)';
-
-                    console.log(`🧊 Sending ICE candidate (${candidateType}):`, event.candidate.candidate);
-
+            peerConnection.onicecandidate = (e) => {
+                if (e.candidate) {
                     socket.emit('webrtc-signal', {
                         type: 'ice-candidate',
                         callId: currentCallId,
                         targetUserId: remoteUserId,
-                        data: event.candidate
+                        data: e.candidate
                     });
                 }
             };
 
-            peerConnection.oniceconnectionstatechange = () => {
-                const state = peerConnection.iceConnectionState;
-                console.log('🔄 ICE Connection State:', state);
-                if (state === 'failed' || state === 'disconnected') {
-                    document.getElementById('auth-msg').innerText = 'ICE Connection Failed! (Check TURN)';
-                    document.getElementById('auth-msg').className = 'error';
-                }
-            };
-
-            peerConnection.onicecandidateerror = (event) => {
-                console.error('❌ ICE Candidate Error:', event);
-                console.error('Error Code:', event.errorCode);
-                console.error('Error Text:', event.errorText);
-                console.error('URL:', event.url);
-
-                if (event.errorCode >= 700) {
-                    alert(`TURN Server Error: ${event.errorText} (Check Credentials/Firewall)`);
-                }
-            };
-
-            peerConnection.onsignalingstatechange = () => {
-                console.log('🚦 Signaling State:', peerConnection.signalingState);
-            };
-
             peerConnection.ontrack = (event) => {
-                console.log('📺 Received Remote Track:', event.streams[0].id);
                 document.getElementById('remoteVideo').srcObject = event.streams[0];
             };
 
@@ -515,25 +758,17 @@
             });
         }
 
-        let candidateQueue = [];
-
-        async function handleOffer(offer, fromUserId) {
+        async function handleOffer(offer, fromId) {
             peerConnection = new RTCPeerConnection(iceConfig);
             localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
 
-            peerConnection.onicecandidate = (event) => {
-                if (event.candidate) {
-                    let candidateType = '🏠 Local (Host)';
-                    if (event.candidate.candidate.includes('typ srflx')) candidateType = '🌍 Public (STUN)';
-                    if (event.candidate.candidate.includes('typ relay')) candidateType = '🔄 Relay (TURN)';
-
-                    console.log(`🧊 Sending ICE candidate (${candidateType}) [Answerer]:`, event.candidate.candidate);
-
+            peerConnection.onicecandidate = (e) => {
+                if (e.candidate) {
                     socket.emit('webrtc-signal', {
                         type: 'ice-candidate',
                         callId: currentCallId,
-                        targetUserId: fromUserId,
-                        data: event.candidate
+                        targetUserId: fromId,
+                        data: e.candidate
                     });
                 }
             };
@@ -543,55 +778,24 @@
             };
 
             await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
-
-            // Process queued candidates now that remote description is set
-            while (candidateQueue.length > 0) {
-                const c = candidateQueue.shift();
-                await peerConnection.addIceCandidate(new RTCIceCandidate(c));
-                console.log('✅ Added queued ICE candidate');
-            }
-
             const answer = await peerConnection.createAnswer();
             await peerConnection.setLocalDescription(answer);
 
             socket.emit('webrtc-signal', {
                 type: 'answer',
                 callId: currentCallId,
-                targetUserId: fromUserId,
+                targetUserId: fromId,
                 data: answer
             });
         }
 
         async function handleAnswer(answer) {
             await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
-
-            // Process queued candidates now that remote description is set
-            while (candidateQueue.length > 0) {
-                const c = candidateQueue.shift();
-                await peerConnection.addIceCandidate(new RTCIceCandidate(c));
-                console.log('✅ Added queued ICE candidate');
-            }
         }
 
         async function handleCandidate(candidate) {
-            try {
-                if (peerConnection) {
-                    // Check if remote description is set by checking signaling state or remoteDescription
-                    if (peerConnection.remoteDescription && peerConnection.remoteDescription.type) {
-                        await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
-                        console.log('✅ Added ICE candidate');
-                    } else {
-                        console.log('⏳ queuing ICE candidate (remote description not ready)');
-                        candidateQueue.push(candidate);
-                    }
-                } else {
-                    // If PeerConnection doesn't exist yet, queue it? 
-                    // Usually handleOffer creates it immediately, but safer to queue if logic changes.
-                    console.log('⏳ queuing ICE candidate (no peer connection yet)');
-                    candidateQueue.push(candidate);
-                }
-            } catch (e) {
-                console.error('Error adding ICE candidate', e);
+            if (peerConnection) {
+                await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
             }
         }
 
@@ -601,21 +805,38 @@
         }
 
         function cleanupCall() {
-            if (localStream) {
-                localStream.getTracks().forEach(t => t.stop());
-            }
-            if (peerConnection) {
-                peerConnection.close();
-            }
-            document.getElementById('call-ui').classList.add('hidden');
+            if (localStream) localStream.getTracks().forEach(t => t.stop());
+            if (peerConnection) peerConnection.close();
+
+            document.getElementById('call-active-panel').classList.add('hidden');
             document.getElementById('remoteVideo').srcObject = null;
             document.getElementById('localVideo').srcObject = null;
-            alert('Call Ended');
+
+            currentCallId = null;
+            peerConnection = null;
+            logStatus('call', 'Session Ended.', 'dim');
         }
 
-        function rejectCall() {
-            socket.emit('reject-call', { callId: currentCallId });
-            document.getElementById('incoming-call').classList.add('hidden');
+        function testSocket() {
+            if (!socket || !socket.connected) {
+                alert('Socket not connected!');
+                return;
+            }
+            console.log('📤 Sending test ping...');
+            socket.emit('ping-server', { hello: 'from client', time: Date.now() });
+            logStatus('call', 'Sent test ping...', 'warning');
+        }
+
+        function logout() {
+            location.reload();
+        }
+
+        function logStatus(id, msg, type) {
+            const el = document.getElementById(`${id}-status`) || document.getElementById(`${id}-status-box`);
+            if (el) {
+                el.innerText = msg;
+                el.style.color = `var(--${type})`;
+            }
         }
 
     </script>

@@ -27,18 +27,14 @@ describe('Example Controller Integration', () => {
         name: 'Test Item',
         description: 'A test item',
         price: 99,
-        metadata: { 
+        metadata: {
           category: 'electronics',
-          priority: 'medium'
+          priority: 'medium',
         },
       };
-      const res = await request(server)
-        .post('/api/examples')
-        .send(exampleData);
-      
-      console.log('Response status:', res.status);
-      console.log('Response body:', res.body);
-      
+      const res = await request(server).post('/api/examples').send(exampleData);
+
+      // Test assertions
       expect(res.status).toBe(201);
       expect(res.body.success).toBe(true);
       expect(res.body.data).toHaveProperty('id');
@@ -63,13 +59,21 @@ describe('Example Controller Integration', () => {
           name: 'Item 1',
           description: 'First',
           price: 10,
-          metadata: { category: 'books', priority: 'medium', createdAt: new Date().toISOString() },
+          metadata: {
+            category: 'books',
+            priority: 'medium',
+            createdAt: new Date().toISOString(),
+          },
         },
         {
           name: 'Item 2',
           description: 'Second',
           price: 20,
-          metadata: { category: 'electronics', priority: 'medium', createdAt: new Date().toISOString() },
+          metadata: {
+            category: 'electronics',
+            priority: 'medium',
+            createdAt: new Date().toISOString(),
+          },
         },
       ]);
       const res = await request(server).get('/api/examples').expect(200);
@@ -79,4 +83,3 @@ describe('Example Controller Integration', () => {
     });
   });
 });
-

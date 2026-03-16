@@ -9,7 +9,9 @@ const config = {
   logLevel: process.env.LOG_LEVEL || 'info',
 
   database: {
-    url: process.env.DATABASE_URL || 'postgres://postgres:postgres@localhost:5432/express_ts_db',
+    url:
+      process.env.DATABASE_URL ||
+      'postgres://postgres:postgres@localhost:5432/express_ts_db',
   },
 
   jwt: {
@@ -26,6 +28,13 @@ const config = {
       ? process.env.ALLOWED_ORIGINS.split(',')
       : ['http://localhost:3000'],
   },
+
+  firebase: {
+    serviceAccountPath: process.env.FIREBASE_SERVICE_ACCOUNT_PATH || '',
+    projectId: process.env.FIREBASE_PROJECT_ID || '',
+    clientEmail: process.env.FIREBASE_CLIENT_EMAIL || '',
+    privateKey: process.env.FIREBASE_PRIVATE_KEY || '',
+  },
 };
 
 // Freeze the config object to make it immutable
@@ -40,4 +49,4 @@ if (appConfig.encryptionKey.length !== 64) {
 }
 
 // Re-export other config modules for convenience
-
+export { initializeFirebase, isFirebaseReady } from './firebase';

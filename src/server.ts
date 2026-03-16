@@ -1,7 +1,7 @@
 import app from './app';
 import { createServer } from 'http';
 import { logger } from './utils';
-import { appConfig } from './config';
+import { appConfig, initializeFirebase } from './config';
 import { WebRTCService } from './services/webrtc.service';
 import { db, client } from './db'; // Import database connection
 import { cloudinary } from './config/cloudinary';
@@ -20,40 +20,43 @@ const checkServices = async () => {
     database: { status: 'unknown', details: '' },
     webrtc: { status: 'unknown', details: '' },
     cloudinary: { status: 'unknown', details: '' },
-    environment: { status: 'ok', details: process.env.NODE_ENV || 'development' }
+    environment: {
+      status: 'ok',
+      details: process.env.NODE_ENV || 'development',
+    },
   };
 
   // Check database connection
   try {
     await client`SELECT 1`;
-    services.database = { 
-      status: 'connected', 
-      details: 'PostgreSQL connection successful' 
+    services.database = {
+      status: 'connected',
+      details: 'PostgreSQL connection successful',
     };
   } catch (error) {
-    services.database = { 
-      status: 'error', 
-      details: `Database connection failed: ${error instanceof Error ? error.message : 'Unknown error'}` 
+    services.database = {
+      status: 'error',
+      details: `Database connection failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
     };
   }
 
   // Check WebRTC service
   try {
     if (webrtcService) {
-      services.webrtc = { 
-        status: 'running', 
-        details: `Socket.IO server initialized on port ${PORT}` 
+      services.webrtc = {
+        status: 'running',
+        details: `Socket.IO server initialized on port ${PORT}`,
       };
     } else {
-      services.webrtc = { 
-        status: 'error', 
-        details: 'WebRTC service not initialized' 
+      services.webrtc = {
+        status: 'error',
+        details: 'WebRTC service not initialized',
       };
     }
   } catch (error) {
-    services.webrtc = { 
-      status: 'error', 
-      details: `WebRTC service error: ${error instanceof Error ? error.message : 'Unknown error'}` 
+    services.webrtc = {
+      status: 'error',
+      details: `WebRTC service error: ${error instanceof Error ? error.message : 'Unknown error'}`,
     };
   }
 
@@ -66,7 +69,8 @@ const checkServices = async () => {
     if (!cloudName || !apiKey || !apiSecret) {
       services.cloudinary = {
         status: 'warning',
-        details: 'Cloudinary credentials not configured (media uploads disabled)'
+        details:
+          'Cloudinary credentials not configured (media uploads disabled)',
       };
     } else {
       // Test Cloudinary connection by calling the API
@@ -74,19 +78,19 @@ const checkServices = async () => {
       if (result.status === 'ok') {
         services.cloudinary = {
           status: 'connected',
-          details: `Cloudinary connected (Cloud: ${cloudName})`
+          details: `Cloudinary connected (Cloud: ${cloudName})`,
         };
       } else {
         services.cloudinary = {
           status: 'error',
-          details: 'Cloudinary ping failed'
+          details: 'Cloudinary ping failed',
         };
       }
     }
   } catch (error) {
     services.cloudinary = {
       status: 'error',
-      details: `Cloudinary connection failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+      details: `Cloudinary connection failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
     };
   }
 
@@ -96,23 +100,32 @@ const checkServices = async () => {
 (async () => {
   try {
     logger.info('🔍 Checking service health...');
-    
+
+    // Initialize Firebase Admin SDK (for push notifications)
+    initializeFirebase();
+
     // Initialize WebRTC service
     webrtcService = new WebRTCService(server);
-    
+
     // Check all services
     const services = await checkServices();
-    
+
     // Log service status
     logger.info('📊 Service Status:');
     Object.entries(services).forEach(([service, status]) => {
       let icon = '❌';
-      if (status.status === 'connected' || status.status === 'running' || status.status === 'ok') {
+      if (
+        status.status === 'connected' ||
+        status.status === 'running' ||
+        status.status === 'ok'
+      ) {
         icon = '✅';
       } else if (status.status === 'warning') {
         icon = '⚠️';
       }
-      logger.info(`${icon} ${service.charAt(0).toUpperCase() + service.slice(1)}: ${status.status} - ${status.details}`);
+      logger.info(
+        `${icon} ${service.charAt(0).toUpperCase() + service.slice(1)}: ${status.status} - ${status.details}`
+      );
     });
 
     // Check if critical services are working
@@ -122,17 +135,25 @@ const checkServices = async () => {
 
     // Log warnings for non-critical services
     if (services.cloudinary.status === 'warning') {
-      logger.warn('⚠️  Media uploads will be disabled without Cloudinary configuration');
+      logger.warn(
+        '⚠️  Media uploads will be disabled without Cloudinary configuration'
+      );
     } else if (services.cloudinary.status === 'error') {
-      logger.warn('⚠️  Media uploads may not work properly due to Cloudinary connection issues');
+      logger.warn(
+        '⚠️  Media uploads may not work properly due to Cloudinary connection issues'
+      );
     }
 
     logger.info('🚀 Starting server...');
 
     httpServer = server.listen(PORT, () => {
       logger.info(`🌐 Server is running on port ${PORT}`);
-      logger.info(`📊 Health check available at: http://localhost:${PORT}/healthz`);
-      logger.info(`📚 API docs available at: http://localhost:${PORT}/api-docs`);
+      logger.info(
+        `📊 Health check available at: http://localhost:${PORT}/healthz`
+      );
+      logger.info(
+        `📚 API docs available at: http://localhost:${PORT}/api-docs`
+      );
       logger.info(`🔌 Signaling server ready for WebRTC connections`);
       logger.info(`🌍 Environment: ${appConfig.env}`);
     });
@@ -198,7 +219,7 @@ process.on('SIGINT', () => {
 });
 
 // Handle uncaught exceptions
-process.on('uncaughtException', (error) => {
+process.on('uncaughtException', error => {
   logger.error('❌ Uncaught Exception:', error);
   gracefulShutdown('UNCAUGHT_EXCEPTION');
   setTimeout(forceShutdown, 5000);
@@ -210,4 +231,3 @@ process.on('unhandledRejection', (reason, promise) => {
   gracefulShutdown('UNHANDLED_REJECTION');
   setTimeout(forceShutdown, 5000);
 });
-
