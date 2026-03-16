@@ -37,3 +37,17 @@ export const verifyEmailSchema = z.object({
     email: z.string().email(),
   }),
 });
+
+export const upsertDeviceTokenSchema = z.object({
+  body: z.object({
+    token: z.string().min(1, 'Token is required'),
+    platform: z.enum(['android', 'ios', 'web']).default('android'),
+    deviceId: z.string().optional(),
+  }),
+});
+
+export const removeDeviceTokenSchema = z.object({
+  params: z.object({
+    token: z.string(),
+  }),
+});
