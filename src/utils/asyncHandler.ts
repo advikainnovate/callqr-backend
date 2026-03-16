@@ -19,6 +19,6 @@ export const asyncHandler =
       next: NextFunction
     ) => Promise<any>
   ): RequestHandler<P, ResBody, ReqBody, ReqQuery> =>
-    (req, res, next) => {
-      fn(req, res, next).catch(next);
-    };
+  (req, res, next) => {
+    Promise.resolve(fn(req, res, next)).catch(next);
+  };
