@@ -60,6 +60,13 @@ TWILIO_ACCOUNT_SID=your_account_sid
 TWILIO_AUTH_TOKEN=your_auth_token
 TWILIO_PHONE_NUMBER=+1234567890
 
+# Firebase (Optional - for push notifications)
+FIREBASE_SERVICE_ACCOUNT_PATH=/path/to/serviceAccount.json
+# OR individual values:
+FIREBASE_PROJECT_ID=your-project-id
+FIREBASE_CLIENT_EMAIL=firebase-adminsdk@your-project.iam.gserviceaccount.com
+FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
+
 # CORS
 ALLOWED_ORIGINS=*
 ```
@@ -74,9 +81,10 @@ ALLOWED_ORIGINS=*
 - Graceful shutdown with client notification
 - Helmet.js security headers
 - Input validation with Zod
-- Forgot password with secure token reset
+- Password reset with secure OTP verification
 - Global user blocking for platform-wide access control
 - Phone verification with OTP via Twilio SMS
+- **Push Notifications (FCM)** for offline calls and messages
 
 ### Communication
 - WebRTC voice/video calls
@@ -121,16 +129,15 @@ PostgreSQL Database (Users, QR Codes, Sessions, Messages)
 
 ## 📚 Documentation
 
-- **[WORKFLOW.md](WORKFLOW.md)** - Complete API workflows for admin and users
-- **[API_ENDPOINTS.md](API_ENDPOINTS.md)** - All available endpoints with examples
-- **[DATABASE_BACKUP.md](docs/DATABASE_BACKUP.md)** - Database backup and restore guide
-- **[SOCKET_RATE_LIMITING.md](SOCKET_RATE_LIMITING.md)** - Socket.IO rate limiting implementation
-- **[GRACEFUL_SHUTDOWN.md](GRACEFUL_SHUTDOWN.md)** - Graceful shutdown implementation
-- **[PROFILE_ENDPOINT_DOCS.md](PROFILE_ENDPOINT_DOCS.md)** - Enhanced profile endpoint with usage stats
-- **[FORGOT_PASSWORD_FLOW.md](docs/FORGOT_PASSWORD_FLOW.md)** - Password reset implementation
-- **[GLOBAL_USER_BLOCKING.md](docs/GLOBAL_USER_BLOCKING.md)** - Global user blocking system
-- **[PHONE_VERIFICATION_FLOW.md](docs/PHONE_VERIFICATION_FLOW.md)** - Phone verification with OTP
-- **[NEW_FEATURES_SUMMARY.md](docs/NEW_FEATURES_SUMMARY.md)** - Summary of latest features
+- **[docs/AUTHENTICATION.md](docs/AUTHENTICATION.md)** - Registration, OTP verification, and login logic
+- **[docs/MESSAGING.md](docs/MESSAGING.md)** - Real-time chat, media uploads, and sockets
+- **[docs/CALLS_AND_WEBRTC.md](docs/CALLS_AND_WEBRTC.md)** - WebRTC signaling and call life-cycle
+- **[docs/PUSH_NOTIFICATIONS.md](docs/PUSH_NOTIFICATIONS.md)** - FCM integration for offline users
+- **[docs/ADMIN_AND_BLOCKING.md](docs/ADMIN_AND_BLOCKING.md)** - Global and user-level blocking
+- **[docs/RATE_LIMITING.md](docs/RATE_LIMITING.md)** - Socket and API protection
+- **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)** - Production setup and Nginx config
+- **[API_ENDPOINTS.md](API_ENDPOINTS.md)** - Reference list of all REST endpoints
+- **[WORKFLOW.md](WORKFLOW.md)** - End-to-end integration examples
 - **[Swagger Docs](http://localhost:9001/api-docs)** - Live interactive API documentation
 
 ## 🛠️ Development
