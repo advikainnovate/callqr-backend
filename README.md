@@ -161,6 +161,38 @@ npm run admin:create # Create admin user (interactive)
 
 ### Database Backup & Restore
 
+#### Prerequisites
+
+**Install PostgreSQL Client Tools:**
+
+**Windows:**
+1. Download PostgreSQL from: https://www.postgresql.org/download/windows/
+2. Install PostgreSQL (includes `pg_dump` and `psql`)
+3. Add PostgreSQL bin directory to PATH:
+   - Default location: `C:\Program Files\PostgreSQL\15\bin`
+   - Add to System Environment Variables > PATH
+4. Restart your terminal/IDE
+
+**macOS:**
+```bash
+# Via Homebrew
+brew install postgresql
+
+# Or download from: https://www.postgresql.org/download/macosx/
+```
+
+**Linux:**
+```bash
+# Ubuntu/Debian
+sudo apt-get install postgresql-client
+
+# CentOS/RHEL
+sudo yum install postgresql
+```
+
+#### Backup Methods
+
+**Method 1: Node.js Scripts (Cross-platform)**
 ```bash
 # Create a backup
 npm run db:backup
@@ -171,6 +203,37 @@ npm run db:restore backup_mydb_2024-03-05_15-30-00.sql
 # List available backups
 ls backups/
 ```
+
+**Method 2: Shell Scripts (Unix/Linux/macOS)**
+```bash
+# Make scripts executable
+chmod +x scripts/backup.sh scripts/restore.sh
+
+# Create backup
+./scripts/backup.sh
+
+# Restore backup
+./scripts/restore.sh backup_mydb_2024-03-05_15-30-00.sql
+```
+
+**Method 3: Batch Scripts (Windows)**
+```cmd
+# Create backup
+scripts\backup.bat
+
+# Restore backup
+scripts\restore.bat backup_mydb_2024-03-05_15-30-00.sql
+```
+
+#### Backup Features
+
+- ✅ **Automatic timestamping** - `backup_dbname_2026-03-16_20-10-11.sql`
+- ✅ **Size reporting** - Shows backup file size
+- ✅ **Recent backups list** - Shows last 5 backups
+- ✅ **Error handling** - Clear error messages and troubleshooting
+- ✅ **Cross-platform** - Works on Windows, macOS, Linux
+- ✅ **Safety checks** - Confirmation prompts for restore operations
+- ✅ **Installation guidance** - Helps install required tools
 
 Backups are stored in the `backups/` directory with timestamps.
 
