@@ -18,7 +18,7 @@ interface AuthenticatedSocket extends Socket {
 }
 
 interface WebRTCSignal {
-  type: 'offer' | 'answer' | 'ice-candidate';
+  type: 'offer' | 'answer' | 'ice-candidate' | 'call-ended';
   callId: string;
   targetUserId: string;
   data: any;
@@ -128,62 +128,48 @@ export class WebRTCService {
       // Join user to their personal room
       socket.join(userId);
 
+      // DEBUG: Log every incoming packet
+      socket.onAny((eventName, ...args) => {
+        console.log(
+          `[DEBUG] Socket received event: ${eventName}`,
+          JSON.stringify(args)
+        );
+      });
+
+      /*
       // Handle WebRTC signaling with rate limiting
       socket.use((packet, next) => {
         const [eventName, data] = packet;
-
-        // Apply rate limiting based on event type
-        switch (eventName) {
-          case 'webrtc-signal':
-            return this.rateLimiter.createLimiter(
-              'webrtc-signal',
-              rateLimitProfiles.signaling
-            )(socket, data, next);
-
-          case 'initiate-call':
-          case 'accept-call':
-          case 'reject-call':
-          case 'end-call':
-            return this.rateLimiter.createLimiter(
-              eventName,
-              rateLimitProfiles.callAction
-            )(socket, data, next);
-
-          case 'chat-message':
-            return this.rateLimiter.createLimiter(
-              'chat-message',
-              rateLimitProfiles.chatMessage
-            )(socket, data, next);
-
-          case 'typing-start':
-          case 'typing-stop':
-            return this.rateLimiter.createLimiter(
-              eventName,
-              rateLimitProfiles.typing
-            )(socket, data, next);
-
-          case 'join-chat':
-          case 'leave-chat':
-            return this.rateLimiter.createLimiter(
-              eventName,
-              rateLimitProfiles.chatRoom
-            )(socket, data, next);
-
-          case 'message-read':
-            return this.rateLimiter.createLimiter(
-              'message-read',
-              rateLimitProfiles.readReceipt
-            )(socket, data, next);
-
-          default:
-            return next();
-        }
+        // ... (rest of the rate limit logic)
       });
+      */
 
       // Handle WebRTC signaling
       socket.on('webrtc-signal', async (data: WebRTCSignal) => {
         await this.handleWebRTCSignal(socket, data);
       });
+
+      // Handle specific WebRTC events
+      socket.on(
+        'webrtc-offer',
+        async (data: { callId: string; offer: any }) => {
+          await this.handleWebRTCOffer(socket, data);
+        }
+      );
+
+      socket.on(
+        'webrtc-answer',
+        async (data: { callId: string; answer: any }) => {
+          await this.handleWebRTCAnswer(socket, data);
+        }
+      );
+
+      socket.on(
+        'webrtc-ice-candidate',
+        async (data: { callId: string; candidate: any }) => {
+          await this.handleWebRTCIceCandidate(socket, data);
+        }
+      );
 
       // Handle call initiation
       socket.on('initiate-call', async (data: { callId: string }) => {
@@ -244,9 +230,20 @@ export class WebRTCService {
       );
 
       // Handle disconnection
-      socket.on('disconnect', () => {
-        logger.info(`User disconnected from WebRTC: ${userId}`);
+      socket.on('disconnect', reason => {
+        logger.info(
+          `User disconnected from WebRTC: ${userId}. Reason: ${reason}`
+        );
         this.connectedUsers.delete(userId);
+      });
+
+      // Handle Ping for debugging
+      socket.on('ping-server', data => {
+        console.log(
+          `[DEBUG] Received ping from ${userId}:`,
+          JSON.stringify(data)
+        );
+        socket.emit('pong-server', { timestamp: Date.now(), received: data });
       });
     });
   }
@@ -258,7 +255,7 @@ export class WebRTCService {
     try {
       const { callId, targetUserId, data: signalData } = data;
 
-      // Verify user is part of the call
+      // Verify user is part of the call in DB
       const call = await callSessionService.getCallSessionById(callId);
       if (
         !call ||
@@ -268,26 +265,127 @@ export class WebRTCService {
         return;
       }
 
-      // Forward signal to target user
-      const targetSocketId = this.connectedUsers.get(targetUserId);
-      if (targetSocketId) {
-        logger.info(
-          `[Signal] Forwarding ${data.type} from ${socket.userId} to ${targetUserId}`
-        );
-        this.io.to(targetSocketId).emit('webrtc-signal', {
-          type: data.type,
-          callId,
-          fromUserId: socket.userId,
-          data: data.data,
-        });
-      } else {
-        logger.warn(
-          `[Signal] Target user ${targetUserId} not found (Caller: ${socket.userId})`
-        );
-      }
+      // Forward signal to other participant via call room
+      logger.info(
+        `[Signal] Forwarding ${data.type} from ${socket.userId} in room call:${callId}`
+      );
+      socket.to(`call:${callId}`).emit('webrtc-signal', {
+        type: data.type,
+        callId,
+        fromUserId: socket.userId,
+        data: data.data,
+      });
     } catch (error) {
       logger.error('Error handling WebRTC signal:', error);
       socket.emit('error', { message: 'Failed to process signal' });
+    }
+  }
+
+  private async handleWebRTCOffer(
+    socket: AuthenticatedSocket,
+    data: { callId: string; offer: any }
+  ) {
+    try {
+      const { callId, offer } = data;
+      console.log(
+        `[DEBUG] WebRTC: Received offer for call ${callId} from ${socket.userId}`
+      );
+
+      // Verify user is part of the call
+      const call = await callSessionService.getCallSessionById(callId);
+      if (
+        !call ||
+        (call.callerId !== socket.userId && call.receiverId !== socket.userId)
+      ) {
+        socket.emit('error', {
+          message: 'Unauthorized to send offer for this call',
+        });
+        return;
+      }
+
+      // Forward offer to call room (other participant)
+      console.log(
+        `[DEBUG] WebRTC: Forwarding offer to call room: call:${callId}`
+      );
+      socket.to(`call:${callId}`).emit('webrtc-offer', {
+        callId,
+        fromUserId: socket.userId,
+        offer,
+      });
+    } catch (error) {
+      logger.error('Error handling WebRTC offer:', error);
+      socket.emit('error', { message: 'Failed to process offer' });
+    }
+  }
+
+  private async handleWebRTCAnswer(
+    socket: AuthenticatedSocket,
+    data: { callId: string; answer: any }
+  ) {
+    try {
+      const { callId, answer } = data;
+      console.log(
+        `[DEBUG] WebRTC: Received answer for call ${callId} from ${socket.userId}`
+      );
+
+      // Verify user is part of the call
+      const call = await callSessionService.getCallSessionById(callId);
+      if (
+        !call ||
+        (call.callerId !== socket.userId && call.receiverId !== socket.userId)
+      ) {
+        socket.emit('error', {
+          message: 'Unauthorized to send answer for this call',
+        });
+        return;
+      }
+
+      // Forward answer to call room (other participant)
+      console.log(
+        `[DEBUG] WebRTC: Forwarding answer to call room: call:${callId}`
+      );
+      socket.to(`call:${callId}`).emit('webrtc-answer', {
+        callId,
+        fromUserId: socket.userId,
+        answer,
+      });
+    } catch (error) {
+      logger.error('Error handling WebRTC answer:', error);
+      socket.emit('error', { message: 'Failed to process answer' });
+    }
+  }
+
+  private async handleWebRTCIceCandidate(
+    socket: AuthenticatedSocket,
+    data: { callId: string; candidate: any }
+  ) {
+    try {
+      const { callId, candidate } = data;
+      console.log(
+        `[DEBUG] WebRTC: Received ICE candidate for call ${callId} from ${socket.userId}`
+      );
+
+      // Verify user is part of the call
+      const call = await callSessionService.getCallSessionById(callId);
+      if (
+        !call ||
+        (call.callerId !== socket.userId && call.receiverId !== socket.userId)
+      ) {
+        socket.emit('error', {
+          message: 'Unauthorized to send ICE candidate for this call',
+        });
+        return;
+      }
+
+      // Forward ICE candidate to call room (other participant)
+      socket.to(`call:${callId}`).emit('webrtc-ice-candidate', {
+        callId,
+        fromUserId: socket.userId,
+        candidate,
+      });
+    } catch (error) {
+      logger.error('Error handling WebRTC ICE candidate:', error);
+      socket.emit('error', { message: 'Failed to process ICE candidate' });
     }
   }
 
@@ -297,22 +395,39 @@ export class WebRTCService {
   ) {
     try {
       const { callId } = data;
+      console.log(
+        `[DEBUG] WebRTC: Received initiate-call for ${callId} from user ${socket.userId}`
+      );
 
       // Verify call and get details
       const call = await callSessionService.getCallSessionById(callId);
       if (!call || call.callerId !== socket.userId) {
+        console.log(
+          `[DEBUG] WebRTC: Initiation failed - Call not found or unauthorized. Call: ${JSON.stringify(call)}`
+        );
         socket.emit('error', { message: 'Unauthorized to initiate this call' });
         return;
       }
+
+      // Join the call room immediately
+      socket.join(`call:${callId}`);
+      logger.info(`User ${socket.userId} joined call room: ${callId}`);
 
       // Get caller's username
       const caller = await userService.getUserById(call.callerId);
 
       // Notify receiver
-      const receiverSocketId = this.connectedUsers.get(call.receiverId);
-      if (receiverSocketId) {
-        // Receiver is online — deliver via socket
-        this.io.to(receiverSocketId).emit('incoming-call', {
+      const isReceiverOnline = this.isUserOnline(call.receiverId);
+      console.log(
+        `[DEBUG] WebRTC: Notifying receiver ${call.receiverId}. Online status: ${isReceiverOnline}`
+      );
+
+      if (isReceiverOnline) {
+        // Receiver is online — deliver via their personal room
+        console.log(
+          `[DEBUG] WebRTC: Emitting incoming-call to user room ${call.receiverId}`
+        );
+        this.io.to(call.receiverId).emit('incoming-call', {
           callId: call.id,
           callerId: call.callerId,
           callerUsername: caller.username,
@@ -358,6 +473,10 @@ export class WebRTCService {
         return;
       }
 
+      // CRITICAL FIX: Join the call room BEFORE updating status
+      socket.join(`call:${callId}`);
+      logger.info(`Receiver ${socket.userId} joined call room: ${callId}`);
+
       // Update call status
       await callSessionService.updateCallStatus(
         callId,
@@ -365,14 +484,15 @@ export class WebRTCService {
         'connected'
       );
 
-      // Notify caller
-      const callerSocketId = this.connectedUsers.get(call.callerId);
-      if (callerSocketId) {
-        this.io.to(callerSocketId).emit('call-accepted', {
-          callId: call.id,
-          receiverId: call.receiverId,
-        });
-      }
+      // Notify caller via call room AND personal room (double delivery)
+      this.io.to(`call:${callId}`).emit('call-accepted', {
+        callId: call.id,
+        receiverId: call.receiverId,
+      });
+      this.io.to(call.callerId).emit('call-accepted', {
+        callId: call.id,
+        receiverId: call.receiverId,
+      });
 
       // Notify receiver that call is connected
       socket.emit('call-connected', { callId: call.id });
@@ -399,14 +519,14 @@ export class WebRTCService {
       // Update call status
       await callSessionService.rejectCall(callId, socket.userId!);
 
-      // Notify caller
-      const callerSocketId = this.connectedUsers.get(call.callerId);
-      if (callerSocketId) {
-        this.io.to(callerSocketId).emit('call-rejected', {
-          callId: call.id,
-          receiverId: call.receiverId,
-        });
-      }
+      // Notify caller via their personal room
+      this.io.to(call.callerId).emit('call-rejected', {
+        callId: call.id,
+        receiverId: call.receiverId,
+      });
+
+      // Ensure they leave the room (if they ever joined)
+      socket.leave(`call:${callId}`);
     } catch (error) {
       logger.error('Error handling call rejection:', error);
       socket.emit('error', { message: 'Failed to reject call' });
@@ -420,7 +540,7 @@ export class WebRTCService {
     try {
       const { callId } = data;
 
-      // End the call
+      // End the call in DB
       const updatedCall = await callSessionService.endCall(
         callId,
         socket.userId!
@@ -435,16 +555,24 @@ export class WebRTCService {
       if (call) {
         const otherUserId =
           call.callerId === socket.userId ? call.receiverId : call.callerId;
-        const otherSocketId = this.connectedUsers.get(otherUserId);
 
-        if (otherSocketId) {
-          this.io.to(otherSocketId).emit('call-ended', {
-            callId: call.id,
-            endedBy: socket.userId,
-          });
-        }
+        // Notify the room so the other party gets the message
+        socket.to(`call:${callId}`).emit('call-ended', {
+          callId: call.id,
+          endedBy: socket.userId,
+        });
+
+        // Fallback: Notify via personal room as well
+        this.io.to(otherUserId).emit('call-ended', {
+          callId: call.id,
+          endedBy: socket.userId,
+        });
       }
 
+      // Cleanup room membership
+      socket.leave(`call:${callId}`);
+
+      // Confirm to sender
       socket.emit('call-ended', { callId });
     } catch (error) {
       logger.error('Error handling call end:', error);

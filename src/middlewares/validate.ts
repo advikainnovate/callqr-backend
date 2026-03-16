@@ -5,7 +5,14 @@ import { appConfig } from '../config'; // Import appConfig
 
 export const validate = (schema: z.Schema) =>
   asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+    if (req.method === 'OPTIONS') {
+      return next();
+    }
     try {
+      console.log(
+        `[DEBUG] Validating ${req.method} ${req.path} with schema. Body:`,
+        JSON.stringify(req.body)
+      );
       await schema.parseAsync({
         body: req.body,
         query: req.query,
@@ -14,6 +21,10 @@ export const validate = (schema: z.Schema) =>
       return next();
     } catch (error) {
       if (error instanceof ZodError) {
+        console.log(
+          `[DEBUG] Zod Error Details:`,
+          JSON.stringify(error.issues, null, 2)
+        );
         const errorMessages = error.issues.map(issue => ({
           message: `${issue.path.join('.')} is ${issue.message.toLowerCase()}`,
         }));
