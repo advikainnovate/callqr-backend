@@ -1,8 +1,21 @@
 import { eq, or, and } from 'drizzle-orm';
 import { db } from '../db';
-import { users, userBlocks, type NewUser, type User, type NewUserBlock } from '../models';
+import {
+  users,
+  userBlocks,
+  type NewUser,
+  type User,
+  type NewUserBlock,
+} from '../models';
 import { v4 as uuidv4 } from 'uuid';
-import { logger, ConflictError, NotFoundError, BadRequestError, UnauthorizedError, ForbiddenError } from '../utils';
+import {
+  logger,
+  ConflictError,
+  NotFoundError,
+  BadRequestError,
+  UnauthorizedError,
+  ForbiddenError,
+} from '../utils';
 import crypto from 'crypto';
 import bcrypt from 'bcrypt';
 import { appConfig } from '../config';
@@ -39,7 +52,10 @@ export class UserService {
     return bcrypt.hash(password, saltRounds);
   }
 
-  private async verifyPassword(password: string, hash: string): Promise<boolean> {
+  private async verifyPassword(
+    password: string,
+    hash: string
+  ): Promise<boolean> {
     return bcrypt.compare(password, hash);
   }
 
@@ -93,7 +109,7 @@ export class UserService {
     // Create default FREE subscription for new user
     const { subscriptions } = await import('../models');
     const { SUBSCRIPTION_PLANS } = await import('../constants/subscriptions');
-    
+
     await db.insert(subscriptions).values({
       id: uuidv4(),
       userId: user.id,
@@ -121,7 +137,9 @@ export class UserService {
 
     // Check if user is globally blocked
     if (user.isGloballyBlocked === 'true') {
-      throw new ForbiddenError('Your account has been globally blocked. Please contact support.');
+      throw new ForbiddenError(
+        'Your account has been globally blocked. Please contact support.'
+      );
     }
 
     // Check if user is active
@@ -130,7 +148,10 @@ export class UserService {
     }
 
     // Verify password
-    const isPasswordValid = await this.verifyPassword(password, user.passwordHash);
+    const isPasswordValid = await this.verifyPassword(
+      password,
+      user.passwordHash
+    );
 
     if (!isPasswordValid) {
       throw new UnauthorizedError('Invalid username or password');
@@ -140,12 +161,19 @@ export class UserService {
     return user;
   }
 
-  async changePassword(userId: string, oldPassword: string, newPassword: string): Promise<void> {
+  async changePassword(
+    userId: string,
+    oldPassword: string,
+    newPassword: string
+  ): Promise<void> {
     // Get user
     const user = await this.getUserById(userId);
 
     // Verify old password
-    const isPasswordValid = await this.verifyPassword(oldPassword, user.passwordHash);
+    const isPasswordValid = await this.verifyPassword(
+      oldPassword,
+      user.passwordHash
+    );
 
     if (!isPasswordValid) {
       throw new UnauthorizedError('Current password is incorrect');
@@ -153,7 +181,9 @@ export class UserService {
 
     // Validate new password
     if (!newPassword || newPassword.length < 6) {
-      throw new BadRequestError('New password must be at least 6 characters long');
+      throw new BadRequestError(
+        'New password must be at least 6 characters long'
+      );
     }
 
     // Hash new password
@@ -309,7 +339,9 @@ export class UserService {
   }
 
   // Forgot Password - Generate reset token
-  async generatePasswordResetToken(email: string): Promise<{ token: string; user: User }> {
+  async generatePasswordResetToken(
+    email: string
+  ): Promise<{ token: string; user: User }> {
     // Find user by email hash
     const emailHash = this.hashData(email);
     const [user] = await db
@@ -427,7 +459,9 @@ export class UserService {
       .where(eq(users.id, userId))
       .returning();
 
-    logger.info(`User ${userId} globally blocked by admin ${adminId}. Reason: ${reason}`);
+    logger.info(
+      `User ${userId} globally blocked by admin ${adminId}. Reason: ${reason}`
+    );
     return blockedUser;
   }
 
@@ -463,7 +497,10 @@ export class UserService {
   }
 
   // Get globally blocked users (admin only)
-  async getGloballyBlockedUsers(limit: number = 100, offset: number = 0): Promise<User[]> {
+  async getGloballyBlockedUsers(
+    limit: number = 100,
+    offset: number = 0
+  ): Promise<User[]> {
     return db
       .select()
       .from(users)
@@ -473,18 +510,18 @@ export class UserService {
   }
 
   // Phone Verification Methods
-  
+
   // Generate and store phone verification OTP
   async generatePhoneVerificationOTP(userId: string): Promise<string> {
     // Generate 6-digit OTP
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    
+
     // Hash the OTP before storing
     const hashedOTP = this.hashData(otp);
-    
+
     // Set expiry to 10 minutes from now
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
-    
+
     // Store hashed OTP and expiry in database
     await db
       .update(users)
@@ -493,9 +530,9 @@ export class UserService {
         phoneVerificationExpires: expiresAt,
       })
       .where(eq(users.id, userId));
-    
+
     logger.info(`Phone verification OTP generated for user ${userId}`);
-    
+
     // Return the plain OTP to send via SMS
     return otp;
   }
@@ -503,23 +540,27 @@ export class UserService {
   // Verify phone OTP
   async verifyPhoneOTP(userId: string, otp: string): Promise<boolean> {
     const user = await this.getUserById(userId);
-    
+
     if (!user.phoneVerificationCode || !user.phoneVerificationExpires) {
-      throw new BadRequestError('No verification code found. Please request a new code.');
+      throw new BadRequestError(
+        'No verification code found. Please request a new code.'
+      );
     }
-    
+
     // Check if OTP has expired
     if (new Date() > user.phoneVerificationExpires) {
-      throw new BadRequestError('Verification code has expired. Please request a new code.');
+      throw new BadRequestError(
+        'Verification code has expired. Please request a new code.'
+      );
     }
-    
+
     // Hash the provided OTP and compare
     const hashedOTP = this.hashData(otp);
-    
+
     if (hashedOTP !== user.phoneVerificationCode) {
       throw new BadRequestError('Invalid verification code.');
     }
-    
+
     // Mark phone as verified and clear verification fields
     await db
       .update(users)
@@ -529,7 +570,7 @@ export class UserService {
         phoneVerificationExpires: null,
       })
       .where(eq(users.id, userId));
-    
+
     logger.info(`Phone verified successfully for user ${userId}`);
     return true;
   }
@@ -543,21 +584,26 @@ export class UserService {
   // Resend phone verification OTP
   async resendPhoneVerificationOTP(userId: string): Promise<string> {
     const user = await this.getUserById(userId);
-    
+
     if (!user.phone) {
-      throw new BadRequestError('No phone number associated with this account.');
+      throw new BadRequestError(
+        'No phone number associated with this account.'
+      );
     }
-    
+
     if (user.isPhoneVerified === 'true') {
       throw new BadRequestError('Phone number is already verified.');
     }
-    
+
     // Generate new OTP
     return this.generatePhoneVerificationOTP(userId);
   }
 
   // Reset password using user ID (after OTP verification)
-  async resetPasswordWithUserId(userId: string, newPassword: string): Promise<void> {
+  async resetPasswordWithUserId(
+    userId: string,
+    newPassword: string
+  ): Promise<void> {
     // Validate password
     if (!newPassword || newPassword.length < 6) {
       throw new BadRequestError('Password must be at least 6 characters long');
@@ -580,7 +626,11 @@ export class UserService {
 
   // ==================== USER BLOCKING METHODS ====================
 
-  async blockUserById(blockerId: string, blockedUserId: string, reason?: string): Promise<void> {
+  async blockUserById(
+    blockerId: string,
+    blockedUserId: string,
+    reason?: string
+  ): Promise<void> {
     if (blockerId === blockedUserId) {
       throw new BadRequestError('Cannot block yourself');
     }
@@ -597,7 +647,9 @@ export class UserService {
         reason,
       });
 
-      logger.info(`User ${blockerId} blocked user ${blockedUserId}${reason ? ` for reason: ${reason}` : ''}`);
+      logger.info(
+        `User ${blockerId} blocked user ${blockedUserId}${reason ? ` for reason: ${reason}` : ''}`
+      );
     } catch (error: any) {
       // Handle unique constraint violation (user already blocked)
       if (error.code === '23505') {
@@ -607,7 +659,10 @@ export class UserService {
     }
   }
 
-  async unblockUserById(blockerId: string, blockedUserId: string): Promise<void> {
+  async unblockUserById(
+    blockerId: string,
+    blockedUserId: string
+  ): Promise<void> {
     const result = await db
       .delete(userBlocks)
       .where(
@@ -620,7 +675,10 @@ export class UserService {
     logger.info(`User ${blockerId} unblocked user ${blockedUserId}`);
   }
 
-  async isUserBlocked(blockerId: string, blockedUserId: string): Promise<boolean> {
+  async isUserBlocked(
+    blockerId: string,
+    blockedUserId: string
+  ): Promise<boolean> {
     const [block] = await db
       .select()
       .from(userBlocks)
@@ -635,7 +693,11 @@ export class UserService {
     return !!block;
   }
 
-  async getBlockedUsers(blockerId: string, limit: number = 50, offset: number = 0): Promise<User[]> {
+  async getBlockedUsers(
+    blockerId: string,
+    limit: number = 50,
+    offset: number = 0
+  ): Promise<User[]> {
     const blockedUserIds = await db
       .select({ blockedUserId: userBlocks.blockedUserId })
       .from(userBlocks)
@@ -659,7 +721,11 @@ export class UserService {
       );
   }
 
-  async getUsersWhoBlockedMe(userId: string, limit: number = 50, offset: number = 0): Promise<User[]> {
+  async getUsersWhoBlockedMe(
+    userId: string,
+    limit: number = 50,
+    offset: number = 0
+  ): Promise<User[]> {
     const blockerIds = await db
       .select({ blockerId: userBlocks.blockerId })
       .from(userBlocks)
@@ -681,6 +747,70 @@ export class UserService {
           or(...userIds.map(id => eq(users.id, id)))
         )
       );
+  }
+
+  // ==================== DEVICE TOKEN METHODS ====================
+
+  async upsertDeviceToken(
+    userId: string,
+    token: string,
+    platform: string,
+    deviceId?: string
+  ): Promise<void> {
+    const { deviceTokens } = await import('../models');
+
+    // Check if token already exists for any user.
+    // If it exists for another user (e.g., device changed hands), we might want to overwrite or re-assign.
+    // Drizzle currently doesn't have a simple ON CONFLICT for postgres.js without the specific syntax,
+    // so let's do a select and update/insert.
+    const [existing] = await db
+      .select()
+      .from(deviceTokens)
+      .where(eq(deviceTokens.token, token))
+      .limit(1);
+
+    if (existing) {
+      await db
+        .update(deviceTokens)
+        .set({
+          userId,
+          platform,
+          deviceId: deviceId || null,
+          updatedAt: new Date(),
+        })
+        .where(eq(deviceTokens.id, existing.id));
+    } else {
+      await db.insert(deviceTokens).values({
+        id: uuidv4(),
+        userId,
+        token,
+        platform,
+        deviceId: deviceId || null,
+      });
+    }
+
+    logger.info(`Device token upserted for user ${userId}`);
+  }
+
+  async removeDeviceToken(userId: string, token: string): Promise<void> {
+    const { deviceTokens } = await import('../models');
+    await db
+      .delete(deviceTokens)
+      .where(
+        and(eq(deviceTokens.userId, userId), eq(deviceTokens.token, token))
+      );
+
+    logger.info(`Device token removed for user ${userId}`);
+  }
+
+  async getUserDeviceTokens(userId: string): Promise<string[]> {
+    const { deviceTokens } = await import('../models');
+    const tokens = await db
+      .select({ token: deviceTokens.token })
+      .from(deviceTokens)
+      .where(eq(deviceTokens.userId, userId));
+
+    return tokens.map(t => t.token);
   }
 }
 

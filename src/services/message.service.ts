@@ -1,8 +1,19 @@
 import { eq, and, desc, sql, gte, like, inArray } from 'drizzle-orm';
 import { db } from '../db';
-import { messages, type NewMessage, type Message, type MessageMedia } from '../models';
+import {
+  messages,
+  type NewMessage,
+  type Message,
+  type MessageMedia,
+} from '../models';
 import { v4 as uuidv4 } from 'uuid';
-import { logger, NotFoundError, BadRequestError, ForbiddenError, TooManyRequestsError } from '../utils';
+import {
+  logger,
+  NotFoundError,
+  BadRequestError,
+  ForbiddenError,
+  TooManyRequestsError,
+} from '../utils';
 import { chatSessionService } from './chatSession.service';
 import { subscriptionService } from './subscription.service';
 import { mediaService } from './media.service';
@@ -23,23 +34,33 @@ export class MessageService {
     }
 
     // Verify sender is participant in chat
-    const isParticipant = await chatSessionService.verifyParticipant(chatSessionId, senderId);
+    const isParticipant = await chatSessionService.verifyParticipant(
+      chatSessionId,
+      senderId
+    );
     if (!isParticipant) {
       throw new ForbiddenError('You are not a participant in this chat');
     }
 
     // Get chat session and verify it's active
-    const chatSession = await chatSessionService.getChatSessionById(chatSessionId);
+    const chatSession =
+      await chatSessionService.getChatSessionById(chatSessionId);
     if (chatSession.status !== 'active') {
-      throw new BadRequestError(`Cannot send message to ${chatSession.status} chat`);
+      throw new BadRequestError(
+        `Cannot send message to ${chatSession.status} chat`
+      );
     }
 
     // NEW: Check if either participant has blocked the other
-    const otherParticipantId = chatSession.participant1Id === senderId 
-      ? chatSession.participant2Id 
-      : chatSession.participant1Id;
-      
-    const isBlocked = await userService.isUserBlocked(otherParticipantId, senderId);
+    const otherParticipantId =
+      chatSession.participant1Id === senderId
+        ? chatSession.participant2Id
+        : chatSession.participant1Id;
+
+    const isBlocked = await userService.isUserBlocked(
+      otherParticipantId,
+      senderId
+    );
     if (isBlocked) {
       throw new ForbiddenError('Unable to send message');
     }
@@ -53,7 +74,9 @@ export class MessageService {
         throw new BadRequestError('Message content cannot be empty');
       }
       if (content.length > 5000) {
-        throw new BadRequestError('Message content exceeds maximum length of 5000 characters');
+        throw new BadRequestError(
+          'Message content exceeds maximum length of 5000 characters'
+        );
       }
     }
 
@@ -61,12 +84,16 @@ export class MessageService {
     let mediaAttachments: MessageMedia[] | undefined;
     if (messageType === 'image' && mediaFiles && mediaFiles.length > 0) {
       try {
-        const uploadResults = await mediaService.uploadImages(mediaFiles, senderId);
+        const uploadResults = await mediaService.uploadImages(
+          mediaFiles,
+          senderId
+        );
         mediaAttachments = uploadResults.map(result => ({
           ...result,
-          thumbnailUrl: mediaService.generateImageUrls(result.publicId).thumbnail,
+          thumbnailUrl: mediaService.generateImageUrls(result.publicId)
+            .thumbnail,
         }));
-        
+
         // For image messages, content can be optional (caption)
         if (!content) {
           content = `Sent ${mediaAttachments.length} image${mediaAttachments.length > 1 ? 's' : ''}`;
@@ -96,7 +123,9 @@ export class MessageService {
     // Update chat session's last message time
     await chatSessionService.updateLastMessageTime(chatSessionId);
 
-    logger.info(`Message sent: ${message.id} in chat ${chatSessionId} (type: ${messageType})`);
+    logger.info(
+      `Message sent: ${message.id} in chat ${chatSessionId} (type: ${messageType})`
+    );
     return message;
   }
 
@@ -107,7 +136,10 @@ export class MessageService {
     offset: number = 0
   ): Promise<Message[]> {
     // Verify user is participant in chat
-    const isParticipant = await chatSessionService.verifyParticipant(chatSessionId, userId);
+    const isParticipant = await chatSessionService.verifyParticipant(
+      chatSessionId,
+      userId
+    );
     if (!isParticipant) {
       throw new ForbiddenError('You are not a participant in this chat');
     }
@@ -115,7 +147,12 @@ export class MessageService {
     return db
       .select()
       .from(messages)
-      .where(and(eq(messages.chatSessionId, chatSessionId), eq(messages.isDeleted, false)))
+      .where(
+        and(
+          eq(messages.chatSessionId, chatSessionId),
+          eq(messages.isDeleted, false)
+        )
+      )
       .orderBy(desc(messages.sentAt))
       .limit(limit)
       .offset(offset);
@@ -133,7 +170,10 @@ export class MessageService {
     }
 
     // Verify user is participant in chat
-    const isParticipant = await chatSessionService.verifyParticipant(message.chatSessionId, userId);
+    const isParticipant = await chatSessionService.verifyParticipant(
+      message.chatSessionId,
+      userId
+    );
     if (!isParticipant) {
       throw new ForbiddenError('You are not a participant in this chat');
     }
@@ -161,9 +201,15 @@ export class MessageService {
     return updatedMessage;
   }
 
-  async markChatMessagesAsRead(chatSessionId: string, userId: string): Promise<number> {
+  async markChatMessagesAsRead(
+    chatSessionId: string,
+    userId: string
+  ): Promise<number> {
     // Verify user is participant in chat
-    const isParticipant = await chatSessionService.verifyParticipant(chatSessionId, userId);
+    const isParticipant = await chatSessionService.verifyParticipant(
+      chatSessionId,
+      userId
+    );
     if (!isParticipant) {
       throw new ForbiddenError('You are not a participant in this chat');
     }
@@ -184,7 +230,9 @@ export class MessageService {
       )
       .returning();
 
-    logger.info(`Marked ${result.length} messages as read in chat ${chatSessionId}`);
+    logger.info(
+      `Marked ${result.length} messages as read in chat ${chatSessionId}`
+    );
     return result.length;
   }
 
@@ -206,7 +254,9 @@ export class MessageService {
 
     // Delete media attachments from Cloudinary if present
     if (message.mediaAttachments && Array.isArray(message.mediaAttachments)) {
-      const publicIds = message.mediaAttachments.map((media: MessageMedia) => media.publicId);
+      const publicIds = message.mediaAttachments.map(
+        (media: MessageMedia) => media.publicId
+      );
       if (publicIds.length > 0) {
         await mediaService.deleteImages(publicIds);
       }
@@ -227,14 +277,14 @@ export class MessageService {
   async getUnreadCount(userId: string): Promise<number> {
     // Get all chat sessions where user is participant
     const chatSessions = await chatSessionService.getUserChatSessions(userId);
-    
+
     if (chatSessions.length === 0) {
       return 0;
     }
 
     // Use Drizzle's inArray for safe parameter binding
-    const chatSessionIds = chatSessions.map((chat) => chat.id);
-    
+    const chatSessionIds = chatSessions.map(chat => chat.id);
+
     // Count unread messages in all user's chats (excluding user's own messages)
     const [result] = await db
       .select({ count: sql<number>`count(*)` })
@@ -251,9 +301,15 @@ export class MessageService {
     return Number(result.count);
   }
 
-  async getUnreadCountByChat(chatSessionId: string, userId: string): Promise<number> {
+  async getUnreadCountByChat(
+    chatSessionId: string,
+    userId: string
+  ): Promise<number> {
     // Verify user is participant in chat
-    const isParticipant = await chatSessionService.verifyParticipant(chatSessionId, userId);
+    const isParticipant = await chatSessionService.verifyParticipant(
+      chatSessionId,
+      userId
+    );
     if (!isParticipant) {
       throw new ForbiddenError('You are not a participant in this chat');
     }
@@ -273,9 +329,16 @@ export class MessageService {
     return Number(result.count);
   }
 
-  async searchMessages(chatSessionId: string, userId: string, query: string): Promise<Message[]> {
+  async searchMessages(
+    chatSessionId: string,
+    userId: string,
+    query: string
+  ): Promise<Message[]> {
     // Verify user is participant in chat
-    const isParticipant = await chatSessionService.verifyParticipant(chatSessionId, userId);
+    const isParticipant = await chatSessionService.verifyParticipant(
+      chatSessionId,
+      userId
+    );
     if (!isParticipant) {
       throw new ForbiddenError('You are not a participant in this chat');
     }
@@ -305,7 +368,9 @@ export class MessageService {
     const [result] = await db
       .select({ count: sql<number>`count(*)` })
       .from(messages)
-      .where(and(eq(messages.senderId, userId), gte(messages.sentAt, startOfDay)));
+      .where(
+        and(eq(messages.senderId, userId), gte(messages.sentAt, startOfDay))
+      );
 
     return Number(result.count);
   }
@@ -326,11 +391,31 @@ export class MessageService {
     }
   }
 
+  /** Lightweight fetch by primary key — for internal use only (no participant check). */
+  async getMessageById(messageId: string): Promise<Message> {
+    const [message] = await db
+      .select()
+      .from(messages)
+      .where(eq(messages.id, messageId))
+      .limit(1);
+
+    if (!message) {
+      throw new NotFoundError('Message not found');
+    }
+
+    return message;
+  }
+
   async getLastMessage(chatSessionId: string): Promise<Message | null> {
     const [message] = await db
       .select()
       .from(messages)
-      .where(and(eq(messages.chatSessionId, chatSessionId), eq(messages.isDeleted, false)))
+      .where(
+        and(
+          eq(messages.chatSessionId, chatSessionId),
+          eq(messages.isDeleted, false)
+        )
+      )
       .orderBy(desc(messages.sentAt))
       .limit(1);
 
@@ -349,7 +434,10 @@ export class MessageService {
     }
 
     // Verify user is participant in chat
-    const isParticipant = await chatSessionService.verifyParticipant(message.chatSessionId, userId);
+    const isParticipant = await chatSessionService.verifyParticipant(
+      message.chatSessionId,
+      userId
+    );
     if (!isParticipant) {
       throw new ForbiddenError('You are not a participant in this chat');
     }
@@ -372,9 +460,15 @@ export class MessageService {
     return updatedMessage;
   }
 
-  async markChatMessagesAsDelivered(chatSessionId: string, userId: string): Promise<number> {
+  async markChatMessagesAsDelivered(
+    chatSessionId: string,
+    userId: string
+  ): Promise<number> {
     // Verify user is participant in chat
-    const isParticipant = await chatSessionService.verifyParticipant(chatSessionId, userId);
+    const isParticipant = await chatSessionService.verifyParticipant(
+      chatSessionId,
+      userId
+    );
     if (!isParticipant) {
       throw new ForbiddenError('You are not a participant in this chat');
     }
@@ -395,11 +489,16 @@ export class MessageService {
       )
       .returning();
 
-    logger.info(`Marked ${result.length} messages as delivered in chat ${chatSessionId}`);
+    logger.info(
+      `Marked ${result.length} messages as delivered in chat ${chatSessionId}`
+    );
     return result.length;
   }
 
-  async getDeliveryStatus(messageId: string, userId: string): Promise<{
+  async getDeliveryStatus(
+    messageId: string,
+    userId: string
+  ): Promise<{
     sent: boolean;
     delivered: boolean;
     read: boolean;
@@ -418,7 +517,10 @@ export class MessageService {
     }
 
     // Verify user is participant in chat
-    const isParticipant = await chatSessionService.verifyParticipant(message.chatSessionId, userId);
+    const isParticipant = await chatSessionService.verifyParticipant(
+      message.chatSessionId,
+      userId
+    );
     if (!isParticipant) {
       throw new ForbiddenError('You are not a participant in this chat');
     }

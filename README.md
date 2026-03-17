@@ -60,6 +60,13 @@ TWILIO_ACCOUNT_SID=your_account_sid
 TWILIO_AUTH_TOKEN=your_auth_token
 TWILIO_PHONE_NUMBER=+1234567890
 
+# Firebase (Optional - for push notifications)
+FIREBASE_SERVICE_ACCOUNT_PATH=/path/to/serviceAccount.json
+# OR individual values:
+FIREBASE_PROJECT_ID=your-project-id
+FIREBASE_CLIENT_EMAIL=firebase-adminsdk@your-project.iam.gserviceaccount.com
+FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
+
 # CORS
 ALLOWED_ORIGINS=*
 ```
@@ -74,9 +81,10 @@ ALLOWED_ORIGINS=*
 - Graceful shutdown with client notification
 - Helmet.js security headers
 - Input validation with Zod
-- Forgot password with secure token reset
+- Password reset with secure OTP verification
 - Global user blocking for platform-wide access control
 - Phone verification with OTP via Twilio SMS
+- **Push Notifications (FCM)** for offline calls and messages
 
 ### Communication
 - WebRTC voice/video calls
@@ -87,6 +95,9 @@ ALLOWED_ORIGINS=*
 
 ### Management
 - QR code lifecycle (create, assign, scan, revoke)
+- **QR Token Types**: 
+  - Human Token (12 chars): `QR-94NT-FN43` - For display/manual entry
+  - Machine Token (64 chars): `6d89188c...` - For API calls (required for `/api/calls/initiate`)
 - Subscription tiers (Free, Pro, Enterprise)
 - Razorpay payment integration
 - Admin dashboard with analytics
@@ -121,16 +132,15 @@ PostgreSQL Database (Users, QR Codes, Sessions, Messages)
 
 ## 📚 Documentation
 
-- **[WORKFLOW.md](WORKFLOW.md)** - Complete API workflows for admin and users
-- **[API_ENDPOINTS.md](API_ENDPOINTS.md)** - All available endpoints with examples
-- **[DATABASE_BACKUP.md](docs/DATABASE_BACKUP.md)** - Database backup and restore guide
-- **[SOCKET_RATE_LIMITING.md](SOCKET_RATE_LIMITING.md)** - Socket.IO rate limiting implementation
-- **[GRACEFUL_SHUTDOWN.md](GRACEFUL_SHUTDOWN.md)** - Graceful shutdown implementation
-- **[PROFILE_ENDPOINT_DOCS.md](PROFILE_ENDPOINT_DOCS.md)** - Enhanced profile endpoint with usage stats
-- **[FORGOT_PASSWORD_FLOW.md](docs/FORGOT_PASSWORD_FLOW.md)** - Password reset implementation
-- **[GLOBAL_USER_BLOCKING.md](docs/GLOBAL_USER_BLOCKING.md)** - Global user blocking system
-- **[PHONE_VERIFICATION_FLOW.md](docs/PHONE_VERIFICATION_FLOW.md)** - Phone verification with OTP
-- **[NEW_FEATURES_SUMMARY.md](docs/NEW_FEATURES_SUMMARY.md)** - Summary of latest features
+- **[docs/AUTHENTICATION.md](docs/AUTHENTICATION.md)** - Registration, OTP verification, and login logic
+- **[docs/MESSAGING.md](docs/MESSAGING.md)** - Real-time chat, media uploads, and sockets
+- **[docs/CALLS_AND_WEBRTC.md](docs/CALLS_AND_WEBRTC.md)** - WebRTC signaling and call life-cycle
+- **[docs/PUSH_NOTIFICATIONS.md](docs/PUSH_NOTIFICATIONS.md)** - FCM integration for offline users
+- **[docs/ADMIN_AND_BLOCKING.md](docs/ADMIN_AND_BLOCKING.md)** - Global and user-level blocking
+- **[docs/RATE_LIMITING.md](docs/RATE_LIMITING.md)** - Socket and API protection
+- **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)** - Production setup and Nginx config
+- **[API_ENDPOINTS.md](API_ENDPOINTS.md)** - Reference list of all REST endpoints
+- **[WORKFLOW.md](WORKFLOW.md)** - End-to-end integration examples
 - **[Swagger Docs](http://localhost:9001/api-docs)** - Live interactive API documentation
 
 ## 🛠️ Development
@@ -151,6 +161,38 @@ npm run admin:create # Create admin user (interactive)
 
 ### Database Backup & Restore
 
+#### Prerequisites
+
+**Install PostgreSQL Client Tools:**
+
+**Windows:**
+1. Download PostgreSQL from: https://www.postgresql.org/download/windows/
+2. Install PostgreSQL (includes `pg_dump` and `psql`)
+3. Add PostgreSQL bin directory to PATH:
+   - Default location: `C:\Program Files\PostgreSQL\15\bin`
+   - Add to System Environment Variables > PATH
+4. Restart your terminal/IDE
+
+**macOS:**
+```bash
+# Via Homebrew
+brew install postgresql
+
+# Or download from: https://www.postgresql.org/download/macosx/
+```
+
+**Linux:**
+```bash
+# Ubuntu/Debian
+sudo apt-get install postgresql-client
+
+# CentOS/RHEL
+sudo yum install postgresql
+```
+
+#### Backup Methods
+
+**Method 1: Node.js Scripts (Cross-platform)**
 ```bash
 # Create a backup
 npm run db:backup
@@ -161,6 +203,37 @@ npm run db:restore backup_mydb_2024-03-05_15-30-00.sql
 # List available backups
 ls backups/
 ```
+
+**Method 2: Shell Scripts (Unix/Linux/macOS)**
+```bash
+# Make scripts executable
+chmod +x scripts/backup.sh scripts/restore.sh
+
+# Create backup
+./scripts/backup.sh
+
+# Restore backup
+./scripts/restore.sh backup_mydb_2024-03-05_15-30-00.sql
+```
+
+**Method 3: Batch Scripts (Windows)**
+```cmd
+# Create backup
+scripts\backup.bat
+
+# Restore backup
+scripts\restore.bat backup_mydb_2024-03-05_15-30-00.sql
+```
+
+#### Backup Features
+
+- ✅ **Automatic timestamping** - `backup_dbname_2026-03-16_20-10-11.sql`
+- ✅ **Size reporting** - Shows backup file size
+- ✅ **Recent backups list** - Shows last 5 backups
+- ✅ **Error handling** - Clear error messages and troubleshooting
+- ✅ **Cross-platform** - Works on Windows, macOS, Linux
+- ✅ **Safety checks** - Confirmation prompts for restore operations
+- ✅ **Installation guidance** - Helps install required tools
 
 Backups are stored in the `backups/` directory with timestamps.
 
@@ -245,6 +318,35 @@ See [WORKFLOW.md](WORKFLOW.md#6-payment--subscription-workflow) for complete pay
 
 ## 🔌 WebRTC Integration
 
+### Complete WebRTC Event Flow
+
+The system supports the full WebRTC signaling flow:
+
+```
+Caller → initiate-call → Server creates call room
+Server → incoming-call → Receiver  
+Receiver → accept-call → Server: both join call:${callId}
+Caller → webrtc-offer → Server → Receiver (via call room)
+Receiver → webrtc-answer → Server → Caller (via call room)
+Both → webrtc-ice-candidate → Server → Other party (via call room)
+```
+
+### Supported WebRTC Events
+
+| Event | Direction | Description |
+|-------|-----------|-------------|
+| `initiate-call` | Client → Server | Start call process |
+| `incoming-call` | Server → Client | Notify receiver of incoming call |
+| `accept-call` | Client → Server | Accept incoming call |
+| `reject-call` | Client → Server | Reject incoming call |
+| `end-call` | Client → Server | End active call |
+| `webrtc-offer` | Client ↔ Server | WebRTC offer signaling |
+| `webrtc-answer` | Client ↔ Server | WebRTC answer signaling |
+| `webrtc-ice-candidate` | Client ↔ Server | ICE candidate exchange |
+| `call-accepted` | Server → Client | Call was accepted |
+| `call-rejected` | Server → Client | Call was rejected |
+| `call-ended` | Server → Client | Call was ended |
+
 ### Socket.IO Rate Limiting
 
 All Socket.IO events are protected with rate limiting to prevent abuse:
@@ -259,7 +361,7 @@ All Socket.IO events are protected with rate limiting to prevent abuse:
 | Read Receipts | 50 requests | 1 minute |
 | Connections (per IP) | 10 connections | 1 minute |
 
-See [SOCKET_RATE_LIMITING.md](SOCKET_RATE_LIMITING.md) for details.
+See [docs/RATE_LIMITING.md](docs/RATE_LIMITING.md) for details.
 
 ### Client Setup
 
