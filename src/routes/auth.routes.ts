@@ -35,23 +35,35 @@ const changePasswordSchema = z.object({
 // Forgot password schema
 const forgotPasswordSchema = z.object({
   body: z.object({
-    email: z.string().email(),
+    username: z.string().min(1, 'Username is required'),
   }),
 });
 
 // Reset password schema
 const resetPasswordSchema = z.object({
   body: z.object({
-    token: z.string().min(1),
-    newPassword: z.string().min(6).max(100),
+    userId: z.string().uuid('Invalid user ID format'),
+    otp: z.string().length(6, 'OTP must be 6 digits'),
+    newPassword: z
+      .string()
+      .min(6, 'Password must be at least 6 characters')
+      .max(100),
   }),
 });
 
 // Public routes
 router.post('/register', validate(registerSchema), authController.register);
 router.post('/login', validate(loginSchema), authController.login);
-router.post('/forgot-password', validate(forgotPasswordSchema), authController.forgotPassword);
-router.post('/reset-password', validate(resetPasswordSchema), authController.resetPassword);
+router.post(
+  '/forgot-password',
+  validate(forgotPasswordSchema),
+  authController.forgotPassword
+);
+router.post(
+  '/reset-password',
+  validate(resetPasswordSchema),
+  authController.resetPassword
+);
 
 /**
  * @swagger
@@ -196,6 +208,11 @@ router.post('/reset-password', validate(resetPasswordSchema), authController.res
  */
 // Protected routes
 router.get('/profile', authenticateToken, authController.getProfile);
-router.post('/change-password', authenticateToken, validate(changePasswordSchema), authController.changePassword);
+router.post(
+  '/change-password',
+  authenticateToken,
+  validate(changePasswordSchema),
+  authController.changePassword
+);
 
 export default router;
