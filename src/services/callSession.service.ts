@@ -2,7 +2,12 @@ import { eq, and, desc, sql, gte, or } from 'drizzle-orm';
 import { db } from '../db';
 import { callSessions, type NewCallSession, type CallSession } from '../models';
 import { v4 as uuidv4 } from 'uuid';
-import { logger, NotFoundError, BadRequestError, ForbiddenError } from '../utils';
+import {
+  logger,
+  NotFoundError,
+  BadRequestError,
+  ForbiddenError,
+} from '../utils';
 import { qrCodeService } from './qrCode.service';
 import { userService } from './user.service';
 import { subscriptionService } from './subscription.service';
@@ -28,7 +33,10 @@ export class CallSessionService {
     }
 
     // NEW: Check if receiver has blocked the caller
-    const isBlocked = await userService.isUserBlocked(qrCode.assignedUserId, callerId);
+    const isBlocked = await userService.isUserBlocked(
+      qrCode.assignedUserId,
+      callerId
+    );
     if (isBlocked) {
       throw new ForbiddenError('Unable to initiate call');
     }
@@ -49,7 +57,9 @@ export class CallSessionService {
       })
       .returning();
 
-    logger.info(`Call session initiated: ${callSession.id} from ${callerId} to ${qrCode.assignedUserId}`);
+    logger.info(
+      `Call session initiated: ${callSession.id} from ${callerId} to ${qrCode.assignedUserId}`
+    );
     return callSession;
   }
 
@@ -62,8 +72,13 @@ export class CallSessionService {
     const existingCall = await this.getCallSessionById(callId);
 
     // Authorization check
-    if (existingCall.callerId !== userId && existingCall.receiverId !== userId) {
-      throw new ForbiddenError('You do not have permission to update this call');
+    if (
+      existingCall.callerId !== userId &&
+      existingCall.receiverId !== userId
+    ) {
+      throw new ForbiddenError(
+        'You do not have permission to update this call'
+      );
     }
 
     const updateData: Partial<NewCallSession> = {
@@ -75,7 +90,7 @@ export class CallSessionService {
     }
 
     if (status === 'connected' && existingCall.status !== 'connected') {
-      updateData.startedAt = new Date();
+      updateData.startedAt = new Date(); // record when media actually started
     }
 
     if (status === 'ended' || status === 'failed') {
@@ -106,11 +121,19 @@ export class CallSessionService {
     return callSession;
   }
 
-  async getUserCallHistory(userId: string, limit: number = 50): Promise<CallSession[]> {
+  async getUserCallHistory(
+    userId: string,
+    limit: number = 50
+  ): Promise<CallSession[]> {
     return db
       .select()
       .from(callSessions)
-      .where(or(eq(callSessions.callerId, userId), eq(callSessions.receiverId, userId)))
+      .where(
+        or(
+          eq(callSessions.callerId, userId),
+          eq(callSessions.receiverId, userId)
+        )
+      )
       .orderBy(desc(callSessions.startedAt))
       .limit(limit);
   }
@@ -121,7 +144,10 @@ export class CallSessionService {
       .from(callSessions)
       .where(
         and(
-          or(eq(callSessions.callerId, userId), eq(callSessions.receiverId, userId)),
+          or(
+            eq(callSessions.callerId, userId),
+            eq(callSessions.receiverId, userId)
+          ),
           or(
             eq(callSessions.status, 'initiated'),
             eq(callSessions.status, 'ringing'),
@@ -132,7 +158,11 @@ export class CallSessionService {
       .orderBy(desc(callSessions.startedAt));
   }
 
-  async endCall(callId: string, userId: string, reason?: 'busy' | 'rejected' | 'timeout' | 'error'): Promise<CallSession> {
+  async endCall(
+    callId: string,
+    userId: string,
+    reason?: 'busy' | 'rejected' | 'timeout' | 'error'
+  ): Promise<CallSession> {
     return this.updateCallStatus(callId, userId, 'ended', reason);
   }
 
@@ -148,11 +178,80 @@ export class CallSessionService {
       throw new ForbiddenError('Only the receiver can accept the call');
     }
 
-    return this.updateCallStatus(callId, userId, 'ringing');
+    // REST accept moves straight to connected (socket handler does the same)
+    return this.updateCallStatus(callId, userId, 'connected');
   }
 
   async connectCall(callId: string, userId: string): Promise<CallSession> {
     return this.updateCallStatus(callId, userId, 'connected');
+  }
+
+  /**
+   * Ends all active (initiated/ringing/connected) calls for a user.
+   * Called when a user disconnects from the socket.
+   */
+  async endActiveCallsForUser(
+    userId: string,
+    reason: 'error' | 'timeout' = 'error'
+  ): Promise<CallSession[]> {
+    const activeCalls = await this.getActiveCalls(userId);
+    const ended: CallSession[] = [];
+
+    for (const call of activeCalls) {
+      try {
+        const updated = await db
+          .update(callSessions)
+          .set({ status: 'ended', endedReason: reason, endedAt: new Date() })
+          .where(eq(callSessions.id, call.id))
+          .returning();
+        if (updated[0]) ended.push(updated[0]);
+      } catch (err) {
+        logger.error(`Failed to end call ${call.id} on disconnect:`, err);
+      }
+    }
+
+    return ended;
+  }
+
+  /**
+   * Times out calls that have been ringing/initiated for longer than maxAgeSeconds.
+   * Should be called periodically (e.g. every 30s).
+   */
+  async timeoutStaleCalls(maxAgeSeconds: number = 60): Promise<CallSession[]> {
+    const cutoff = new Date(Date.now() - maxAgeSeconds * 1000);
+
+    const stale = await db
+      .select()
+      .from(callSessions)
+      .where(
+        and(
+          or(
+            eq(callSessions.status, 'initiated'),
+            eq(callSessions.status, 'ringing')
+          ),
+          sql`${callSessions.initiatedAt} < ${cutoff}`
+        )
+      );
+
+    const timedOut: CallSession[] = [];
+    for (const call of stale) {
+      try {
+        const [updated] = await db
+          .update(callSessions)
+          .set({ status: 'ended', endedReason: 'timeout', endedAt: new Date() })
+          .where(eq(callSessions.id, call.id))
+          .returning();
+        if (updated) timedOut.push(updated);
+      } catch (err) {
+        logger.error(`Failed to timeout call ${call.id}:`, err);
+      }
+    }
+
+    if (timedOut.length > 0) {
+      logger.info(`Timed out ${timedOut.length} stale call(s)`);
+    }
+
+    return timedOut;
   }
 
   async getCallDuration(callId: string): Promise<number> {
@@ -176,7 +275,12 @@ export class CallSessionService {
     const [result] = await db
       .select({ count: sql<number>`count(*)` })
       .from(callSessions)
-      .where(and(eq(callSessions.receiverId, userId), gte(callSessions.startedAt, startOfDay)));
+      .where(
+        and(
+          eq(callSessions.receiverId, userId),
+          gte(callSessions.startedAt, startOfDay)
+        )
+      );
 
     return Number(result.count);
   }
