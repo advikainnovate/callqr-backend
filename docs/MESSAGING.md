@@ -9,11 +9,14 @@
 ```
 Scan QR code → POST /chats/initiate → chatSessionId
         │
-        ├─ Socket: join-chat { chatSessionId }
-        │
-        ├─ Send message: POST /messages → messageId
-        │
-        └─ Socket: chat-message { chatSessionId, messageId }
+        └─ Socket: join-chat { chatSessionId }   ← do this immediately
+                   │
+        Send message: POST /messages
+                   │
+            Server saves to DB
+                   │
+            Server emits new-message
+            to chat:<chatSessionId> room
                    │
             ┌──────┴──────┐
         Recipient      Recipient
@@ -22,6 +25,9 @@ Scan QR code → POST /chats/initiate → chatSessionId
        new-message     FCM push
        via socket      → tray notification
 ```
+
+> ⚠️ There is NO `chat-message` socket emit from the client anymore.
+> The client only calls `POST /messages`. The server handles all real-time delivery.
 
 ---
 
@@ -133,8 +139,6 @@ Fields:
 }
 ```
 
-> After saving via REST, **always emit the socket event** to deliver in real-time (see Socket section).
-
 ---
 
 ## Image URL Variants
@@ -185,8 +189,9 @@ Response:
 
 **WhatsApp-style status indicators:**
 
-| ✓         | Sent      |
+| Icon      | Meaning   |
 | --------- | --------- |
+| ✓         | Sent      |
 | ✓✓        | Delivered |
 | ✓✓ (blue) | Read      |
 
@@ -202,54 +207,97 @@ DELETE /api/messages/:messageId    // sender only, soft-delete
 
 ## Socket.IO — Real-time Delivery
 
-### Join a chat room (do this on entering the chat screen)
+### Connection
 
 ```javascript
-socket.emit('join-chat', { chatSessionId });
-socket.on('chat-joined', ({ chatSessionId }) => {
-  /* ready */
+const socket = io(SERVER_URL, {
+  path: '/socket.io',
+  transports: ['websocket'],
+  auth: { token: 'Bearer <access_token>' },
 });
 ```
 
-### Send a message (REST first, then socket)
+### When to join chat rooms
+
+Join rooms as early as possible — on login or app open — so messages are never missed.
 
 ```javascript
-// 1. Persist via REST
-const { data: msg } = await api.post('/messages', {
+// On connect: rejoin all active chats
+socket.on('connect', () => {
+  activeChats.forEach(({ id }) => {
+    socket.emit('join-chat', { chatSessionId: id });
+  });
+});
+
+// After initiating a new chat
+const { data } = await api.post('/chat-sessions/initiate', { qrToken });
+socket.emit('join-chat', { chatSessionId: data.data.id });
+
+// Confirm
+socket.on('chat-joined', ({ chatSessionId }) => {
+  console.log('Joined room:', chatSessionId);
+});
+```
+
+> The server verifies you are a participant before allowing you into the room.
+> If you are not a participant, you receive an `error` event and are not joined.
+
+### Send a message — REST only, no socket emit
+
+```javascript
+// Just call REST. Server emits new-message to the room automatically.
+const { data } = await api.post('/messages', {
   chatSessionId,
   content: text,
   messageType: 'text',
 });
-
-// 2. Real-time delivery via socket
-socket.emit('chat-message', { chatSessionId, messageId: msg.data.id });
+// data.data contains the full message — render it locally immediately
 ```
 
 ### Receive messages
 
-```javascript
-socket.on('new-message', async ({ chatSessionId, messageId, senderId }) => {
-  // Fetch messages from REST to get content
-  const msgs = await api.get(`/messages/${chatSessionId}`);
-  renderMessages(msgs.data.data);
+The `new-message` event carries the full message payload — no extra REST fetch needed.
 
-  // Acknowledge receipts
-  socket.emit('message-delivered', { chatSessionId, messageId });
-  socket.emit('message-read', { chatSessionId, messageId }); // if chat is open
+```javascript
+socket.on('new-message', message => {
+  // message shape:
+  // {
+  //   id, chatSessionId, senderId, messageType,
+  //   content, mediaAttachments, isDelivered, isRead, sentAt
+  // }
+  appendMessage(message);
+
+  // Send receipts
+  socket.emit('message-delivered', {
+    chatSessionId: message.chatSessionId,
+    messageId: message.id,
+  });
+
+  // If the chat screen is currently open and visible
+  if (isChatOpen(message.chatSessionId)) {
+    socket.emit('message-read', {
+      chatSessionId: message.chatSessionId,
+      messageId: message.id,
+    });
+  }
 });
 ```
 
-### Delivery tick updates
+### Delivery & read tick updates
 
 ```javascript
-socket.on('message-delivered', ({ messageId }) => updateTick(messageId, '✓✓'));
-socket.on('message-read', ({ messageId }) => updateTick(messageId, '✓✓🔵'));
+socket.on('message-delivered', ({ messageId, deliveredAt }) => {
+  updateTick(messageId, '✓✓');
+});
+
+socket.on('message-read', ({ messageId, readAt }) => {
+  updateTick(messageId, '✓✓🔵');
+});
 ```
 
 ### Typing indicators
 
 ```javascript
-// Debounce the stop event
 const stopTyping = debounce(
   () => socket.emit('typing-stop', { chatSessionId }),
   1500
@@ -260,11 +308,11 @@ const onTextChange = () => {
   stopTyping();
 };
 
-socket.on('user-typing', () => showTypingIndicator());
-socket.on('user-stopped-typing', () => hideTypingIndicator());
+socket.on('user-typing', ({ userId }) => showTypingIndicator(userId));
+socket.on('user-stopped-typing', ({ userId }) => hideTypingIndicator(userId));
 ```
 
-### Leave the room (do this on navigating away)
+### Leave the room (on navigating away from chat screen)
 
 ```javascript
 socket.emit('leave-chat', { chatSessionId });
@@ -272,11 +320,40 @@ socket.emit('leave-chat', { chatSessionId });
 
 ---
 
+## Socket Events Reference
+
+### Client → Server
+
+| Event               | Payload                        | When to emit                        |
+| ------------------- | ------------------------------ | ----------------------------------- |
+| `join-chat`         | `{ chatSessionId }`            | On connect, on new chat created     |
+| `leave-chat`        | `{ chatSessionId }`            | On navigating away from chat screen |
+| `typing-start`      | `{ chatSessionId }`            | On text input change                |
+| `typing-stop`       | `{ chatSessionId }`            | After 1.5s of no typing             |
+| `message-delivered` | `{ chatSessionId, messageId }` | On receiving `new-message`          |
+| `message-read`      | `{ chatSessionId, messageId }` | When chat is open and visible       |
+
+> `chat-message` is removed. Do not emit it.
+
+### Server → Client
+
+| Event                 | Payload                                                                                                | Meaning                      |
+| --------------------- | ------------------------------------------------------------------------------------------------------ | ---------------------------- |
+| `chat-joined`         | `{ chatSessionId }`                                                                                    | Room join confirmed          |
+| `new-message`         | `{ id, chatSessionId, senderId, messageType, content, mediaAttachments, isDelivered, isRead, sentAt }` | New message received         |
+| `message-delivered`   | `{ messageId, chatSessionId, deliveredBy, deliveredAt }`                                               | Other party received message |
+| `message-read`        | `{ messageId, chatSessionId, readBy }`                                                                 | Other party read message     |
+| `user-typing`         | `{ chatSessionId, userId }`                                                                            | Other party is typing        |
+| `user-stopped-typing` | `{ chatSessionId, userId }`                                                                            | Other party stopped typing   |
+| `error`               | `{ message }`                                                                                          | Something went wrong         |
+
+---
+
 ## Push Notification Fallback
 
-If the recipient is **not connected to the socket**, the backend automatically sends an FCM push notification instead.
+If the recipient is **not connected to the socket**, the backend automatically sends an FCM push notification.
 
-See [PUSH_NOTIFICATIONS.md](./PUSH_NOTIFICATIONS.md) for the full setup guide.
+See [PUSH_NOTIFICATIONS.md](./PUSH_NOTIFICATIONS.md) for setup.
 
 **What the recipient receives:**
 
@@ -292,7 +369,7 @@ See [PUSH_NOTIFICATIONS.md](./PUSH_NOTIFICATIONS.md) for the full setup guide.
 }
 ```
 
-> Image messages show `"📎 Sent an attachment"` in the preview — never the file content.
+> Image messages show `"📎 Sent an attachment"` as the preview — never the file content.
 
 ---
 
@@ -313,6 +390,7 @@ Exceeding the limit returns `429 Too Many Requests`.
 | Check                    | Detail                                                      |
 | ------------------------ | ----------------------------------------------------------- |
 | Participant verification | Every message read/write verifies the user is in that chat  |
+| Room join auth           | Server checks participant status before joining socket room |
 | Block check              | If either user has blocked the other, messages are rejected |
 | Sender-only delete       | Only the original sender can delete their message           |
 | Media validation         | MIME type, file size, and Sharp processing validation       |

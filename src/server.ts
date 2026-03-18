@@ -2,7 +2,7 @@ import app from './app';
 import { createServer } from 'http';
 import { logger } from './utils';
 import { appConfig, initializeFirebase } from './config';
-import { WebRTCService } from './services/webrtc.service';
+import { WebRTCService, setWebRTCService } from './services/webrtc.service';
 import { db, client } from './db'; // Import database connection
 import { cloudinary } from './config/cloudinary';
 
@@ -106,6 +106,7 @@ const checkServices = async () => {
 
     // Initialize WebRTC service
     webrtcService = new WebRTCService(server);
+    setWebRTCService(webrtcService);
 
     // Check all services
     const services = await checkServices();
