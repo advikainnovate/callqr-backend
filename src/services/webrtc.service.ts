@@ -6,6 +6,7 @@ import { logger } from '../utils';
 import { callSessionService } from './callSession.service';
 import { userService } from './user.service';
 import { notificationService } from './notification.service';
+import { socketEmitter } from './socketEmitter.service';
 import {
   SocketRateLimiter,
   ConnectionRateLimiter,
@@ -27,6 +28,13 @@ interface WebRTCSignal {
 interface ICEConfiguration {
   iceServers: RTCIceServer[];
 }
+
+// Singleton instance — set by server.ts after initialization
+let _instance: WebRTCService | null = null;
+export const getWebRTCService = (): WebRTCService | null => _instance;
+export const setWebRTCService = (instance: WebRTCService) => {
+  _instance = instance;
+};
 
 export class WebRTCService {
   private io: SocketIOServer;
@@ -70,20 +78,22 @@ export class WebRTCService {
 
     this.setupMiddleware();
     this.setupEventHandlers();
+    socketEmitter.init(this.io);
 
     // Periodically timeout unanswered calls (every 30s, kills calls ringing > 60s)
     this.staleCallTimer = setInterval(async () => {
       try {
         const timedOut = await callSessionService.timeoutStaleCalls(60);
         for (const call of timedOut) {
-          // Notify both parties if they're still connected
-          this.io
-            .to(call.callerId)
-            .emit('call-ended', { callId: call.id, endedBy: 'timeout' });
-          this.io
-            .to(call.receiverId)
-            .emit('call-ended', { callId: call.id, endedBy: 'timeout' });
-          this.io.socketsLeave(`call:${call.id}`);
+          socketEmitter.emitToUser(call.callerId, 'call-ended', {
+            callId: call.id,
+            endedBy: 'timeout',
+          });
+          socketEmitter.emitToUser(call.receiverId, 'call-ended', {
+            callId: call.id,
+            endedBy: 'timeout',
+          });
+          socketEmitter.leaveCallRoom(call.id);
         }
       } catch (err) {
         logger.error('Error in stale call cleanup:', err);
@@ -212,13 +222,6 @@ export class WebRTCService {
         await this.handleLeaveChat(socket, data);
       });
 
-      socket.on(
-        'chat-message',
-        async (data: { chatSessionId: string; messageId: string }) => {
-          await this.handleChatMessage(socket, data);
-        }
-      );
-
       socket.on('typing-start', async (data: { chatSessionId: string }) => {
         await this.handleTypingStart(socket, data);
       });
@@ -257,10 +260,11 @@ export class WebRTCService {
           for (const call of endedCalls) {
             const otherUserId =
               call.callerId === userId ? call.receiverId : call.callerId;
-            this.io
-              .to(otherUserId)
-              .emit('call-ended', { callId: call.id, endedBy: 'disconnect' });
-            this.io.socketsLeave(`call:${call.id}`);
+            socketEmitter.emitToUser(otherUserId, 'call-ended', {
+              callId: call.id,
+              endedBy: 'disconnect',
+            });
+            socketEmitter.leaveCallRoom(call.id);
           }
         } catch (err) {
           logger.error(
@@ -325,7 +329,7 @@ export class WebRTCService {
       }
 
       // Forward offer to call room (other participant)
-      socket.to(`call:${callId}`).emit('webrtc-offer', {
+      socketEmitter.emitToCallRoom(callId, 'webrtc-offer', {
         callId,
         fromUserId: socket.userId,
         offer,
@@ -356,7 +360,7 @@ export class WebRTCService {
       }
 
       // Forward answer to call room (other participant)
-      socket.to(`call:${callId}`).emit('webrtc-answer', {
+      socketEmitter.emitToCallRoom(callId, 'webrtc-answer', {
         callId,
         fromUserId: socket.userId,
         answer,
@@ -387,7 +391,7 @@ export class WebRTCService {
       }
 
       // Forward ICE candidate to call room (other participant)
-      socket.to(`call:${callId}`).emit('webrtc-ice-candidate', {
+      socketEmitter.emitToCallRoom(callId, 'webrtc-ice-candidate', {
         callId,
         fromUserId: socket.userId,
         candidate,
@@ -430,7 +434,7 @@ export class WebRTCService {
         console.log(
           `[DEBUG] WebRTC: Emitting incoming-call to user room ${call.receiverId}`
         );
-        this.io.to(call.receiverId).emit('incoming-call', {
+        socketEmitter.emitToUser(call.receiverId, 'incoming-call', {
           callId: call.id,
           callerId: call.callerId,
           callerUsername: caller.username,
@@ -490,12 +494,12 @@ export class WebRTCService {
       );
 
       // Notify caller via call room AND personal room (double delivery)
-      this.io.to(`call:${callId}`).emit('call-accepted', {
+      socketEmitter.emitToCallRoom(callId, 'call-accepted', {
         callId: call.id,
         receiverId: call.receiverId,
         iceServers: this.iceConfig.iceServers,
       });
-      this.io.to(call.callerId).emit('call-accepted', {
+      socketEmitter.emitToUser(call.callerId, 'call-accepted', {
         callId: call.id,
         receiverId: call.receiverId,
         iceServers: this.iceConfig.iceServers,
@@ -530,7 +534,7 @@ export class WebRTCService {
       await callSessionService.rejectCall(callId, socket.userId!);
 
       // Notify caller via their personal room
-      this.io.to(call.callerId).emit('call-rejected', {
+      socketEmitter.emitToUser(call.callerId, 'call-rejected', {
         callId: call.id,
         receiverId: call.receiverId,
       });
@@ -567,13 +571,13 @@ export class WebRTCService {
           call.callerId === socket.userId ? call.receiverId : call.callerId;
 
         // Notify the room so the other party gets the message
-        socket.to(`call:${callId}`).emit('call-ended', {
+        socketEmitter.emitToCallRoom(callId, 'call-ended', {
           callId: call.id,
           endedBy: socket.userId,
         });
 
         // Fallback: Notify via personal room as well
-        this.io.to(otherUserId).emit('call-ended', {
+        socketEmitter.emitToUser(otherUserId, 'call-ended', {
           callId: call.id,
           endedBy: socket.userId,
         });
@@ -598,7 +602,17 @@ export class WebRTCService {
     try {
       const { chatSessionId } = data;
 
-      // Join the chat room
+      // Safety check — only participants can join the room
+      const { chatSessionService } = await import('./chatSession.service');
+      const isParticipant = await chatSessionService.verifyParticipant(
+        chatSessionId,
+        socket.userId!
+      );
+      if (!isParticipant) {
+        socket.emit('error', { message: 'Not a participant in this chat' });
+        return;
+      }
+
       socket.join(`chat:${chatSessionId}`);
       logger.info(`User ${socket.userId} joined chat room: ${chatSessionId}`);
 
@@ -627,75 +641,6 @@ export class WebRTCService {
     }
   }
 
-  private async handleChatMessage(
-    socket: AuthenticatedSocket,
-    data: { chatSessionId: string; messageId: string }
-  ) {
-    try {
-      const { chatSessionId, messageId } = data;
-
-      // Broadcast new message to chat room (except sender)
-      socket.to(`chat:${chatSessionId}`).emit('new-message', {
-        chatSessionId,
-        messageId,
-        senderId: socket.userId,
-      });
-
-      // Confirm to sender that the message was sent
-      socket.emit('message-sent', {
-        chatSessionId,
-        messageId,
-        status: 'sent',
-        sentAt: new Date().toISOString(),
-      });
-
-      // Push notification fallback: check if the other participant is offline
-      try {
-        const { chatSessionService } = await import('./chatSession.service');
-        const { messageService } = await import('./message.service');
-
-        const otherParticipantId =
-          await chatSessionService.getOtherParticipantId(
-            chatSessionId,
-            socket.userId!
-          );
-
-        const isOtherOnline = this.connectedUsers.has(otherParticipantId);
-        if (!isOtherOnline) {
-          // Fetch message content for the push preview + sender username
-          const [msg, sender] = await Promise.all([
-            messageService.getMessageById(messageId),
-            userService.getUserById(socket.userId!),
-          ]);
-
-          const deviceTokens =
-            await userService.getUserDeviceTokens(otherParticipantId);
-          await notificationService.sendMessageNotification(deviceTokens, {
-            chatSessionId,
-            senderId: socket.userId!,
-            senderUsername: sender.username,
-            // Only preview text messages; show generic label for images
-            messagePreview:
-              msg.messageType === 'text'
-                ? msg.content
-                : '📎 Sent an attachment',
-          });
-        }
-      } catch (pushError) {
-        // Push failure must never affect the main message flow
-        logger.warn(
-          `Push notification failed for chat ${chatSessionId}:`,
-          pushError
-        );
-      }
-
-      logger.info(`Message ${messageId} sent in chat ${chatSessionId}`);
-    } catch (error) {
-      logger.error('Error handling chat message:', error);
-      socket.emit('error', { message: 'Failed to send message' });
-    }
-  }
-
   private async handleMessageDelivered(
     socket: AuthenticatedSocket,
     data: { messageId: string; chatSessionId: string }
@@ -708,10 +653,10 @@ export class WebRTCService {
       await messageService.markAsDelivered(messageId, socket.userId!);
 
       // Notify sender about delivery
-      socket.to(`chat:${chatSessionId}`).emit('message-delivered', {
+      socketEmitter.emitMessageDelivered(chatSessionId, {
         messageId,
         chatSessionId,
-        deliveredBy: socket.userId,
+        deliveredBy: socket.userId!,
         deliveredAt: new Date().toISOString(),
       });
 
@@ -729,10 +674,7 @@ export class WebRTCService {
       const { chatSessionId } = data;
 
       // Broadcast typing indicator to chat room (except sender)
-      socket.to(`chat:${chatSessionId}`).emit('user-typing', {
-        chatSessionId,
-        userId: socket.userId,
-      });
+      socketEmitter.emitUserTyping(chatSessionId, socket.userId!);
     } catch (error) {
       logger.error('Error handling typing start:', error);
     }
@@ -746,10 +688,7 @@ export class WebRTCService {
       const { chatSessionId } = data;
 
       // Broadcast typing stop to chat room (except sender)
-      socket.to(`chat:${chatSessionId}`).emit('user-stopped-typing', {
-        chatSessionId,
-        userId: socket.userId,
-      });
+      socketEmitter.emitUserStoppedTyping(chatSessionId, socket.userId!);
     } catch (error) {
       logger.error('Error handling typing stop:', error);
     }
@@ -763,10 +702,10 @@ export class WebRTCService {
       const { chatSessionId, messageId } = data;
 
       // Broadcast read receipt to chat room (except sender)
-      socket.to(`chat:${chatSessionId}`).emit('message-read', {
-        chatSessionId,
+      socketEmitter.emitMessageRead(chatSessionId, {
         messageId,
-        readBy: socket.userId,
+        chatSessionId,
+        readBy: socket.userId!,
       });
 
       logger.info(`Message ${messageId} read by ${socket.userId}`);
@@ -775,7 +714,7 @@ export class WebRTCService {
     }
   }
 
-  // Public methods for external use
+  // Public methods for external use — prefer socketEmitter for new code
   public isUserOnline(userId: string): boolean {
     return this.connectedUsers.has(userId);
   }
@@ -805,7 +744,7 @@ export class WebRTCService {
     logger.info(`📊 Notifying ${connectedCount} connected clients...`);
 
     // Notify all connected clients about shutdown
-    this.io.emit('server-shutdown', {
+    socketEmitter.broadcast('server-shutdown', {
       reason,
       message: 'Server is shutting down. Please reconnect in a few moments.',
       timestamp: new Date().toISOString(),
