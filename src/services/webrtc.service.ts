@@ -393,6 +393,7 @@ export class WebRTCService {
           callId: call.id,
           callerId: call.callerId,
           callerUsername: caller.username,
+          iceServers: this.iceConfig.iceServers,
         });
       } else {
         // Receiver is offline — wake them via push notification
@@ -450,14 +451,19 @@ export class WebRTCService {
       this.io.to(`call:${callId}`).emit('call-accepted', {
         callId: call.id,
         receiverId: call.receiverId,
+        iceServers: this.iceConfig.iceServers,
       });
       this.io.to(call.callerId).emit('call-accepted', {
         callId: call.id,
         receiverId: call.receiverId,
+        iceServers: this.iceConfig.iceServers,
       });
 
       // Notify receiver that call is connected
-      socket.emit('call-connected', { callId: call.id });
+      socket.emit('call-connected', {
+        callId: call.id,
+        iceServers: this.iceConfig.iceServers,
+      });
     } catch (error) {
       logger.error('Error handling call acceptance:', error);
       socket.emit('error', { message: 'Failed to accept call' });
