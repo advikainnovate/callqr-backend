@@ -8,6 +8,7 @@ export interface CallNotificationPayload {
   callId: string;
   callerId: string;
   callerUsername: string;
+  iceServers?: string; // JSON-serialized RTCIceServer[] for offline receiver
 }
 
 export interface MessageNotificationPayload {
@@ -40,6 +41,7 @@ class NotificationService {
         callId: payload.callId,
         callerId: payload.callerId,
         callerUsername: payload.callerUsername,
+        ...(payload.iceServers ? { iceServers: payload.iceServers } : {}),
         timestamp: new Date().toISOString(),
       },
       android: {

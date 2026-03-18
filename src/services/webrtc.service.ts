@@ -34,6 +34,7 @@ export class WebRTCService {
   private iceConfig: ICEConfiguration;
   private rateLimiter: SocketRateLimiter;
   private connectionLimiter: ConnectionRateLimiter;
+  private staleCallTimer: NodeJS.Timeout | null = null;
 
   constructor(server: HTTPServer) {
     // Initialize rate limiters
@@ -69,6 +70,25 @@ export class WebRTCService {
 
     this.setupMiddleware();
     this.setupEventHandlers();
+
+    // Periodically timeout unanswered calls (every 30s, kills calls ringing > 60s)
+    this.staleCallTimer = setInterval(async () => {
+      try {
+        const timedOut = await callSessionService.timeoutStaleCalls(60);
+        for (const call of timedOut) {
+          // Notify both parties if they're still connected
+          this.io
+            .to(call.callerId)
+            .emit('call-ended', { callId: call.id, endedBy: 'timeout' });
+          this.io
+            .to(call.receiverId)
+            .emit('call-ended', { callId: call.id, endedBy: 'timeout' });
+          this.io.socketsLeave(`call:${call.id}`);
+        }
+      } catch (err) {
+        logger.error('Error in stale call cleanup:', err);
+      }
+    }, 30000);
   }
 
   private setupMiddleware() {
@@ -222,11 +242,32 @@ export class WebRTCService {
       );
 
       // Handle disconnection
-      socket.on('disconnect', reason => {
+      socket.on('disconnect', async reason => {
         logger.info(
           `User disconnected from WebRTC: ${userId}. Reason: ${reason}`
         );
         this.connectedUsers.delete(userId);
+
+        // End any active calls this user was part of
+        try {
+          const endedCalls = await callSessionService.endActiveCallsForUser(
+            userId,
+            'error'
+          );
+          for (const call of endedCalls) {
+            const otherUserId =
+              call.callerId === userId ? call.receiverId : call.callerId;
+            this.io
+              .to(otherUserId)
+              .emit('call-ended', { callId: call.id, endedBy: 'disconnect' });
+            this.io.socketsLeave(`call:${call.id}`);
+          }
+        } catch (err) {
+          logger.error(
+            `Error cleaning up calls on disconnect for user ${userId}:`,
+            err
+          );
+        }
       });
     });
   }
@@ -407,6 +448,7 @@ export class WebRTCService {
           callId: call.id,
           callerId: call.callerId,
           callerUsername: caller.username,
+          iceServers: JSON.stringify(this.iceConfig.iceServers),
         });
       }
 
@@ -752,6 +794,12 @@ export class WebRTCService {
    */
   public async shutdown(reason: string = 'Server maintenance'): Promise<void> {
     logger.info('🔌 Initiating WebRTC service shutdown...');
+
+    // Stop stale call cleanup timer
+    if (this.staleCallTimer) {
+      clearInterval(this.staleCallTimer);
+      this.staleCallTimer = null;
+    }
 
     const connectedCount = this.connectedUsers.size;
     logger.info(`📊 Notifying ${connectedCount} connected clients...`);
