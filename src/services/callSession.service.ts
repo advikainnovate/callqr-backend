@@ -1,4 +1,4 @@
-import { eq, and, desc, sql, gte, or } from 'drizzle-orm';
+import { eq, and, desc, sql, gte, or, lt } from 'drizzle-orm';
 import { db } from '../db';
 import { callSessions, type NewCallSession, type CallSession } from '../models';
 import { v4 as uuidv4 } from 'uuid';
@@ -229,7 +229,7 @@ export class CallSessionService {
             eq(callSessions.status, 'initiated'),
             eq(callSessions.status, 'ringing')
           ),
-          sql`${callSessions.initiatedAt} < ${cutoff}`
+          lt(callSessions.initiatedAt, cutoff)
         )
       );
 
