@@ -13,21 +13,56 @@ import {
 const router = Router();
 
 // Initiate chat session
-router.post('/initiate', authenticateToken, validate(initiateChatSchema), chatSessionController.initiateChat);
+router.post(
+  '/initiate',
+  authenticateToken,
+  validate(initiateChatSchema),
+  chatSessionController.initiateChat
+);
 
-// Get chat session details
-router.get('/:chatSessionId', authenticateToken, validate(getChatSessionSchema), chatSessionController.getChatSession);
-
-// Get my chat sessions
-router.get('/my/all', authenticateToken, validate(getMyChatSessionsSchema), chatSessionController.getMyChatSessions);
+// Get my chat sessions (legacy and current)
+router.get(
+  '/my-chats',
+  authenticateToken,
+  validate(getMyChatSessionsSchema),
+  chatSessionController.getMyChatSessions
+);
+router.get(
+  '/my/all',
+  authenticateToken,
+  validate(getMyChatSessionsSchema),
+  chatSessionController.getMyChatSessions
+);
 
 // Get active chat sessions
-router.get('/active/list', authenticateToken, chatSessionController.getActiveChatSessions);
+router.get(
+  '/active/list',
+  authenticateToken,
+  chatSessionController.getActiveChatSessions
+);
+
+// Get chat session details
+router.get(
+  '/:chatSessionId',
+  authenticateToken,
+  validate(getChatSessionSchema),
+  chatSessionController.getChatSession
+);
 
 // End chat session
-router.patch('/:chatSessionId/end', authenticateToken, validate(endChatSessionSchema), chatSessionController.endChatSession);
+router.patch(
+  '/:chatSessionId/end',
+  authenticateToken,
+  validate(endChatSessionSchema),
+  chatSessionController.endChatSession
+);
 
 // Block chat session
-router.patch('/:chatSessionId/block', authenticateToken, validate(blockChatSessionSchema), chatSessionController.blockChatSession);
+router.patch(
+  '/:chatSessionId/block',
+  authenticateToken,
+  validate(blockChatSessionSchema),
+  chatSessionController.blockChatSession
+);
 
 export default router;

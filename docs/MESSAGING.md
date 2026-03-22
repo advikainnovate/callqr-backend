@@ -58,7 +58,8 @@ Response 201:
 ### Chat session endpoints
 
 ```
-GET   /api/chat-sessions/my/all               All your chat sessions
+GET   /api/chat-sessions/my-chats             All your chat sessions (preferred)
+GET   /api/chat-sessions/my/all               All your chat sessions (alias)
 GET   /api/chat-sessions/active/list          Active sessions only
 GET   /api/chat-sessions/:chatSessionId       Full session details
 PATCH /api/chat-sessions/:chatSessionId/end   End a chat
