@@ -11,8 +11,22 @@ import { chatSessionService } from '../services/chatSession.service';
 export class MessageController {
   sendMessage = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
-      const senderId = req.user!.userId;
+      console.log('REQ.USER:', req.user);
+      console.log('BODY:', req.body);
+
+      const senderId = req.user?.userId;
       const { chatSessionId, content, messageType } = req.body;
+
+      console.log('SENDER ID:', senderId);
+      console.log('CHAT ID:', chatSessionId);
+
+      if (!senderId || !chatSessionId) {
+        logger.error('Missing senderId or chatSessionId in sendMessage');
+        return res.status(400).json({
+          status: 'error',
+          message: 'Authentication required or missing chat session ID',
+        });
+      }
 
       const mediaFiles = req.files as Express.Multer.File[] | undefined;
 
