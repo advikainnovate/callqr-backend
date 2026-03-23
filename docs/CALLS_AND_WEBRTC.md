@@ -253,11 +253,11 @@ See [PUSH_NOTIFICATIONS.md](./PUSH_NOTIFICATIONS.md) for the full setup guide.
 
 | Plan       | Daily calls (received) |
 | ---------- | ---------------------- |
-| FREE       | 20                     |
+| FREE       | 50                     |
 | PRO        | 80                     |
 | ENTERPRISE | Unlimited              |
 
-Calls are counted per **receiver** per day.
+Calls are counted per **receiver** per day. Only calls that are successfully **connected** (answered) count towards this limit.
 
 ---
 

@@ -108,7 +108,7 @@ ALLOWED_ORIGINS=*
 
 | Plan | Daily Calls | Daily Messages | Active Chats |
 |------|-------------|----------------|--------------|
-| Free | 20 | 100 | 5 |
+| Free | 50 | 50 | 5 |
 | Pro | 80 | 500 | 20 |
 | Enterprise | 200 | Unlimited | Unlimited |
 

@@ -378,11 +378,13 @@ See [PUSH_NOTIFICATIONS.md](./PUSH_NOTIFICATIONS.md) for setup.
 
 | Plan       | Messages/day |
 | ---------- | ------------ |
-| FREE       | 100          |
+| FREE       | 50           |
 | PRO        | 500          |
 | ENTERPRISE | Unlimited    |
 
 Exceeding the limit returns `429 Too Many Requests`.
+
+> **Message Order**: Messages are returned in **ascending order** (oldest first) to ensure a natural chat flow while still providing the most recent history via pagination.
 
 ---
 
