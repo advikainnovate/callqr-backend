@@ -462,6 +462,14 @@ export class WebRTCService {
         socket.userId!,
         'ringing'
       );
+
+      // 🔴 IMPORTANT: Notify the caller that signaling can now start
+      // This sends them the ICE servers and confirms the call is ready for WebRTC negotiation
+      socket.emit('call-initiated', {
+        callId: call.id,
+        receiverId: call.receiverId,
+        iceServers: this.iceConfig.iceServers,
+      });
     } catch (error) {
       logger.error('Error handling call initiation:', error);
       socket.emit('error', { message: 'Failed to initiate call' });

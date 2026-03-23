@@ -22,7 +22,14 @@ export const validate = (schema: z.Schema) =>
         }));
         // Only log Zod errors if not in test environment
         if (appConfig.env !== 'test') {
-          logger.error('Zod validation error', { errors: errorMessages });
+          logger.error('Zod validation error', {
+            path: req.path,
+            method: req.method,
+            errors: errorMessages,
+            body: req.body,
+            params: req.params,
+            query: req.query,
+          });
         }
         return res.status(400).json({ success: false, errors: errorMessages });
       }

@@ -2,7 +2,12 @@ import { eq, and, isNull } from 'drizzle-orm';
 import { db } from '../db';
 import { qrCodes, type NewQRCode, type QRCode as QRCodeType } from '../models';
 import { v4 as uuidv4 } from 'uuid';
-import { logger, NotFoundError, BadRequestError, ConflictError } from '../utils';
+import {
+  logger,
+  NotFoundError,
+  BadRequestError,
+  ConflictError,
+} from '../utils';
 import crypto from 'crypto';
 import * as QRCode from 'qrcode';
 import { userService } from './user.service';
@@ -16,43 +21,43 @@ export class QRCodeService {
     // Character set excluding confusing characters (0, O, 1, I, L)
     const chars = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
     let token = 'QR-';
-    
+
     // Generate first group (4 chars)
     for (let i = 0; i < 4; i++) {
       token += chars.charAt(Math.floor(Math.random() * chars.length));
     }
-    
+
     token += '-';
-    
+
     // Generate second group (4 chars)
     for (let i = 0; i < 4; i++) {
       token += chars.charAt(Math.floor(Math.random() * chars.length));
     }
-    
+
     return token;
   }
 
   private async ensureUniqueHumanToken(): Promise<string> {
     let attempts = 0;
     const maxAttempts = 10;
-    
+
     while (attempts < maxAttempts) {
       const humanToken = this.generateHumanToken();
-      
+
       // Check if token already exists
       const [existing] = await db
         .select()
         .from(qrCodes)
         .where(eq(qrCodes.humanToken, humanToken))
         .limit(1);
-      
+
       if (!existing) {
         return humanToken;
       }
-      
+
       attempts++;
     }
-    
+
     throw new Error('Failed to generate unique human token');
   }
 
@@ -80,7 +85,7 @@ export class QRCodeService {
     }
 
     const qrCodes: QRCodeType[] = [];
-    
+
     for (let i = 0; i < count; i++) {
       const qrCode = await this.createQRCode();
       qrCodes.push(qrCode);
@@ -90,7 +95,11 @@ export class QRCodeService {
     return qrCodes;
   }
 
-  async claimQRCode(userId: string, token?: string, humanToken?: string): Promise<QRCodeType> {
+  async claimQRCode(
+    userId: string,
+    token?: string,
+    humanToken?: string
+  ): Promise<QRCodeType> {
     if (!token && !humanToken) {
       throw new BadRequestError('Either token or humanToken must be provided');
     }
@@ -103,7 +112,7 @@ export class QRCodeService {
 
     // Find QR code by token or humanToken
     let qrCode: QRCodeType | undefined;
-    
+
     if (humanToken) {
       const normalizedHumanToken = humanToken.toUpperCase().trim();
       const [found] = await db
@@ -197,7 +206,7 @@ export class QRCodeService {
 
   async getQRCodeByHumanToken(humanToken: string): Promise<QRCodeType> {
     const normalizedToken = humanToken.toUpperCase().trim();
-    
+
     const [qrCode] = await db
       .select()
       .from(qrCodes)
@@ -226,10 +235,7 @@ export class QRCodeService {
   }
 
   async getUserQRCodes(userId: string): Promise<QRCodeType[]> {
-    return db
-      .select()
-      .from(qrCodes)
-      .where(eq(qrCodes.assignedUserId, userId));
+    return db.select().from(qrCodes).where(eq(qrCodes.assignedUserId, userId));
   }
 
   async getUnassignedQRCodes(limit: number = 100): Promise<QRCodeType[]> {
@@ -240,13 +246,16 @@ export class QRCodeService {
       .limit(limit);
   }
 
-  async scanQRCode(token?: string, humanToken?: string): Promise<{ qrCode: QRCodeType; user: any }> {
+  async scanQRCode(
+    token?: string,
+    humanToken?: string
+  ): Promise<{ qrCode: QRCodeType; user: any }> {
     if (!token && !humanToken) {
       throw new BadRequestError('Either token or humanToken must be provided');
     }
 
     let qrCode: QRCodeType;
-    
+
     if (humanToken) {
       qrCode = await this.getQRCodeByHumanToken(humanToken);
     } else {
@@ -279,7 +288,9 @@ export class QRCodeService {
       throw new BadRequestError('QR code owner is not active');
     }
 
-    logger.info(`QR code scanned: ${qrCode.humanToken} (owner: ${qrCode.assignedUserId})`);
+    logger.info(
+      `QR code scanned: ${qrCode.humanToken} (owner: ${qrCode.assignedUserId})`
+    );
 
     return {
       qrCode,
@@ -302,7 +313,9 @@ export class QRCodeService {
       .returning();
 
     if (!qrCode) {
-      throw new NotFoundError('QR code not found or you do not have permission to revoke it');
+      throw new NotFoundError(
+        'QR code not found or you do not have permission to revoke it'
+      );
     }
 
     logger.info(`QR code revoked: ${qrCodeId}`);
@@ -319,14 +332,19 @@ export class QRCodeService {
       .returning();
 
     if (!qrCode) {
-      throw new NotFoundError('QR code not found or you do not have permission to disable it');
+      throw new NotFoundError(
+        'QR code not found or you do not have permission to disable it'
+      );
     }
 
     logger.info(`QR code disabled: ${qrCodeId}`);
     return qrCode;
   }
 
-  async reactivateQRCode(qrCodeId: string, userId: string): Promise<QRCodeType> {
+  async reactivateQRCode(
+    qrCodeId: string,
+    userId: string
+  ): Promise<QRCodeType> {
     const [qrCode] = await db
       .update(qrCodes)
       .set({
@@ -336,7 +354,9 @@ export class QRCodeService {
       .returning();
 
     if (!qrCode) {
-      throw new NotFoundError('QR code not found or you do not have permission to reactivate it');
+      throw new NotFoundError(
+        'QR code not found or you do not have permission to reactivate it'
+      );
     }
 
     logger.info(`QR code reactivated: ${qrCodeId}`);
