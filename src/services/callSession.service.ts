@@ -53,7 +53,6 @@ export class CallSessionService {
         receiverId: qrCode.assignedUserId,
         qrId: qrCode.id,
         status: 'initiated',
-        startedAt: new Date(),
       })
       .returning();
 

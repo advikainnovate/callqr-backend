@@ -144,7 +144,7 @@ export class MessageService {
       throw new ForbiddenError('You are not a participant in this chat');
     }
 
-    return db
+    const result = await db
       .select()
       .from(messages)
       .where(
@@ -156,6 +156,8 @@ export class MessageService {
       .orderBy(desc(messages.sentAt))
       .limit(limit)
       .offset(offset);
+
+    return result.reverse();
   }
 
   async markAsRead(messageId: string, userId: string): Promise<Message> {
@@ -347,7 +349,7 @@ export class MessageService {
       throw new BadRequestError('Search query cannot be empty');
     }
 
-    return db
+    const result = await db
       .select()
       .from(messages)
       .where(
@@ -359,6 +361,8 @@ export class MessageService {
       )
       .orderBy(desc(messages.sentAt))
       .limit(50);
+
+    return result.reverse();
   }
 
   async getDailyMessageCount(userId: string): Promise<number> {
