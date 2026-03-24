@@ -13,7 +13,16 @@ import { userService } from './user.service';
 import { subscriptionService } from './subscription.service';
 
 export class CallSessionService {
-  async initiateCall(callerId: string, qrToken: string): Promise<CallSession> {
+  async initiateCall(
+    qrToken: string,
+    callerId?: string,
+    guestId?: string,
+    guestIp?: string
+  ): Promise<CallSession> {
+    if (!callerId && !guestId) {
+      throw new BadRequestError('Either callerId or guestId must be provided');
+    }
+
     // Validate QR code and get receiver info
     const qrCode = await qrCodeService.validateQRCode(qrToken);
 
@@ -28,17 +37,29 @@ export class CallSessionService {
     }
 
     // Check if caller is trying to call themselves
-    if (callerId === qrCode.assignedUserId) {
+    if (callerId && callerId === qrCode.assignedUserId) {
       throw new BadRequestError('Cannot call yourself');
     }
 
-    // NEW: Check if receiver has blocked the caller
-    const isBlocked = await userService.isUserBlocked(
-      qrCode.assignedUserId,
-      callerId
-    );
-    if (isBlocked) {
-      throw new ForbiddenError('Unable to initiate call');
+    // Check for blocking
+    if (callerId) {
+      const isBlocked = await userService.isUserBlocked(
+        qrCode.assignedUserId,
+        callerId
+      );
+      if (isBlocked) {
+        throw new ForbiddenError('Unable to initiate call');
+      }
+    } else {
+      // Anonymous caller
+      const isBlocked = await userService.isGuestBlocked(
+        qrCode.assignedUserId,
+        guestId!,
+        guestIp!
+      );
+      if (isBlocked) {
+        throw new ForbiddenError('Unable to initiate call');
+      }
     }
 
     // Check receiver's daily call limit
@@ -49,7 +70,10 @@ export class CallSessionService {
       .insert(callSessions)
       .values({
         id: uuidv4(),
-        callerId,
+        callerId: callerId || null,
+        guestId: guestId || null,
+        guestIp: guestIp || null,
+        callerType: callerId ? 'registered' : 'anonymous',
         receiverId: qrCode.assignedUserId,
         qrId: qrCode.id,
         status: 'initiated',
@@ -57,7 +81,7 @@ export class CallSessionService {
       .returning();
 
     logger.info(
-      `Call session initiated: ${callSession.id} from ${callerId} to ${qrCode.assignedUserId}`
+      `Call session initiated: ${callSession.id} from ${callerId || guestId} to ${qrCode.assignedUserId}`
     );
     return callSession;
   }
@@ -71,10 +95,17 @@ export class CallSessionService {
     const existingCall = await this.getCallSessionById(callId);
 
     // Authorization check
-    if (
-      existingCall.callerId !== userId &&
-      existingCall.receiverId !== userId
-    ) {
+    let isAuthorized = false;
+    if (userId.startsWith('guest:')) {
+      const guestId = userId.split(':')[1];
+      isAuthorized =
+        existingCall.guestId === guestId || existingCall.receiverId === userId;
+    } else {
+      isAuthorized =
+        existingCall.callerId === userId || existingCall.receiverId === userId;
+    }
+
+    if (!isAuthorized) {
       throw new ForbiddenError(
         'You do not have permission to update this call'
       );
@@ -124,12 +155,17 @@ export class CallSessionService {
     userId: string,
     limit: number = 50
   ): Promise<CallSession[]> {
+    const isGuest = userId.startsWith('guest:');
+    const id = isGuest ? userId.split(':')[1] : userId;
+
     return db
       .select()
       .from(callSessions)
       .where(
         or(
-          eq(callSessions.callerId, userId),
+          isGuest
+            ? eq(callSessions.guestId, id)
+            : eq(callSessions.callerId, id),
           eq(callSessions.receiverId, userId)
         )
       )
@@ -138,13 +174,18 @@ export class CallSessionService {
   }
 
   async getActiveCalls(userId: string): Promise<CallSession[]> {
+    const isGuest = userId.startsWith('guest:');
+    const id = isGuest ? userId.split(':')[1] : userId;
+
     return db
       .select()
       .from(callSessions)
       .where(
         and(
           or(
-            eq(callSessions.callerId, userId),
+            isGuest
+              ? eq(callSessions.guestId, id)
+              : eq(callSessions.callerId, id),
             eq(callSessions.receiverId, userId)
           ),
           or(

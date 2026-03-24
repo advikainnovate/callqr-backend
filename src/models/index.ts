@@ -8,3 +8,4 @@ export * from './message.schema';
 export * from './payment.schema';
 export * from './userBlock.schema';
 export * from './deviceToken.schema';
+export * from './blockedGuest.schema';

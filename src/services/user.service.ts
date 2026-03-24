@@ -6,6 +6,8 @@ import {
   type NewUser,
   type User,
   type NewUserBlock,
+  blockedGuests,
+  type NewBlockedGuest,
 } from '../models';
 import { v4 as uuidv4 } from 'uuid';
 import {
@@ -811,6 +813,69 @@ export class UserService {
       .where(eq(deviceTokens.userId, userId));
 
     return tokens.map(t => t.token);
+  }
+
+  // ==================== GUEST BLOCKING METHODS ====================
+
+  async blockGuest(
+    ownerId: string,
+    guestId: string | null,
+    ipAddress: string | null,
+    reason?: string
+  ): Promise<void> {
+    if (!guestId && !ipAddress) {
+      throw new BadRequestError('Either guestId or ipAddress must be provided');
+    }
+
+    await db.insert(blockedGuests).values({
+      id: uuidv4(),
+      ownerId,
+      guestId,
+      ipAddress,
+      reason,
+    });
+
+    logger.info(
+      `Guest blocked by owner ${ownerId}: ID=${guestId}, IP=${ipAddress}`
+    );
+  }
+
+  async unblockGuest(ownerId: string, guestIdOrIp: string): Promise<void> {
+    await db
+      .delete(blockedGuests)
+      .where(
+        and(
+          eq(blockedGuests.ownerId, ownerId),
+          or(
+            eq(blockedGuests.guestId, guestIdOrIp),
+            eq(blockedGuests.ipAddress, guestIdOrIp)
+          )
+        )
+      );
+
+    logger.info(`Guest ${guestIdOrIp} unblocked by owner ${ownerId}`);
+  }
+
+  async isGuestBlocked(
+    ownerId: string,
+    guestId: string | null,
+    ipAddress: string | null
+  ): Promise<boolean> {
+    if (!guestId && !ipAddress) return false;
+
+    const conditions = [];
+    if (guestId) conditions.push(eq(blockedGuests.guestId, guestId));
+    if (ipAddress) conditions.push(eq(blockedGuests.ipAddress, ipAddress));
+
+    if (conditions.length === 0) return false;
+
+    const [block] = await db
+      .select()
+      .from(blockedGuests)
+      .where(and(eq(blockedGuests.ownerId, ownerId), or(...conditions)))
+      .limit(1);
+
+    return !!block;
   }
 }
 
