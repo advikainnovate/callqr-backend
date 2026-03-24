@@ -330,9 +330,10 @@ export class WebRTCService {
 
       // Verify user is part of the call
       const call = await callSessionService.getCallSessionById(callId);
+      const callerId = call && (call.callerId || `guest:${call.guestId}`);
       if (
         !call ||
-        (call.callerId !== socket.userId && call.receiverId !== socket.userId)
+        (callerId !== socket.userId && call.receiverId !== socket.userId)
       ) {
         socket.emit('error', {
           message: 'Unauthorized to send offer for this call',
@@ -361,9 +362,10 @@ export class WebRTCService {
 
       // Verify user is part of the call
       const call = await callSessionService.getCallSessionById(callId);
+      const callerId = call && (call.callerId || `guest:${call.guestId}`);
       if (
         !call ||
-        (call.callerId !== socket.userId && call.receiverId !== socket.userId)
+        (callerId !== socket.userId && call.receiverId !== socket.userId)
       ) {
         socket.emit('error', {
           message: 'Unauthorized to send answer for this call',
@@ -392,9 +394,10 @@ export class WebRTCService {
 
       // Verify user is part of the call
       const call = await callSessionService.getCallSessionById(callId);
+      const callerId = call && (call.callerId || `guest:${call.guestId}`);
       if (
         !call ||
-        (call.callerId !== socket.userId && call.receiverId !== socket.userId)
+        (callerId !== socket.userId && call.receiverId !== socket.userId)
       ) {
         socket.emit('error', {
           message: 'Unauthorized to send ICE candidate for this call',
@@ -535,7 +538,8 @@ export class WebRTCService {
         receiverId: call.receiverId,
         iceServers: this.iceConfig.iceServers,
       });
-      socketEmitter.emitToUser(call.callerId, 'call-accepted', {
+      const callerId = call.callerId || `guest:${call.guestId}`;
+      socketEmitter.emitToUser(callerId, 'call-accepted', {
         callId: call.id,
         receiverId: call.receiverId,
         iceServers: this.iceConfig.iceServers,
