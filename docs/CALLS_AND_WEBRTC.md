@@ -57,15 +57,31 @@ import { io } from 'socket.io-client';
 const socket = io('wss://your-domain.com', {
   path: '/socket.io',
   transports: ['websocket'],
-  auth: { token: accessToken }, // JWT only — no "Bearer" prefix
+  auth: { token: accessToken }, // Registered users only
+});
+
+// OR for Guest/Anonymous:
+const socket = io('wss://your-domain.com', {
+  path: '/socket.io',
+  transports: ['websocket'],
+  auth: { guestId: localStorage.getItem('guestId') }, // Required for guests
 });
 ```
 
 ### 3. Initiate a call (Caller)
 
 ```javascript
-// Create the session record in DB
+// For registered users:
 const { data: call } = await api.post('/calls/initiate', { qrToken });
+
+// For anonymous users:
+const { data: call } = await api.post(
+  '/calls/initiate',
+  { qrToken },
+  {
+    headers: { 'x-guest-id': guestId },
+  }
+);
 
 // Create the peer connection
 const pc = new RTCPeerConnection(iceConfig);

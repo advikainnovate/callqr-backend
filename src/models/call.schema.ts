@@ -6,15 +6,20 @@ export const callSessions = pgTable(
   'call_sessions',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    callerId: uuid('caller_id')
-      .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
+    callerId: uuid('caller_id').references(() => users.id, {
+      onDelete: 'cascade',
+    }),
     receiverId: uuid('receiver_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
     qrId: uuid('qr_id')
       .notNull()
       .references(() => qrCodes.id, { onDelete: 'cascade' }),
+    guestId: varchar('guest_id', { length: 100 }),
+    guestIp: varchar('guest_ip', { length: 50 }),
+    callerType: varchar('caller_type', { length: 20 })
+      .notNull()
+      .default('registered'), // registered, anonymous
     status: varchar('status', { length: 20 }).notNull().default('initiated'), // initiated, ringing, connected, ended, failed
     endedReason: varchar('ended_reason', { length: 50 }), // busy, rejected, timeout, error
     initiatedAt: timestamp('initiated_at').defaultNow(), // when the call was first created

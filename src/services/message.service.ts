@@ -33,6 +33,12 @@ export class MessageService {
       throw new BadRequestError('Chat session ID and sender ID are required');
     }
 
+    if (senderId.startsWith('guest:')) {
+      throw new ForbiddenError(
+        'Anonymous users cannot send messages. Please install the app.'
+      );
+    }
+
     // Verify sender is participant in chat
     const isParticipant = await chatSessionService.verifyParticipant(
       chatSessionId,

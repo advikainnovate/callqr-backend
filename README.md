@@ -85,11 +85,13 @@ ALLOWED_ORIGINS=*
 - Global user blocking for platform-wide access control
 - Phone verification with OTP via Twilio SMS
 - **Push Notifications (FCM)** for offline calls and messages
+- **Anonymous Calling Support**: Allow calls from non-registered users via QR scans
+- **Guest Identity & Blocking**: Privacy-safe guest IDs with IP-based blocking
 
 ### Communication
-- WebRTC voice/video calls
-- Real-time text messaging
+- Real-time text messaging (Registered users only)
 - Socket.IO for instant signaling
+- Anonymous Calling (Web-based via QR scan)
 - Typing indicators & read receipts
 - Message search & history
 
@@ -111,6 +113,7 @@ ALLOWED_ORIGINS=*
 | Free | 50 | 50 | 5 |
 | Pro | 80 | 500 | 20 |
 | Enterprise | 200 | Unlimited | Unlimited |
+| Anonymous | 50 (Shared/IP) | Blocked | 0 |
 
 ### Subscription Management
 - **Upgrade**: Instant upgrade to higher tier with payment

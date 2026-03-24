@@ -1,6 +1,9 @@
 import { Router } from 'express';
 import { callController } from '../controllers/call.controller';
-import { authenticateToken } from '../middlewares/auth.middleware';
+import {
+  authenticateToken,
+  authenticateTokenOrGuest,
+} from '../middlewares/auth.middleware';
 import { validate } from '../middlewares/validate';
 import {
   initiateCallSchema,
@@ -14,31 +17,70 @@ import {
 
 const router = Router();
 
-// Initiate a call
-router.post('/initiate', authenticateToken, validate(initiateCallSchema), callController.initiateCall);
+// Initiate a call (allow guests)
+router.post(
+  '/initiate',
+  authenticateTokenOrGuest,
+  validate(initiateCallSchema),
+  callController.initiateCall
+);
 
-// Get call session details
-router.get('/:callId', authenticateToken, validate(getCallSessionSchema), callController.getCallSession);
+// Get call session details (allow guests)
+router.get(
+  '/:callId',
+  authenticateTokenOrGuest,
+  validate(getCallSessionSchema),
+  callController.getCallSession
+);
 
-// Update call status
-router.patch('/:callId/status', authenticateToken, validate(updateCallStatusSchema), callController.updateCallStatus);
+// Update call status (allow guests)
+router.patch(
+  '/:callId/status',
+  authenticateTokenOrGuest,
+  validate(updateCallStatusSchema),
+  callController.updateCallStatus
+);
 
-// End call
-router.patch('/:callId/end', authenticateToken, validate(endCallSchema), callController.endCall);
+// End call (allow guests)
+router.patch(
+  '/:callId/end',
+  authenticateTokenOrGuest,
+  validate(endCallSchema),
+  callController.endCall
+);
 
-// Accept call
-router.patch('/:callId/accept', authenticateToken, validate(acceptCallSchema), callController.acceptCall);
+// Accept call (allow guests)
+router.patch(
+  '/:callId/accept',
+  authenticateTokenOrGuest,
+  validate(acceptCallSchema),
+  callController.acceptCall
+);
 
-// Reject call
-router.patch('/:callId/reject', authenticateToken, validate(rejectCallSchema), callController.rejectCall);
+// Reject call (allow guests)
+router.patch(
+  '/:callId/reject',
+  authenticateTokenOrGuest,
+  validate(rejectCallSchema),
+  callController.rejectCall
+);
 
-// Get call history
-router.get('/history/all', authenticateToken, validate(getCallHistorySchema), callController.getCallHistory);
+// Get call history (registered user only)
+router.get(
+  '/history/all',
+  authenticateToken,
+  validate(getCallHistorySchema),
+  callController.getCallHistory
+);
 
-// Get active calls
-router.get('/active/list', authenticateToken, callController.getActiveCalls);
+// Get active calls (allow guests)
+router.get(
+  '/active/list',
+  authenticateTokenOrGuest,
+  callController.getActiveCalls
+);
 
-// Get call usage
+// Get call usage (registered user only)
 router.get('/usage/stats', authenticateToken, callController.getCallUsage);
 
 export default router;

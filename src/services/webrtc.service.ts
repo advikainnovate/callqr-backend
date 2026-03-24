@@ -85,10 +85,14 @@ export class WebRTCService {
       try {
         const timedOut = await callSessionService.timeoutStaleCalls(60);
         for (const call of timedOut) {
-          socketEmitter.emitToUser(call.callerId, 'call-ended', {
-            callId: call.id,
-            endedBy: 'timeout',
-          });
+          const callerId =
+            call.callerId || (call.guestId ? `guest:${call.guestId}` : null);
+          if (callerId) {
+            socketEmitter.emitToUser(callerId, 'call-ended', {
+              callId: call.id,
+              endedBy: 'timeout',
+            });
+          }
           socketEmitter.emitToUser(call.receiverId, 'call-ended', {
             callId: call.id,
             endedBy: 'timeout',
@@ -121,21 +125,28 @@ export class WebRTCService {
     // Authenticate socket connections
     this.io.use(async (socket: AuthenticatedSocket, next) => {
       try {
-        const token = socket.handshake.auth.token;
-        if (!token) {
-          return next(new Error('Authentication token required'));
+        const { token, guestId } = socket.handshake.auth;
+
+        if (token) {
+          const decoded = jwt.verify(token, appConfig.jwt.secret) as any;
+          const user = await userService.getUserById(decoded.userId);
+
+          if (!user || user.status !== 'active') {
+            return next(new Error('Invalid user'));
+          }
+
+          socket.userId = user.id;
+          socket.email = user.username;
+          return next();
         }
 
-        const decoded = jwt.verify(token, appConfig.jwt.secret) as any;
-        const user = await userService.getUserById(decoded.userId);
-
-        if (!user || user.status !== 'active') {
-          return next(new Error('Invalid user'));
+        if (guestId) {
+          socket.userId = `guest:${guestId}`;
+          socket.email = 'Anonymous Caller';
+          return next();
         }
 
-        socket.userId = user.id;
-        socket.email = user.username; // Using username instead of email
-        next();
+        return next(new Error('Authentication token or guest ID required'));
       } catch (error) {
         logger.warn('Socket authentication failed:', error);
         next(new Error('Authentication failed'));
@@ -258,8 +269,9 @@ export class WebRTCService {
             'error'
           );
           for (const call of endedCalls) {
+            const callerId = call.callerId || `guest:${call.guestId}`;
             const otherUserId =
-              call.callerId === userId ? call.receiverId : call.callerId;
+              callerId === userId ? call.receiverId : callerId;
             socketEmitter.emitToUser(otherUserId, 'call-ended', {
               callId: call.id,
               endedBy: 'disconnect',
@@ -411,7 +423,15 @@ export class WebRTCService {
 
       // Verify call and get details
       const call = await callSessionService.getCallSessionById(callId);
-      if (!call || call.callerId !== socket.userId) {
+      let isAuthorized = false;
+      if (socket.userId?.startsWith('guest:')) {
+        const guestId = socket.userId.split(':')[1];
+        isAuthorized = call && call.guestId === guestId;
+      } else {
+        isAuthorized = call && call.callerId === socket.userId;
+      }
+
+      if (!isAuthorized) {
         socket.emit('error', { message: 'Unauthorized to initiate this call' });
         return;
       }
@@ -421,7 +441,15 @@ export class WebRTCService {
       logger.info(`User ${socket.userId} joined call room: ${callId}`);
 
       // Get caller's username
-      const caller = await userService.getUserById(call.callerId);
+      let callerUsername = 'Anonymous Caller';
+      if (call.callerId) {
+        try {
+          const caller = await userService.getUserById(call.callerId);
+          callerUsername = caller.username;
+        } catch (err) {
+          logger.warn(`Failed to fetch caller ${call.callerId}:`, err);
+        }
+      }
 
       // Notify receiver
       const isReceiverOnline = this.isUserOnline(call.receiverId);
@@ -436,8 +464,8 @@ export class WebRTCService {
         );
         socketEmitter.emitToUser(call.receiverId, 'incoming-call', {
           callId: call.id,
-          callerId: call.callerId,
-          callerUsername: caller.username,
+          callerId: call.callerId || `guest:${call.guestId}`,
+          callerUsername: callerUsername,
           iceServers: this.iceConfig.iceServers,
         });
       } else {
@@ -450,8 +478,8 @@ export class WebRTCService {
         );
         await notificationService.sendCallNotification(deviceTokens, {
           callId: call.id,
-          callerId: call.callerId,
-          callerUsername: caller.username,
+          callerId: call.callerId || `guest:${call.guestId}`,
+          callerUsername: callerUsername,
           iceServers: JSON.stringify(this.iceConfig.iceServers),
         });
       }
@@ -542,7 +570,8 @@ export class WebRTCService {
       await callSessionService.rejectCall(callId, socket.userId!);
 
       // Notify caller via their personal room
-      socketEmitter.emitToUser(call.callerId, 'call-rejected', {
+      const callerId = call.callerId || `guest:${call.guestId}`;
+      socketEmitter.emitToUser(callerId!, 'call-rejected', {
         callId: call.id,
         receiverId: call.receiverId,
       });
@@ -575,8 +604,9 @@ export class WebRTCService {
       // Get call details to notify other participant
       const call = await callSessionService.getCallSessionById(callId);
       if (call) {
+        const callerId = call.callerId || `guest:${call.guestId}`;
         const otherUserId =
-          call.callerId === socket.userId ? call.receiverId : call.callerId;
+          callerId === socket.userId ? call.receiverId : callerId;
 
         // Notify the room so the other party gets the message
         socketEmitter.emitToCallRoom(callId, 'call-ended', {
@@ -585,7 +615,7 @@ export class WebRTCService {
         });
 
         // Fallback: Notify via personal room as well
-        socketEmitter.emitToUser(otherUserId, 'call-ended', {
+        socketEmitter.emitToUser(otherUserId!, 'call-ended', {
           callId: call.id,
           endedBy: socket.userId,
         });

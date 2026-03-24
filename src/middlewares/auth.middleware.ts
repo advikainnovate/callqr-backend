@@ -13,6 +13,8 @@ export interface AuthenticatedRequest extends Request {
     userId: string;
     username: string;
   };
+  guestId?: string;
+  guestIp?: string;
 }
 
 export const authenticateToken = asyncHandler(
@@ -24,35 +26,52 @@ export const authenticateToken = asyncHandler(
       throw new UnauthorizedError('Access token required');
     }
 
-    let decoded;
-    try {
-      decoded = jwt.verify(token, appConfig.jwt.secret) as any;
-    } catch (error: any) {
-      logger.warn('Invalid token attempt:', error.message);
-      throw new ForbiddenError('Invalid or expired token');
-    }
-
+    const decoded = jwt.verify(token, appConfig.jwt.secret) as any;
     req.user = decoded as { userId: string; username: string };
 
     // Check if user is globally blocked
-    try {
-      const { userService } = await import('../services/user.service');
-      const isBlocked = await userService.isGloballyBlocked(req.user.userId);
+    const { userService } = await import('../services/user.service');
+    const isBlocked = await userService.isGloballyBlocked(req.user.userId);
 
-      if (isBlocked) {
-        logger.warn(
-          `Globally blocked user attempted access: ${req.user.userId}`
-        );
-        throw new ForbiddenError(
-          'Your account has been globally blocked. Please contact support.'
-        );
+    if (isBlocked) {
+      throw new ForbiddenError(
+        'Your account has been globally blocked. Please contact support.'
+      );
+    }
+
+    next();
+  }
+);
+
+/** Middleware that allows either a valid JWT Or a guestId header. */
+export const authenticateTokenOrGuest = asyncHandler(
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    const authHeader = req.headers.authorization;
+    const token = authHeader && authHeader.split(' ')[1];
+    const guestId = req.headers['x-guest-id'] as string;
+
+    if (!token && !guestId) {
+      throw new UnauthorizedError('Access token or guest ID required');
+    }
+
+    if (token) {
+      try {
+        const decoded = jwt.verify(token, appConfig.jwt.secret) as any;
+        req.user = decoded as { userId: string; username: string };
+
+        const { userService } = await import('../services/user.service');
+        if (await userService.isGloballyBlocked(req.user.userId)) {
+          throw new ForbiddenError('Account is globally blocked.');
+        }
+      } catch (err) {
+        if (!guestId) throw new ForbiddenError('Invalid token');
+        // If token fails but guestId is present, we treat it as guest
       }
-    } catch (error) {
-      if (error instanceof ForbiddenError) {
-        throw error;
-      }
-      logger.error('Error checking global block status:', error);
-      // Continue if check fails - don't block legitimate users due to check failure
+    }
+
+    if (!req.user && guestId) {
+      req.guestId = guestId;
+      req.guestIp = req.ip;
     }
 
     next();
