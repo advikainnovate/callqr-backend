@@ -1,0 +1,34 @@
+meta {
+  name: Global Block User
+  type: http
+  seq: 33
+}
+
+post {
+  url: {{baseUrl}}/api/admin/users/:userId/global-block
+  body: json
+  auth: bearer
+}
+
+params:path {
+  userId: {{userId}}
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+body:json {
+  {
+    "reason": "Repeated harassment reported by multiple users"
+  }
+}
+
+tests {
+  test("Should globally block user successfully", function() {
+    expect(res.status).to.equal(200);
+    expect(res.body.success).to.be.true;
+    expect(res.body.data.status).to.equal('blocked');
+    expect(res.body.data.isGloballyBlocked).to.be.true;
+  });
+}

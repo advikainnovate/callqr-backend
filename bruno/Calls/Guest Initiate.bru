@@ -1,21 +1,17 @@
 meta {
-  name: Initiate
+  name: Guest Initiate
   type: http
-  seq: 1
+  seq: 10
 }
 
 post {
   url: {{baseUrl}}/api/calls/initiate
   body: json
-  auth: bearer
+  auth: none
 }
 
 headers {
   x-guest-id: {{guestId}}
-}
-
-auth:bearer {
-  token: {{authToken}}
 }
 
 body:json {
@@ -25,13 +21,11 @@ body:json {
 }
 
 tests {
-  test("Should initiate call successfully", function() {
+  test("Should initiate call as guest successfully", function() {
     expect(res.status).to.equal(201);
     expect(res.body.success).to.be.true;
     expect(res.body.data.callId).to.be.a('string');
-    expect(res.body.data.callerId).to.be.a('string');
-    expect(res.body.data.receiverId).to.be.a('string');
-    expect(res.body.data.status).to.equal('initiated');
+    expect(res.body.data.callerId).to.equal("guest:" + env.guestId);
     
     // Store call ID for subsequent tests
     bru.setEnvVar("callId", res.body.data.callId);

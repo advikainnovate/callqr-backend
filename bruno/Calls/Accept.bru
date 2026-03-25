@@ -10,6 +10,10 @@ patch {
   auth: bearer
 }
 
+headers {
+  x-guest-id: {{guestId}}
+}
+
 auth:bearer {
   token: {{authToken}}
 }

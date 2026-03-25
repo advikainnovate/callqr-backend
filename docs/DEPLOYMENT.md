@@ -66,8 +66,8 @@ npm install --production
 # 3. Build TypeScript
 npm run build
 
-# 4. Apply database schema changes
-npm run db:push
+# 4. Apply database migrations
+npm run db:migrate
 
 # 5. Restart the process
 pm2 restart callqr-backend
@@ -142,7 +142,7 @@ pm2 restart callqr-backend
 
 - [ ] All env vars set (no empty values)
 - [ ] `NODE_ENV=production`
-- [ ] Database migrations applied (`db:push` or `db:migrate`)
+- [ ] Database migrations applied (`npm run db:migrate` recommended)
 - [ ] SSL certificate active
 - [ ] Nginx WebSocket config applied
 - [ ] Firebase configured (push notifications)
