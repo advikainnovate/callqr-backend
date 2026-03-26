@@ -440,11 +440,21 @@ export class AdminService {
     }
 
     // Get caller details
-    const [caller] = await db
-      .select()
-      .from(users)
-      .where(eq(users.id, call.callerId))
-      .limit(1);
+    let caller = null;
+    let guestInfo = null;
+    if (call.callerId) {
+      [caller] = await db
+        .select()
+        .from(users)
+        .where(eq(users.id, call.callerId))
+        .limit(1);
+    } else if (call.guestId) {
+      guestInfo = {
+        guestId: call.guestId,
+        guestIp: call.guestIp,
+        isAnonymous: true,
+      };
+    }
 
     // Get receiver details
     const [receiver] = await db
@@ -471,6 +481,7 @@ export class AdminService {
     return {
       call,
       caller,
+      guestInfo,
       receiver,
       qrCode,
       duration,
@@ -1029,7 +1040,14 @@ export class AdminService {
 
     return activeCalls.map(c => ({
       ...c.call,
-      caller: c.caller,
+      caller: c.caller?.id
+        ? c.caller
+        : {
+            id: `guest:${c.call.guestId}`,
+            username: 'Anonymous Caller',
+            isGuest: true,
+            ip: c.call.guestIp,
+          },
       receiver: c.receiver,
       duration: c.call.startedAt
         ? Math.floor((Date.now() - c.call.startedAt.getTime()) / 1000)
