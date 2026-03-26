@@ -27,7 +27,15 @@ export const authenticateToken = asyncHandler(
     }
 
     const decoded = jwt.verify(token, appConfig.jwt.secret) as any;
-    req.user = decoded as { userId: string; username: string };
+
+    if (decoded.type !== 'user' || !decoded.userId) {
+      throw new ForbiddenError('User authentication required');
+    }
+
+    req.user = {
+      userId: decoded.userId,
+      username: decoded.username,
+    };
 
     // Check if user is globally blocked
     const { userService } = await import('../services/user.service');
@@ -48,32 +56,39 @@ export const authenticateTokenOrGuest = asyncHandler(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     const authHeader = req.headers.authorization;
     const token = authHeader && authHeader.split(' ')[1];
-    const guestId = req.headers['x-guest-id'] as string;
-
-    if (!token && !guestId) {
-      throw new UnauthorizedError('Access token or guest ID required');
-    }
+    const guestIdHeader = req.headers['x-guest-id'] as string;
 
     if (token) {
-      try {
-        const decoded = jwt.verify(token, appConfig.jwt.secret) as any;
-        req.user = decoded as { userId: string; username: string };
+      const decoded = jwt.verify(token, appConfig.jwt.secret) as any;
+
+      if (decoded.type === 'user' && decoded.userId) {
+        req.user = {
+          userId: decoded.userId,
+          username: decoded.username,
+        };
 
         const { userService } = await import('../services/user.service');
         if (await userService.isGloballyBlocked(req.user.userId)) {
           throw new ForbiddenError('Account is globally blocked.');
         }
-      } catch (err) {
-        if (!guestId) throw new ForbiddenError('Invalid token');
-        // If token fails but guestId is present, we treat it as guest
+      } else if (decoded.type === 'guest' && decoded.guestId) {
+        req.guestId = decoded.guestId;
+        req.guestIp = req.ip;
+      } else {
+        throw new ForbiddenError('Invalid token payload');
       }
+
+      return next();
     }
 
-    if (!req.user && guestId) {
-      req.guestId = guestId;
+    // Fallback to x-guest-id header (temporary)
+    if (guestIdHeader) {
+      logger.warn('Using deprecated x-guest-id header');
+      req.guestId = guestIdHeader;
       req.guestIp = req.ip;
+      return next();
     }
 
-    next();
+    throw new UnauthorizedError('Authentication required');
   }
 );

@@ -3,10 +3,9 @@ import { UnauthorizedError } from './ApiError';
 import { error as errorMessages } from '../constants/messages';
 import { appConfig } from '../config';
 
-export interface TokenPayload {
-  userId: string;
-  username: string;
-}
+export type TokenPayload =
+  | { type: 'user'; userId: string; username: string }
+  | { type: 'guest'; guestId: string };
 
 /**
  * Generates an access token.
@@ -16,6 +15,19 @@ export interface TokenPayload {
 export const generateAccessToken = (payload: TokenPayload): string => {
   const options: SignOptions = {
     expiresIn: appConfig.jwt.accessTokenExpiresIn as SignOptions['expiresIn'],
+  };
+  return jwt.sign(payload, appConfig.jwt.secret, options);
+};
+
+/**
+ * Generates a guest token with a 7-day expiration.
+ * @param guestId The guest ID to include in the token.
+ * @returns The generated guest token string.
+ */
+export const generateGuestToken = (guestId: string): string => {
+  const payload: TokenPayload = { type: 'guest', guestId };
+  const options: SignOptions = {
+    expiresIn: '7d',
   };
   return jwt.sign(payload, appConfig.jwt.secret, options);
 };

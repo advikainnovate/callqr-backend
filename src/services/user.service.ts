@@ -8,6 +8,8 @@ import {
   type NewUserBlock,
   blockedGuests,
   type NewBlockedGuest,
+  guestIdentifiers,
+  type GuestIdentifier,
 } from '../models';
 import { v4 as uuidv4 } from 'uuid';
 import {
@@ -813,6 +815,42 @@ export class UserService {
       .where(eq(deviceTokens.userId, userId));
 
     return tokens.map(t => t.token);
+  }
+
+  // ==================== GUEST IDENTITY METHODS ====================
+
+  /**
+   * Gets or creates a guestId based on a device fingerprint.
+   * This prevents guests from regenerating IDs to bypass blocks.
+   */
+  async getOrCreateGuestId(fingerprint: string): Promise<string> {
+    const [existing] = await db
+      .select()
+      .from(guestIdentifiers)
+      .where(eq(guestIdentifiers.fingerprint, fingerprint))
+      .limit(1);
+
+    if (existing) {
+      // Update last seen
+      await db
+        .update(guestIdentifiers)
+        .set({ lastSeenAt: new Date() })
+        .where(eq(guestIdentifiers.id, existing.id));
+      return existing.guestId;
+    }
+
+    // Create new guestId
+    const guestId = uuidv4();
+    await db.insert(guestIdentifiers).values({
+      id: uuidv4(),
+      fingerprint,
+      guestId,
+    });
+
+    logger.info(
+      `New guest identity created: ${guestId} for fingerprint: ${fingerprint}`
+    );
+    return guestId;
   }
 
   // ==================== GUEST BLOCKING METHODS ====================

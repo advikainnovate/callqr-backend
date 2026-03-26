@@ -7,11 +7,11 @@ meta {
 post {
   url: {{baseUrl}}/api/calls/initiate
   body: json
-  auth: none
+  auth: bearer
 }
 
-headers {
-  x-guest-id: {{guestId}}
+auth:bearer {
+  token: {{guestToken}}
 }
 
 body:json {

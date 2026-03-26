@@ -19,6 +19,34 @@ export const authLimiter = rateLimit({
   skipSuccessfulRequests: true,
   handler: (req, res, next) => {
     logger.warn(`Auth rate limit exceeded for IP: ${req.ip}`);
-    next(new TooManyRequestsError('Too many authentication attempts, please try again later.'));
+    next(
+      new TooManyRequestsError(
+        'Too many authentication attempts, please try again later.'
+      )
+    );
+  },
+});
+
+// Rate limiter for guest token requests (per minute)
+export const guestLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1 minute
+  limit: 5, // 5 requests per minute
+  handler: (req, res, next) => {
+    logger.warn(`Guest rate limit exceeded for IP: ${req.ip}`);
+    next(
+      new TooManyRequestsError(
+        'Too many guest token requests, please try again later.'
+      )
+    );
+  },
+});
+
+// Rate limiter for guest token requests (per day)
+export const guestDailyLimiter = rateLimit({
+  windowMs: 24 * 60 * 60 * 1000, // 24 hours
+  limit: 100, // 100 requests per day
+  handler: (req, res, next) => {
+    logger.warn(`Guest DAILY rate limit exceeded for IP: ${req.ip}`);
+    next(new TooManyRequestsError('Daily guest token limit exceeded.'));
   },
 });
