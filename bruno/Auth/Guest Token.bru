@@ -1,0 +1,23 @@
+meta {
+  name: Guest Token
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/api/auth/guest-token
+  body: none
+  auth: none
+}
+
+script:post-response {
+  if (res.status === 200 && res.body.success) {
+    bru.setEnvVar("guestToken", res.body.data.token);
+    bru.setEnvVar("guestId", res.body.data.guestId);
+  }
+}
+
+docs {
+  Generates a backend-signed guest JWT token tied to your device fingerprint (IP + User-Agent).
+  The token is valid for 7 days.
+}

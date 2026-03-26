@@ -3,6 +3,10 @@ import { authController } from '../controllers/auth.controller';
 import { authenticateToken } from '../middlewares/auth.middleware';
 import { validate } from '../middlewares/validate';
 import { z } from 'zod';
+import {
+  guestLimiter,
+  guestDailyLimiter,
+} from '../middlewares/rateLimit.middleware';
 
 const router = Router();
 
@@ -63,6 +67,13 @@ router.post(
   '/reset-password',
   validate(resetPasswordSchema),
   authController.resetPassword
+);
+
+router.post(
+  '/guest-token',
+  guestLimiter,
+  guestDailyLimiter,
+  authController.getGuestToken
 );
 
 /**
