@@ -1,7 +1,7 @@
 import { Response } from 'express';
 import { qrCodeService } from '../services/qrCode.service';
 import { AuthenticatedRequest } from '../middlewares/auth.middleware';
-import { asyncHandler } from '../utils';
+import { asyncHandler, UnauthorizedError } from '../utils';
 import { sendSuccessResponse } from '../utils/responseHandler';
 
 export class QRCodeController {
@@ -39,7 +39,11 @@ export class QRCodeController {
 
   claimQRCode = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
-      const userId = req.user!.userId;
+      const identity = req.identity;
+      if (identity?.type !== 'user') {
+        throw new UnauthorizedError('User authentication required');
+      }
+      const userId = identity.userId;
       const { token, humanToken } = req.body;
 
       const qrCode = await qrCodeService.claimQRCode(userId, token, humanToken);
@@ -91,7 +95,11 @@ export class QRCodeController {
 
   getMyQRCodes = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
-      const userId = req.user!.userId;
+      const identity = req.identity;
+      if (identity?.type !== 'user') {
+        throw new UnauthorizedError('User authentication required');
+      }
+      const userId = identity.userId;
       const qrCodes = await qrCodeService.getUserQRCodes(userId);
 
       sendSuccessResponse(res, 200, 'QR codes retrieved successfully', {
@@ -132,7 +140,11 @@ export class QRCodeController {
   revokeQRCode = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
       const { qrCodeId } = req.params;
-      const userId = req.user!.userId;
+      const identity = req.identity;
+      if (identity?.type !== 'user') {
+        throw new UnauthorizedError('User authentication required');
+      }
+      const userId = identity.userId;
 
       const qrCode = await qrCodeService.revokeQRCode(qrCodeId, userId);
 
@@ -146,7 +158,11 @@ export class QRCodeController {
   disableQRCode = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
       const { qrCodeId } = req.params;
-      const userId = req.user!.userId;
+      const identity = req.identity;
+      if (identity?.type !== 'user') {
+        throw new UnauthorizedError('User authentication required');
+      }
+      const userId = identity.userId;
 
       const qrCode = await qrCodeService.disableQRCode(qrCodeId, userId);
 
@@ -160,7 +176,11 @@ export class QRCodeController {
   reactivateQRCode = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
       const { qrCodeId } = req.params;
-      const userId = req.user!.userId;
+      const identity = req.identity;
+      if (identity?.type !== 'user') {
+        throw new UnauthorizedError('User authentication required');
+      }
+      const userId = identity.userId;
 
       const qrCode = await qrCodeService.reactivateQRCode(qrCodeId, userId);
 

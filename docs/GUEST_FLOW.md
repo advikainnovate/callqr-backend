@@ -123,6 +123,34 @@ sequenceDiagram
     Note over C,O: WebRTC PeerConnection starts...
 ```
 
+## 🧠 Backend Unified Identity (`req.identity`)
+
+For developers working on the backend, always use `req.identity` instead of `req.user` or `req.guestId`.
+
+The `req.identity` object is a discriminated union:
+
+```typescript
+type Identity =
+  | { type: 'user'; userId: string; username: string }
+  | { type: 'guest'; guestId: string; guestIp: string };
+```
+
+### Usage in Controllers:
+
+```typescript
+const identity = req.identity;
+
+if (identity?.type === 'user') {
+  // Logic for registered users
+  const userId = identity.userId;
+} else if (identity?.type === 'guest') {
+  // Logic for anonymous guests
+  const guestId = identity.guestId;
+}
+```
+
+This ensures type safety and prevents "null-checks" for `req.user` across the codebase.
+
 ---
 
 ## 🛑 Security & Rate Limiting

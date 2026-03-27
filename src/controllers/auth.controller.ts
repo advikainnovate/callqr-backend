@@ -1,7 +1,7 @@
 import { Response } from 'express';
 import { userService } from '../services/user.service';
 import { AuthenticatedRequest } from '../middlewares/auth.middleware';
-import { asyncHandler, logger } from '../utils';
+import { asyncHandler, logger, UnauthorizedError } from '../utils';
 import { sendSuccessResponse } from '../utils/responseHandler';
 import { generateAccessToken, generateGuestToken } from '../utils/jwt';
 import crypto from 'crypto';
@@ -125,7 +125,11 @@ export class AuthController {
 
   changePassword = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
-      const userId = req.user!.userId;
+      const identity = req.identity;
+      if (identity?.type !== 'user') {
+        throw new UnauthorizedError('User authentication required');
+      }
+      const userId = identity.userId;
       const { oldPassword, newPassword } = req.body;
 
       await userService.changePassword(userId, oldPassword, newPassword);
@@ -136,7 +140,11 @@ export class AuthController {
 
   getProfile = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
-      const userId = req.user!.userId;
+      const identity = req.identity;
+      if (identity?.type !== 'user') {
+        throw new UnauthorizedError('User authentication required');
+      }
+      const userId = identity.userId;
 
       // Get basic user profile
       const profile = await userService.getUserProfile(userId);

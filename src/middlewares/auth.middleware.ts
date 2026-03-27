@@ -8,6 +8,10 @@ import {
   asyncHandler,
 } from '../utils';
 
+export type Identity =
+  | { type: 'user'; userId: string; username: string }
+  | { type: 'guest'; guestId: string; guestIp?: string };
+
 export interface AuthenticatedRequest extends Request {
   user?: {
     userId: string;
@@ -15,6 +19,7 @@ export interface AuthenticatedRequest extends Request {
   };
   guestId?: string;
   guestIp?: string;
+  identity?: Identity;
 }
 
 export const authenticateToken = asyncHandler(
@@ -33,6 +38,12 @@ export const authenticateToken = asyncHandler(
     }
 
     req.user = {
+      userId: decoded.userId,
+      username: decoded.username,
+    };
+
+    req.identity = {
+      type: 'user',
       userId: decoded.userId,
       username: decoded.username,
     };
@@ -66,6 +77,11 @@ export const authenticateTokenOrGuest = asyncHandler(
           userId: decoded.userId,
           username: decoded.username,
         };
+        req.identity = {
+          type: 'user',
+          userId: decoded.userId,
+          username: decoded.username,
+        };
 
         const { userService } = await import('../services/user.service');
         if (await userService.isGloballyBlocked(req.user.userId)) {
@@ -74,6 +90,11 @@ export const authenticateTokenOrGuest = asyncHandler(
       } else if (decoded.type === 'guest' && decoded.guestId) {
         req.guestId = decoded.guestId;
         req.guestIp = req.ip;
+        req.identity = {
+          type: 'guest',
+          guestId: decoded.guestId,
+          guestIp: req.ip,
+        };
       } else {
         throw new ForbiddenError('Invalid token payload');
       }
@@ -86,6 +107,11 @@ export const authenticateTokenOrGuest = asyncHandler(
       logger.warn('Using deprecated x-guest-id header');
       req.guestId = guestIdHeader;
       req.guestIp = req.ip;
+      req.identity = {
+        type: 'guest',
+        guestId: guestIdHeader,
+        guestIp: req.ip,
+      };
       return next();
     }
 

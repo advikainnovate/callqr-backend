@@ -2,7 +2,7 @@ import { Response } from 'express';
 import { AuthenticatedRequest } from '../middlewares/auth.middleware';
 import { userService } from '../services/user.service';
 import { smsService } from '../services/sms.service';
-import { logger, BadRequestError } from '../utils';
+import { logger, BadRequestError, UnauthorizedError } from '../utils';
 import { z } from 'zod';
 
 // Validation schemas
@@ -43,14 +43,17 @@ export class PhoneVerificationController {
    *       401:
    *         description: Unauthorized
    */
-  async sendPhoneVerificationOTP(req: AuthenticatedRequest, res: Response): Promise<void> {
+  async sendPhoneVerificationOTP(
+    req: AuthenticatedRequest,
+    res: Response
+  ): Promise<void> {
     try {
       const { phone } = sendOTPSchema.parse(req.body);
-      const userId = req.user?.userId;
-
-      if (!userId) {
-        throw new BadRequestError('User not authenticated');
+      const identity = req.identity;
+      if (identity?.type !== 'user') {
+        throw new UnauthorizedError('User authentication required');
       }
+      const userId = identity.userId;
 
       // Get user profile with decrypted phone
       const userProfile = await userService.getUserProfile(userId);
@@ -103,7 +106,10 @@ export class PhoneVerificationController {
       logger.error('Error sending phone verification OTP:', error);
       res.status(500).json({
         success: false,
-        message: error instanceof Error ? error.message : 'Failed to send verification code',
+        message:
+          error instanceof Error
+            ? error.message
+            : 'Failed to send verification code',
       });
     }
   }
@@ -139,11 +145,11 @@ export class PhoneVerificationController {
   async verifyPhone(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const { otp } = verifyOTPSchema.parse(req.body);
-      const userId = req.user?.userId;
-
-      if (!userId) {
-        throw new BadRequestError('User not authenticated');
+      const identity = req.identity;
+      if (identity?.type !== 'user') {
+        throw new UnauthorizedError('User authentication required');
       }
+      const userId = identity.userId;
 
       // Verify OTP
       await userService.verifyPhoneOTP(userId, otp);
@@ -152,14 +158,17 @@ export class PhoneVerificationController {
       const user = await userService.getUserById(userId);
       if (user.status === 'pending_verification') {
         await userService.updateUser(userId, { status: 'active' });
-        logger.info(`User account activated after phone verification: ${userId}`);
+        logger.info(
+          `User account activated after phone verification: ${userId}`
+        );
       }
 
       logger.info(`Phone verified successfully for user ${userId}`);
 
       res.status(200).json({
         success: true,
-        message: 'Phone number verified successfully. Your account is now active!',
+        message:
+          'Phone number verified successfully. Your account is now active!',
       });
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -174,7 +183,8 @@ export class PhoneVerificationController {
       logger.error('Error verifying phone:', error);
       res.status(400).json({
         success: false,
-        message: error instanceof Error ? error.message : 'Failed to verify phone',
+        message:
+          error instanceof Error ? error.message : 'Failed to verify phone',
       });
     }
   }
@@ -195,13 +205,16 @@ export class PhoneVerificationController {
    *       401:
    *         description: Unauthorized
    */
-  async resendPhoneVerificationOTP(req: AuthenticatedRequest, res: Response): Promise<void> {
+  async resendPhoneVerificationOTP(
+    req: AuthenticatedRequest,
+    res: Response
+  ): Promise<void> {
     try {
-      const userId = req.user?.userId;
-
-      if (!userId) {
-        throw new BadRequestError('User not authenticated');
+      const identity = req.identity;
+      if (identity?.type !== 'user') {
+        throw new UnauthorizedError('User authentication required');
       }
+      const userId = identity.userId;
 
       // Generate new OTP
       const otp = await userService.resendPhoneVerificationOTP(userId);
@@ -227,7 +240,10 @@ export class PhoneVerificationController {
       logger.error('Error resending phone verification OTP:', error);
       res.status(400).json({
         success: false,
-        message: error instanceof Error ? error.message : 'Failed to resend verification code',
+        message:
+          error instanceof Error
+            ? error.message
+            : 'Failed to resend verification code',
       });
     }
   }
@@ -246,13 +262,16 @@ export class PhoneVerificationController {
    *       401:
    *         description: Unauthorized
    */
-  async getPhoneVerificationStatus(req: AuthenticatedRequest, res: Response): Promise<void> {
+  async getPhoneVerificationStatus(
+    req: AuthenticatedRequest,
+    res: Response
+  ): Promise<void> {
     try {
-      const userId = req.user?.userId;
-
-      if (!userId) {
-        throw new BadRequestError('User not authenticated');
+      const identity = req.identity;
+      if (identity?.type !== 'user') {
+        throw new UnauthorizedError('User authentication required');
       }
+      const userId = identity.userId;
 
       const user = await userService.getUserById(userId);
       const userProfile = await userService.getUserProfile(userId);
@@ -262,7 +281,9 @@ export class PhoneVerificationController {
         data: {
           hasPhone: !!user.phone,
           isPhoneVerified: user.isPhoneVerified === 'true',
-          phone: userProfile.phone ? userProfile.phone.replace(/(\d{2})\d+(\d{4})/, '$1****$2') : null, // Masked phone
+          phone: userProfile.phone
+            ? userProfile.phone.replace(/(\d{2})\d+(\d{4})/, '$1****$2')
+            : null, // Masked phone
         },
       });
     } catch (error) {
