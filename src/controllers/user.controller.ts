@@ -1,7 +1,7 @@
 import { Response } from 'express';
 import { userService } from '../services/user.service';
 import { AuthenticatedRequest } from '../middlewares/auth.middleware';
-import { asyncHandler } from '../utils';
+import { asyncHandler, UnauthorizedError } from '../utils';
 import { sendSuccessResponse } from '../utils/responseHandler';
 
 export class UserController {
@@ -20,7 +20,11 @@ export class UserController {
 
   getProfile = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
-      const userId = req.user!.userId;
+      const identity = req.identity;
+      if (identity?.type !== 'user') {
+        throw new UnauthorizedError('User authentication required');
+      }
+      const userId = identity.userId;
       const user = await userService.getUserById(userId);
 
       sendSuccessResponse(res, 200, 'Profile retrieved successfully', {
@@ -123,7 +127,11 @@ export class UserController {
 
   blockUserById = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
-      const blockerId = req.user!.userId;
+      const identity = req.identity;
+      if (identity?.type !== 'user') {
+        throw new UnauthorizedError('User authentication required');
+      }
+      const blockerId = identity.userId;
       const { userId: blockedUserId } = req.params;
       const { reason } = req.body;
 
@@ -138,7 +146,11 @@ export class UserController {
 
   unblockUserById = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
-      const blockerId = req.user!.userId;
+      const identity = req.identity;
+      if (identity?.type !== 'user') {
+        throw new UnauthorizedError('User authentication required');
+      }
+      const blockerId = identity.userId;
       const { userId: blockedUserId } = req.params;
 
       await userService.unblockUserById(blockerId, blockedUserId);
@@ -151,7 +163,11 @@ export class UserController {
 
   getBlockedUsers = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
-      const blockerId = req.user!.userId;
+      const identity = req.identity;
+      if (identity?.type !== 'user') {
+        throw new UnauthorizedError('User authentication required');
+      }
+      const blockerId = identity.userId;
       const limit = req.query.limit ? parseInt(req.query.limit as string) : 50;
       const offset = req.query.offset
         ? parseInt(req.query.offset as string)
@@ -178,7 +194,11 @@ export class UserController {
 
   upsertDeviceToken = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
-      const userId = req.user!.userId;
+      const identity = req.identity;
+      if (identity?.type !== 'user') {
+        throw new UnauthorizedError('User authentication required');
+      }
+      const userId = identity.userId;
       const { token, platform, deviceId } = req.body;
 
       await userService.upsertDeviceToken(userId, token, platform, deviceId);
@@ -192,7 +212,11 @@ export class UserController {
 
   removeDeviceToken = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
-      const userId = req.user!.userId;
+      const identity = req.identity;
+      if (identity?.type !== 'user') {
+        throw new UnauthorizedError('User authentication required');
+      }
+      const userId = identity.userId;
       const { token } = req.params;
 
       await userService.removeDeviceToken(userId, token);

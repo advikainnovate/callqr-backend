@@ -8,9 +8,10 @@ import { sendSuccessResponse } from '../utils/responseHandler';
 export class CallController {
   initiateCall = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
-      const callerId = req.user?.userId;
-      const guestId = req.guestId;
-      const guestIp = req.guestIp;
+      const identity = req.identity;
+      const callerId = identity?.type === 'user' ? identity.userId : undefined;
+      const guestId = identity?.type === 'guest' ? identity.guestId : undefined;
+      const guestIp = identity?.type === 'guest' ? identity.guestIp : req.ip;
       const { qrToken } = req.body;
 
       const callSession = await callSessionService.initiateCall(
@@ -53,12 +54,16 @@ export class CallController {
   updateCallStatus = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
       const { callId } = req.params;
-      const userId =
-        req.user?.userId || (req.guestId ? `guest:${req.guestId}` : null);
+      const identity = req.identity;
 
-      if (!userId) {
+      if (!identity) {
         throw new UnauthorizedError('Authentication required');
       }
+
+      const userId =
+        identity.type === 'user'
+          ? identity.userId
+          : `guest:${identity.guestId}`;
 
       const { status, endedReason } = req.body;
 
@@ -80,12 +85,14 @@ export class CallController {
 
   endCall = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const { callId } = req.params;
-    const userId =
-      req.user?.userId || (req.guestId ? `guest:${req.guestId}` : null);
+    const identity = req.identity;
 
-    if (!userId) {
+    if (!identity) {
       throw new UnauthorizedError('Authentication required');
     }
+
+    const userId =
+      identity.type === 'user' ? identity.userId : `guest:${identity.guestId}`;
 
     const { reason } = req.body;
 
@@ -106,12 +113,16 @@ export class CallController {
   acceptCall = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
       const { callId } = req.params;
-      const userId =
-        req.user?.userId || (req.guestId ? `guest:${req.guestId}` : null);
+      const identity = req.identity;
 
-      if (!userId) {
+      if (!identity) {
         throw new UnauthorizedError('Authentication required');
       }
+
+      const userId =
+        identity.type === 'user'
+          ? identity.userId
+          : `guest:${identity.guestId}`;
 
       const callSession = await callSessionService.acceptCall(callId, userId);
 
@@ -125,12 +136,16 @@ export class CallController {
   rejectCall = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
       const { callId } = req.params;
-      const userId =
-        req.user?.userId || (req.guestId ? `guest:${req.guestId}` : null);
+      const identity = req.identity;
 
-      if (!userId) {
+      if (!identity) {
         throw new UnauthorizedError('Authentication required');
       }
+
+      const userId =
+        identity.type === 'user'
+          ? identity.userId
+          : `guest:${identity.guestId}`;
 
       const callSession = await callSessionService.rejectCall(callId, userId);
 
@@ -144,12 +159,16 @@ export class CallController {
 
   getCallHistory = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
-      const userId =
-        req.user?.userId || (req.guestId ? `guest:${req.guestId}` : null);
+      const identity = req.identity;
 
-      if (!userId) {
+      if (!identity) {
         throw new UnauthorizedError('Authentication required');
       }
+
+      const userId =
+        identity.type === 'user'
+          ? identity.userId
+          : `guest:${identity.guestId}`;
 
       const limit = req.query.limit ? parseInt(req.query.limit as string) : 50;
 
@@ -175,12 +194,16 @@ export class CallController {
 
   getActiveCalls = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
-      const userId =
-        req.user?.userId || (req.guestId ? `guest:${req.guestId}` : null);
+      const identity = req.identity;
 
-      if (!userId) {
+      if (!identity) {
         throw new UnauthorizedError('Authentication required');
       }
+
+      const userId =
+        identity.type === 'user'
+          ? identity.userId
+          : `guest:${identity.guestId}`;
 
       const activeCalls = await callSessionService.getActiveCalls(userId);
 
@@ -199,8 +222,12 @@ export class CallController {
 
   getCallUsage = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
-      const userId = req.user!.userId;
-      const usage = await subscriptionService.getCallUsage(userId);
+      const identity = req.identity;
+      if (identity?.type !== 'user') {
+        throw new UnauthorizedError('User authentication required');
+      }
+
+      const usage = await subscriptionService.getCallUsage(identity.userId);
 
       sendSuccessResponse(res, 200, 'Call usage retrieved successfully', usage);
     }

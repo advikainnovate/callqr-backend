@@ -1,6 +1,6 @@
 import { Response } from 'express';
 import { AuthenticatedRequest } from '../middlewares/auth.middleware';
-import { asyncHandler, logger } from '../utils';
+import { asyncHandler, logger, UnauthorizedError } from '../utils';
 import { sendSuccessResponse } from '../utils/responseHandler';
 import { razorpayService } from '../services/razorpay.service';
 import {
@@ -64,7 +64,11 @@ export class PaymentController {
    */
   createOrder = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
-      const userId = req.user!.userId;
+      const identity = req.identity;
+      if (identity?.type !== 'user') {
+        throw new UnauthorizedError('User authentication required');
+      }
+      const userId = identity.userId;
       const { plan } = req.body;
 
       const order = await razorpayService.createOrder(userId, plan);
@@ -130,7 +134,11 @@ export class PaymentController {
    */
   getPaymentHistory = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
-      const userId = req.user!.userId;
+      const identity = req.identity;
+      if (identity?.type !== 'user') {
+        throw new UnauthorizedError('User authentication required');
+      }
+      const userId = identity.userId;
 
       const payments = await razorpayService.getUserPayments(userId);
 

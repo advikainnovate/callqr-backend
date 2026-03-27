@@ -1,7 +1,7 @@
 import { Response } from 'express';
 import { messageService } from '../services/message.service';
 import { AuthenticatedRequest } from '../middlewares/auth.middleware';
-import { asyncHandler, logger } from '../utils';
+import { asyncHandler, logger, UnauthorizedError } from '../utils';
 import { sendSuccessResponse } from '../utils/responseHandler';
 import { socketEmitter } from '../services/socketEmitter.service';
 import { userService } from '../services/user.service';
@@ -11,21 +11,15 @@ import { chatSessionService } from '../services/chatSession.service';
 export class MessageController {
   sendMessage = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
-      console.log('REQ.USER:', req.user);
-      console.log('BODY:', req.body);
-
-      const senderId = req.user?.userId;
+      const identity = req.identity;
+      const senderId = identity?.type === 'user' ? identity.userId : undefined;
       const { chatSessionId, content, messageType } = req.body;
-
-      console.log('SENDER ID:', senderId);
-      console.log('CHAT ID:', chatSessionId);
 
       if (!senderId || !chatSessionId) {
         logger.error('Missing senderId or chatSessionId in sendMessage');
-        return res.status(400).json({
-          status: 'error',
-          message: 'Authentication required or missing chat session ID',
-        });
+        throw new UnauthorizedError(
+          'Authentication required or missing chat session ID'
+        );
       }
 
       const mediaFiles = req.files as Express.Multer.File[] | undefined;
@@ -101,7 +95,11 @@ export class MessageController {
   getMessages = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
       const { chatSessionId } = req.params;
-      const userId = req.user!.userId;
+      const identity = req.identity;
+      if (identity?.type !== 'user') {
+        throw new UnauthorizedError('User authentication required');
+      }
+      const userId = identity.userId;
       const limit = req.query.limit ? parseInt(req.query.limit as string) : 50;
       const offset = req.query.offset
         ? parseInt(req.query.offset as string)
@@ -140,7 +138,11 @@ export class MessageController {
   markAsRead = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
       const { messageId } = req.params;
-      const userId = req.user!.userId;
+      const identity = req.identity;
+      if (identity?.type !== 'user') {
+        throw new UnauthorizedError('User authentication required');
+      }
+      const userId = identity.userId;
 
       const message = await messageService.markAsRead(messageId, userId);
 
@@ -157,7 +159,11 @@ export class MessageController {
   markAsDelivered = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
       const { messageId } = req.params;
-      const userId = req.user!.userId;
+      const identity = req.identity;
+      if (identity?.type !== 'user') {
+        throw new UnauthorizedError('User authentication required');
+      }
+      const userId = identity.userId;
 
       const message = await messageService.markAsDelivered(messageId, userId);
 
@@ -172,7 +178,11 @@ export class MessageController {
   markChatAsDelivered = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
       const { chatSessionId } = req.params;
-      const userId = req.user!.userId;
+      const identity = req.identity;
+      if (identity?.type !== 'user') {
+        throw new UnauthorizedError('User authentication required');
+      }
+      const userId = identity.userId;
 
       const count = await messageService.markChatMessagesAsDelivered(
         chatSessionId,
@@ -188,7 +198,11 @@ export class MessageController {
   getDeliveryStatus = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
       const { messageId } = req.params;
-      const userId = req.user!.userId;
+      const identity = req.identity;
+      if (identity?.type !== 'user') {
+        throw new UnauthorizedError('User authentication required');
+      }
+      const userId = identity.userId;
 
       const status = await messageService.getDeliveryStatus(messageId, userId);
 
@@ -204,7 +218,11 @@ export class MessageController {
   markChatAsRead = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
       const { chatSessionId } = req.params;
-      const userId = req.user!.userId;
+      const identity = req.identity;
+      if (identity?.type !== 'user') {
+        throw new UnauthorizedError('User authentication required');
+      }
+      const userId = identity.userId;
 
       const count = await messageService.markChatMessagesAsRead(
         chatSessionId,
@@ -220,7 +238,11 @@ export class MessageController {
   deleteMessage = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
       const { messageId } = req.params;
-      const userId = req.user!.userId;
+      const identity = req.identity;
+      if (identity?.type !== 'user') {
+        throw new UnauthorizedError('User authentication required');
+      }
+      const userId = identity.userId;
 
       const message = await messageService.deleteMessage(messageId, userId);
 
@@ -233,7 +255,11 @@ export class MessageController {
 
   getUnreadCount = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
-      const userId = req.user!.userId;
+      const identity = req.identity;
+      if (identity?.type !== 'user') {
+        throw new UnauthorizedError('User authentication required');
+      }
+      const userId = identity.userId;
       const unreadCount = await messageService.getUnreadCount(userId);
 
       sendSuccessResponse(res, 200, 'Unread count retrieved successfully', {
@@ -245,7 +271,11 @@ export class MessageController {
   searchMessages = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
       const { chatSessionId } = req.params;
-      const userId = req.user!.userId;
+      const identity = req.identity;
+      if (identity?.type !== 'user') {
+        throw new UnauthorizedError('User authentication required');
+      }
+      const userId = identity.userId;
       const { query } = req.query;
 
       if (!query || typeof query !== 'string') {
