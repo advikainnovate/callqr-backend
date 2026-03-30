@@ -61,7 +61,10 @@ export class QRCodeService {
     throw new Error('Failed to generate unique human token');
   }
 
-  async createQRCode(): Promise<QRCodeType> {
+  async createQRCode(
+    redirectUrl?: string | null,
+    isRedirectEnabled: boolean = false
+  ): Promise<QRCodeType> {
     const token = this.generateSecureToken();
     const humanToken = await this.ensureUniqueHumanToken();
 
@@ -72,6 +75,8 @@ export class QRCodeService {
         token,
         humanToken,
         status: 'unassigned',
+        redirectUrl,
+        isRedirectEnabled,
       })
       .returning();
 
@@ -79,7 +84,11 @@ export class QRCodeService {
     return qrCode;
   }
 
-  async bulkCreateQRCodes(count: number): Promise<QRCodeType[]> {
+  async bulkCreateQRCodes(
+    count: number,
+    redirectUrl?: string | null,
+    isRedirectEnabled: boolean = false
+  ): Promise<QRCodeType[]> {
     if (count < 1 || count > 2000) {
       throw new BadRequestError('Count must be between 1 and 2000');
     }
@@ -87,7 +96,7 @@ export class QRCodeService {
     const qrCodes: QRCodeType[] = [];
 
     for (let i = 0; i < count; i++) {
-      const qrCode = await this.createQRCode();
+      const qrCode = await this.createQRCode(redirectUrl, isRedirectEnabled);
       qrCodes.push(qrCode);
     }
 
@@ -378,7 +387,7 @@ export class QRCodeService {
   }
 
   async generateQRCodeImage(token: string): Promise<string> {
-    const qrUrl = `${process.env.APP_BASE_URL || 'http://localhost:4000'}/scan/${token}`;
+    const qrUrl = `${process.env.BACKEND_URL || 'http://localhost:4000'}/api/qr-codes/resolve/${token}`;
 
     const dataURL = await QRCode.toDataURL(qrUrl, {
       width: 300,

@@ -6,6 +6,7 @@ dotenv.config();
 const config = {
   env: process.env.NODE_ENV || 'development',
   port: process.env.PORT || 4000,
+  backendUrl: process.env.BACKEND_URL || 'http://localhost:4000',
   logLevel: process.env.LOG_LEVEL || 'info',
 
   database: {
