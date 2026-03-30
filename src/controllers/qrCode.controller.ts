@@ -7,13 +7,19 @@ import { sendSuccessResponse } from '../utils/responseHandler';
 export class QRCodeController {
   createQRCode = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
-      const qrCode = await qrCodeService.createQRCode();
+      const { redirectUrl, isRedirectEnabled } = req.body;
+      const qrCode = await qrCodeService.createQRCode(
+        redirectUrl,
+        isRedirectEnabled
+      );
 
       sendSuccessResponse(res, 201, 'QR code created successfully', {
         id: qrCode.id,
         token: qrCode.token,
         humanToken: qrCode.humanToken,
         status: qrCode.status,
+        redirectUrl: qrCode.redirectUrl,
+        isRedirectEnabled: qrCode.isRedirectEnabled,
         createdAt: qrCode.createdAt,
       });
     }
@@ -21,8 +27,12 @@ export class QRCodeController {
 
   bulkCreateQRCodes = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
-      const { count } = req.body;
-      const qrCodes = await qrCodeService.bulkCreateQRCodes(count);
+      const { count, redirectUrl, isRedirectEnabled } = req.body;
+      const qrCodes = await qrCodeService.bulkCreateQRCodes(
+        count,
+        redirectUrl,
+        isRedirectEnabled
+      );
 
       sendSuccessResponse(res, 201, `${count} QR codes created successfully`, {
         count: qrCodes.length,
@@ -31,6 +41,8 @@ export class QRCodeController {
           token: qr.token,
           humanToken: qr.humanToken,
           status: qr.status,
+          redirectUrl: qr.redirectUrl,
+          isRedirectEnabled: qr.isRedirectEnabled,
           createdAt: qr.createdAt,
         })),
       });
@@ -199,6 +211,28 @@ export class QRCodeController {
       sendSuccessResponse(res, 200, 'QR code image generated successfully', {
         image: dataURL,
       });
+    }
+  );
+
+  handleQRScan = asyncHandler(
+    async (req: AuthenticatedRequest, res: Response) => {
+      const { token } = req.params;
+      const userAgent = req.headers['user-agent'] || '';
+      const isApp =
+        req.query.app === 'true' ||
+        (process.env.OFFICIAL_APP_UA_PART &&
+          userAgent.includes(process.env.OFFICIAL_APP_UA_PART));
+
+      const qrCode = await qrCodeService.getQRCodeByToken(token);
+
+      // If redirect is enabled and NOT from our app, redirect to external URL
+      if (qrCode.isRedirectEnabled && qrCode.redirectUrl && !isApp) {
+        return res.redirect(302, qrCode.redirectUrl);
+      }
+
+      // Otherwise redirect to the frontend calling page
+      const frontendUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/call/${token}`;
+      res.redirect(302, frontendUrl);
     }
   );
 }
