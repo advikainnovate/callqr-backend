@@ -50,9 +50,20 @@ const changePasswordSchema = z.object({
 
 // Forgot password schema
 const forgotPasswordSchema = z.object({
-  body: z.object({
-    username: z.string().min(1, 'Username is required'),
-  }),
+  body: z
+    .object({
+      identifier: z.string().optional(),
+      username: z.string().optional(),
+      email: z.string().optional(),
+      phone: z.string().optional(),
+    })
+    .refine(
+      data => data.identifier || data.username || data.email || data.phone,
+      {
+        message: 'Username, Email, or Phone is required',
+        path: ['identifier'],
+      }
+    ),
 });
 
 // Reset password schema

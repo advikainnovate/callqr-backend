@@ -127,7 +127,7 @@ export class UserService {
     return user;
   }
 
-  async authenticateUser(identifier: string, password: string): Promise<User> {
+  async getUserByIdentifier(identifier: string): Promise<User | null> {
     const isEmail = identifier.includes('@');
     let user: User | undefined;
 
@@ -146,7 +146,23 @@ export class UserService {
         .from(users)
         .where(sql`LOWER(${users.username}) = LOWER(${identifier})`)
         .limit(1);
+
+      // If not found by username, try finding by phone hash
+      if (!user) {
+        const phoneHash = this.hashData(identifier);
+        [user] = await db
+          .select()
+          .from(users)
+          .where(eq(users.phoneHash, phoneHash))
+          .limit(1);
+      }
     }
+
+    return user || null;
+  }
+
+  async authenticateUser(identifier: string, password: string): Promise<User> {
+    const user = await this.getUserByIdentifier(identifier);
 
     // Generic "Invalid credentials" error to prevent user enumeration
     if (!user) {

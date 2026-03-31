@@ -245,18 +245,19 @@ export class AuthController {
   // Forgot Password - Request OTP via SMS
   forgotPassword = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
-      const { username } = req.body;
+      const { identifier, username, email, phone } = req.body;
+      const targetIdentifier = identifier || username || email || phone;
 
-      if (!username) {
+      if (!targetIdentifier) {
         res.status(400).json({
           success: false,
-          message: 'Username is required',
+          message: 'Identifier, username, email or phone is required',
         });
         return;
       }
 
-      // Find user by username
-      const user = await userService.getUserByUsername(username);
+      // Find user by identifier
+      const user = await userService.getUserByIdentifier(targetIdentifier);
 
       if (!user) {
         // Don't reveal if user exists or not (security)
