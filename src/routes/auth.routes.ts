@@ -23,8 +23,12 @@ const registerSchema = z.object({
 // Login schema
 const loginSchema = z.object({
   body: z.object({
-    username: z.string(),
-    password: z.string(),
+    identifier: z.string().min(1, 'Email, Username or Phone is required'),
+    password: z.string().min(1, 'Password is required'),
+    // Maintain backward compatibility for older frontend versions
+    username: z.string().optional(),
+    email: z.string().optional(),
+    phone: z.string().optional(),
   }),
 });
 

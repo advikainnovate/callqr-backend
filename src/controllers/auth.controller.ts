@@ -68,9 +68,20 @@ export class AuthController {
   });
 
   login = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
-    const { username, password } = req.body;
+    const { identifier, username, email, phone, password } = req.body;
 
-    const user = await userService.authenticateUser(username, password);
+    // Use identifier if provided, fallback to username, email or phone (legacy support)
+    const loginIdentifier = identifier || username || email || phone;
+
+    if (!loginIdentifier) {
+      res.status(400).json({
+        success: false,
+        message: 'Username, email or phone is required',
+      });
+      return;
+    }
+
+    const user = await userService.authenticateUser(loginIdentifier, password);
 
     // Check if user is admin (admins bypass phone verification)
     const ADMIN_USER_IDS = (process.env.ADMIN_USER_IDS || '')
