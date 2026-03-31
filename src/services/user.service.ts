@@ -1,4 +1,4 @@
-import { eq, or, and } from 'drizzle-orm';
+import { eq, or, and, sql } from 'drizzle-orm';
 import { db } from '../db';
 import {
   users,
@@ -127,16 +127,33 @@ export class UserService {
     return user;
   }
 
-  async authenticateUser(username: string, password: string): Promise<User> {
-    // Find user by username
-    const [user] = await db
-      .select()
-      .from(users)
-      .where(eq(users.username, username))
-      .limit(1);
+  async authenticateUser(identifier: string, password: string): Promise<User> {
+    const isEmail = identifier.includes('@');
+    let user: User | undefined;
 
+    if (isEmail) {
+      // Find user by email hash (lowercase email before hashing for consistency)
+      const emailHash = this.hashData(identifier.toLowerCase());
+      [user] = await db
+        .select()
+        .from(users)
+        .where(eq(users.emailHash, emailHash))
+        .limit(1);
+    } else {
+      // Find user by username (case-insensitive)
+      [user] = await db
+        .select()
+        .from(users)
+        .where(sql`LOWER(${users.username}) = LOWER(${identifier})`)
+        .limit(1);
+    }
+
+    // Generic "Invalid credentials" error to prevent user enumeration
     if (!user) {
-      throw new UnauthorizedError('Invalid username or password');
+      logger.warn(
+        `Authentication failed: User not found for identifier: ${identifier}`
+      );
+      throw new UnauthorizedError('Invalid credentials');
     }
 
     // Check if user is globally blocked
@@ -147,7 +164,7 @@ export class UserService {
     }
 
     // Check if user is active
-    if (user.status !== 'active') {
+    if (user.status !== 'active' && user.status !== 'pending_verification') {
       throw new UnauthorizedError('Account is not active');
     }
 
@@ -158,7 +175,10 @@ export class UserService {
     );
 
     if (!isPasswordValid) {
-      throw new UnauthorizedError('Invalid username or password');
+      logger.warn(
+        `Authentication failed: Invalid password for user: ${user.id}`
+      );
+      throw new UnauthorizedError('Invalid credentials');
     }
 
     logger.info(`User authenticated successfully: ${user.id}`);
@@ -223,7 +243,7 @@ export class UserService {
     const [user] = await db
       .select()
       .from(users)
-      .where(eq(users.username, username))
+      .where(sql`LOWER(${users.username}) = LOWER(${username})`)
       .limit(1);
 
     return user || null;

@@ -6,7 +6,7 @@ const sql = postgres(process.env.DATABASE_URL);
 async function resetDatabase() {
   try {
     console.log('🗑️  Dropping all tables and data...');
-    
+
     // Drop all tables with CASCADE to handle all foreign keys
     await sql`DROP TABLE IF EXISTS messages CASCADE`;
     await sql`DROP TABLE IF EXISTS chat_sessions CASCADE`;
@@ -17,14 +17,17 @@ async function resetDatabase() {
     await sql`DROP TABLE IF EXISTS reports CASCADE`;
     await sql`DROP TABLE IF EXISTS subscriptions CASCADE`;
     await sql`DROP TABLE IF EXISTS qr_codes CASCADE`;
+    await sql`DROP TABLE IF EXISTS user_blocks CASCADE`;
+    await sql`DROP TABLE IF EXISTS device_tokens CASCADE`;
+    await sql`DROP TABLE IF EXISTS blocked_guests CASCADE`;
+    await sql`DROP TABLE IF EXISTS guest_identifiers CASCADE`;
     await sql`DROP TABLE IF EXISTS users CASCADE`;
     await sql`DROP TABLE IF EXISTS auth_session_tokens CASCADE`;
-    
+
     console.log('✅ All tables dropped successfully');
     console.log('');
     console.log('📝 Now run: npm run db:push');
     console.log('   This will create fresh tables with the new schema');
-    
   } catch (error) {
     console.error('❌ Error resetting database:', error);
     process.exit(1);
