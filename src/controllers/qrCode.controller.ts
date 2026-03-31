@@ -214,9 +214,12 @@ export class QRCodeController {
       const { token } = req.params;
       const dataURL = await qrCodeService.generateQRCodeImage(token);
 
-      sendSuccessResponse(res, 200, 'QR code image generated successfully', {
-        image: dataURL,
-      });
+      const base64Data = dataURL.replace(/^data:image\/png;base64,/, '');
+      const buffer = Buffer.from(base64Data, 'base64');
+
+      res.setHeader('Content-Type', 'image/png');
+      res.setHeader('Cache-Control', 'public, max-age=31536000');
+      res.send(buffer);
     }
   );
 
