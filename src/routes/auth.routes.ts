@@ -22,14 +22,22 @@ const registerSchema = z.object({
 
 // Login schema
 const loginSchema = z.object({
-  body: z.object({
-    identifier: z.string().min(1, 'Email, Username or Phone is required'),
-    password: z.string().min(1, 'Password is required'),
-    // Maintain backward compatibility for older frontend versions
-    username: z.string().optional(),
-    email: z.string().optional(),
-    phone: z.string().optional(),
-  }),
+  body: z
+    .object({
+      identifier: z.string().optional(),
+      password: z.string().min(1, 'Password is required'),
+      // Maintain backward compatibility for older frontend versions
+      username: z.string().optional(),
+      email: z.string().optional(),
+      phone: z.string().optional(),
+    })
+    .refine(
+      data => data.identifier || data.username || data.email || data.phone,
+      {
+        message: 'Email, Username or Phone is required',
+        path: ['identifier'],
+      }
+    ),
 });
 
 // Change password schema
