@@ -129,21 +129,27 @@ export class QRCodeController {
 
   getUnassignedQRCodes = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
-      const limit = req.query.limit ? parseInt(req.query.limit as string) : 100;
-      const qrCodes = await qrCodeService.getUnassignedQRCodes(limit);
+      const limit = req.query.limit ? parseInt(req.query.limit as string) : 50;
+      const cursor = req.query.cursor as string | undefined;
+
+      const result = await qrCodeService.getUnassignedQRCodes(limit, cursor);
+
+      const baseUrl =
+        process.env.BACKEND_URL || `${req.protocol}://${req.get('host')}`;
 
       sendSuccessResponse(
         res,
         200,
         'Unassigned QR codes retrieved successfully',
         {
-          qrCodes: qrCodes.map(qr => ({
+          data: result.data.map(qr => ({
             id: qr.id,
-            token: qr.token,
-            humanToken: qr.humanToken,
-            status: qr.status,
+            code: qr.humanToken,
+            imageUrl: `${baseUrl}/api/qr-codes/image/${qr.token}`,
             createdAt: qr.createdAt,
           })),
+          nextCursor: result.nextCursor,
+          hasMore: result.hasMore,
         }
       );
     }

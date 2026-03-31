@@ -1,4 +1,4 @@
-import { eq, and, isNull } from 'drizzle-orm';
+import { eq, and, isNull, lt, or, desc } from 'drizzle-orm';
 import { db } from '../db';
 import { qrCodes, type NewQRCode, type QRCode as QRCodeType } from '../models';
 import { v4 as uuidv4 } from 'uuid';
@@ -247,12 +247,59 @@ export class QRCodeService {
     return db.select().from(qrCodes).where(eq(qrCodes.assignedUserId, userId));
   }
 
-  async getUnassignedQRCodes(limit: number = 100): Promise<QRCodeType[]> {
-    return db
+  async getUnassignedQRCodes(
+    limit: number = 50,
+    cursor?: string
+  ): Promise<{
+    data: QRCodeType[];
+    nextCursor: string | null;
+    hasMore: boolean;
+  }> {
+    let whereClause = eq(qrCodes.status, 'unassigned');
+
+    if (cursor) {
+      try {
+        const decodedCursor = Buffer.from(cursor, 'base64').toString('utf-8');
+        const [cursorTime, cursorId] = decodedCursor.split(':');
+
+        if (cursorTime && cursorId) {
+          const cursorDate = new Date(cursorTime);
+          whereClause = and(
+            whereClause,
+            or(
+              lt(qrCodes.createdAt, cursorDate),
+              and(eq(qrCodes.createdAt, cursorDate), lt(qrCodes.id, cursorId))
+            )
+          ) as any;
+        }
+      } catch (error) {
+        logger.error(`Invalid cursor provided: ${cursor}`);
+        // Fallback to no cursor if it's malformed
+      }
+    }
+
+    const results = await db
       .select()
       .from(qrCodes)
-      .where(eq(qrCodes.status, 'unassigned'))
-      .limit(limit);
+      .where(whereClause)
+      .orderBy(desc(qrCodes.createdAt), desc(qrCodes.id))
+      .limit(limit + 1);
+
+    const hasMore = results.length > limit;
+    const data = hasMore ? results.slice(0, limit) : results;
+
+    let nextCursor: string | null = null;
+    if (hasMore && data.length > 0) {
+      const lastItem = data[data.length - 1];
+      const cursorStr = `${lastItem.createdAt?.toISOString()}:${lastItem.id}`;
+      nextCursor = Buffer.from(cursorStr).toString('base64');
+    }
+
+    return {
+      data,
+      nextCursor,
+      hasMore,
+    };
   }
 
   async scanQRCode(

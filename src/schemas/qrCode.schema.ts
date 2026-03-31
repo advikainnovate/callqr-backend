@@ -85,3 +85,14 @@ export const getQRCodeImageSchema = z.object({
     token: z.string().length(64),
   }),
 });
+
+export const getUnassignedQRCodesSchema = z.object({
+  query: z.object({
+    limit: z
+      .string()
+      .optional()
+      .transform(val => (val ? parseInt(val, 10) : 50))
+      .pipe(z.number().int().min(1).max(100)),
+    cursor: z.string().optional(),
+  }),
+});

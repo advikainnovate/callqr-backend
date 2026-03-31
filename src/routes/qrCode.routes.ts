@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { qrCodeController } from '../controllers/qrCode.controller';
 import { authenticateToken } from '../middlewares/auth.middleware';
+import { requireAdmin } from '../middlewares/admin.middleware';
 import { validate } from '../middlewares/validate';
 import {
   createQRCodeSchema,
@@ -12,6 +13,7 @@ import {
   disableQRCodeSchema,
   reactivateQRCodeSchema,
   getQRCodeImageSchema,
+  getUnassignedQRCodesSchema,
 } from '../schemas/qrCode.schema';
 
 const router = Router();
@@ -54,10 +56,12 @@ router.post('/scan', validate(scanQRCodeSchema), qrCodeController.scanQRCode);
 // Get my QR codes
 router.get('/my-codes', authenticateToken, qrCodeController.getMyQRCodes);
 
-// Get unassigned QR codes (admin only - you may want to add admin middleware)
+// Get unassigned QR codes (admin only)
 router.get(
   '/unassigned',
   authenticateToken,
+  requireAdmin,
+  validate(getUnassignedQRCodesSchema),
   qrCodeController.getUnassignedQRCodes
 );
 

@@ -5,17 +5,60 @@ meta {
 }
 
 get {
-  url: {{baseUrl}}/api/qr-codes/unassigned
+  url: {{baseUrl}}/api/qr-codes/unassigned?limit=50
   body: none
   auth: bearer
+}
+
+query {
+  limit: 50
+  ~cursor: 
 }
 
 auth:bearer {
   token: {{authToken}}
 }
 
+tests {
+  test("Should return unassigned QR codes gallery", function() {
+    const data = res.getBody();
+    expect(res.getStatus()).to.equal(200);
+    expect(data.success).to.be.true;
+    expect(data.data.data).to.be.an('array');
+    if (data.data.data.length > 0) {
+      const first = data.data.data[0];
+      expect(first).to.have.property('id');
+      expect(first).to.have.property('code');
+      expect(first).to.have.property('imageUrl');
+      expect(first).to.have.property('createdAt');
+    }
+  });
+}
+
 docs {
-  Get all unassigned QR codes (admin only).
+  # Get Unassigned QR Codes Gallery (Admin Only)
   
-  Returns list of QR codes that haven't been assigned to any user yet.
+  Returns a paginated list of unassigned QR codes specifically formatted for a gallery view.
+  
+  ## Parameters
+  - `limit`: Number of items to return (1-100, default 50)
+  - `cursor`: Base64 encoded string for pagination
+  
+  ## Response Structure
+  ```json
+  {
+    "data": {
+      "data": [
+        {
+          "id": "uuid",
+          "code": "QR-XXXX-XXXX",
+          "imageUrl": "...",
+          "createdAt": "..."
+        }
+      ],
+      "nextCursor": "...",
+      "hasMore": true
+    }
+  }
+  ```
 }
