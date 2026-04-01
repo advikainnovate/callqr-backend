@@ -3,6 +3,7 @@ import { qrCodeService } from '../services/qrCode.service';
 import { AuthenticatedRequest } from '../middlewares/auth.middleware';
 import { asyncHandler, UnauthorizedError } from '../utils';
 import { sendSuccessResponse } from '../utils/responseHandler';
+import { appConfig } from '../config';
 
 export class QRCodeController {
   createQRCode = asyncHandler(
@@ -134,9 +135,6 @@ export class QRCodeController {
 
       const result = await qrCodeService.getUnassignedQRCodes(limit, cursor);
 
-      const baseUrl =
-        process.env.BACKEND_URL || `${req.protocol}://${req.get('host')}`;
-
       sendSuccessResponse(
         res,
         200,
@@ -145,7 +143,7 @@ export class QRCodeController {
           data: result.data.map(qr => ({
             id: qr.id,
             code: qr.humanToken,
-            imageUrl: `${baseUrl}/api/qr-codes/image/${qr.token}`,
+            imageUrl: `${appConfig.backendUrl}/api/qr-codes/image/${qr.token}`,
             createdAt: qr.createdAt,
           })),
           nextCursor: result.nextCursor,

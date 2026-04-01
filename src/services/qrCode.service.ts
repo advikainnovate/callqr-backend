@@ -11,6 +11,7 @@ import {
 import crypto from 'crypto';
 import * as QRCode from 'qrcode';
 import { userService } from './user.service';
+import { appConfig } from '../config';
 
 export class QRCodeService {
   private generateSecureToken(): string {
@@ -434,7 +435,7 @@ export class QRCodeService {
   }
 
   async generateQRCodeImage(token: string): Promise<string> {
-    const qrUrl = `${process.env.BACKEND_URL || 'http://localhost:4000'}/api/qr-codes/resolve/${token}`;
+    const qrUrl = `${appConfig.backendUrl}/api/qr-codes/resolve/${token}`;
 
     const dataURL = await QRCode.toDataURL(qrUrl, {
       width: 300,
