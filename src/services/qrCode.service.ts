@@ -12,6 +12,7 @@ import crypto from 'crypto';
 import * as QRCode from 'qrcode';
 import { userService } from './user.service';
 import { appConfig } from '../config';
+import { extractQRCodeToken } from '../utils/tokenUtils';
 
 export class QRCodeService {
   private generateSecureToken(): string {
@@ -200,7 +201,14 @@ export class QRCodeService {
     return updatedQR;
   }
 
-  async getQRCodeByToken(token: string): Promise<QRCodeType> {
+  async getQRCodeByToken(input: string): Promise<QRCodeType> {
+    const token = extractQRCodeToken(input);
+
+    if (!token) {
+      logger.warn(`Invalid QR token input received: ${input}`);
+      throw new BadRequestError('Invalid QR token format');
+    }
+
     const [qrCode] = await db
       .select()
       .from(qrCodes)
@@ -420,7 +428,14 @@ export class QRCodeService {
     return qrCode;
   }
 
-  async validateQRCode(token: string): Promise<QRCodeType> {
+  async validateQRCode(input: string): Promise<QRCodeType> {
+    const token = extractQRCodeToken(input);
+
+    if (!token) {
+      logger.warn(`Invalid QR token validation input received: ${input}`);
+      throw new NotFoundError('Invalid, revoked, or disabled QR code');
+    }
+
     const [qrCode] = await db
       .select()
       .from(qrCodes)
@@ -434,7 +449,13 @@ export class QRCodeService {
     return qrCode;
   }
 
-  async generateQRCodeImage(token: string): Promise<string> {
+  async generateQRCodeImage(input: string): Promise<string> {
+    const token = extractQRCodeToken(input);
+
+    if (!token) {
+      throw new BadRequestError('Invalid QR token format');
+    }
+
     const qrUrl = `${appConfig.backendUrl}/api/qr-codes/resolve/${token}`;
 
     const dataURL = await QRCode.toDataURL(qrUrl, {

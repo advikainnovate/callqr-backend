@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 export const initiateCallSchema = z.object({
   body: z.object({
-    qrToken: z.string().length(64),
+    qrToken: z.string().min(1).max(255),
   }),
 });
 

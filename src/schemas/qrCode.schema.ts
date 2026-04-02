@@ -18,7 +18,7 @@ export const bulkCreateQRCodeSchema = z.object({
 export const claimQRCodeSchema = z.object({
   body: z
     .object({
-      token: z.string().length(64).optional(),
+      token: z.string().min(1).max(255).optional(),
       humanToken: z
         .string()
         .regex(
@@ -43,7 +43,7 @@ export const assignQRCodeSchema = z.object({
 export const scanQRCodeSchema = z.object({
   body: z
     .object({
-      token: z.string().length(64).optional(),
+      token: z.string().min(1).max(255).optional(),
       humanToken: z
         .string()
         .regex(
@@ -58,7 +58,7 @@ export const scanQRCodeSchema = z.object({
 
 export const getQRCodeByTokenSchema = z.object({
   params: z.object({
-    token: z.string().length(64),
+    token: z.string().min(1).max(255),
   }),
 });
 
@@ -82,7 +82,7 @@ export const reactivateQRCodeSchema = z.object({
 
 export const getQRCodeImageSchema = z.object({
   params: z.object({
-    token: z.string().length(64),
+    token: z.string().min(1).max(255),
   }),
 });
 
