@@ -162,12 +162,9 @@ export class CallSessionService {
       .select()
       .from(callSessions)
       .where(
-        or(
-          isGuest
-            ? eq(callSessions.guestId, id)
-            : eq(callSessions.callerId, id),
-          eq(callSessions.receiverId, userId)
-        )
+        isGuest
+          ? eq(callSessions.guestId, id)
+          : or(eq(callSessions.callerId, id), eq(callSessions.receiverId, id))
       )
       .orderBy(desc(callSessions.startedAt))
       .limit(limit);
@@ -182,12 +179,12 @@ export class CallSessionService {
       .from(callSessions)
       .where(
         and(
-          or(
-            isGuest
-              ? eq(callSessions.guestId, id)
-              : eq(callSessions.callerId, id),
-            eq(callSessions.receiverId, userId)
-          ),
+          isGuest
+            ? eq(callSessions.guestId, id)
+            : or(
+                eq(callSessions.callerId, id),
+                eq(callSessions.receiverId, id)
+              ),
           or(
             eq(callSessions.status, 'initiated'),
             eq(callSessions.status, 'ringing'),

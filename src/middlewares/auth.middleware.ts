@@ -28,13 +28,13 @@ export const authenticateToken = asyncHandler(
     const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
 
     if (!token) {
-      throw new UnauthorizedError('Access token required');
+      return next(new UnauthorizedError('Access token required'));
     }
 
     const decoded = jwt.verify(token, appConfig.jwt.secret) as any;
 
     if (decoded.type !== 'user' || !decoded.userId) {
-      throw new ForbiddenError('User authentication required');
+      return next(new ForbiddenError('User authentication required'));
     }
 
     req.user = {
@@ -53,8 +53,10 @@ export const authenticateToken = asyncHandler(
     const isBlocked = await userService.isGloballyBlocked(req.user.userId);
 
     if (isBlocked) {
-      throw new ForbiddenError(
-        'Your account has been globally blocked. Please contact support.'
+      return next(
+        new ForbiddenError(
+          'Your account has been globally blocked. Please contact support.'
+        )
       );
     }
 
@@ -85,7 +87,7 @@ export const authenticateTokenOrGuest = asyncHandler(
 
         const { userService } = await import('../services/user.service');
         if (await userService.isGloballyBlocked(req.user.userId)) {
-          throw new ForbiddenError('Account is globally blocked.');
+          return next(new ForbiddenError('Account is globally blocked.'));
         }
       } else if (decoded.type === 'guest' && decoded.guestId) {
         req.guestId = decoded.guestId;
@@ -96,7 +98,7 @@ export const authenticateTokenOrGuest = asyncHandler(
           guestIp: req.ip,
         };
       } else {
-        throw new ForbiddenError('Invalid token payload');
+        return next(new ForbiddenError('Invalid token payload'));
       }
 
       return next();
@@ -115,6 +117,6 @@ export const authenticateTokenOrGuest = asyncHandler(
       return next();
     }
 
-    throw new UnauthorizedError('Authentication required');
+    return next(new UnauthorizedError('Authentication required'));
   }
 );
