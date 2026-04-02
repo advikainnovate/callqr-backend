@@ -671,6 +671,10 @@
                     throw new Error(errMsg || 'Invalid QR Token');
                 }
 
+                if (!scanData.data.user) {
+                    throw new Error('This QR code has not been assigned to a user yet.');
+                }
+
                 const secureToken = scanData.data.qrCode.token;
                 remoteUserId = scanData.data.user.id;
                 logStatus('call', `User found: ${scanData.data.user.username}. Requesting session...`, 'warning');
