@@ -12,6 +12,7 @@ import {
   ConnectionRateLimiter,
   rateLimitProfiles,
 } from '../middleware/socketRateLimit';
+import { normalizeUserId } from '../utils/identityUtils';
 
 interface AuthenticatedSocket extends Socket {
   userId?: string;
@@ -288,27 +289,58 @@ export class WebRTCService {
     });
   }
 
+  /**
+   * Universal authorization check for call participants (Regular users & Guests).
+   * Normalizes the socket userId before checking against caller/receiver/guest fields.
+   */
+  private async isAuthorizedForCall(
+    callId: string,
+    socketUserId: string | undefined
+  ): Promise<boolean> {
+    if (!socketUserId) return false;
+
+    try {
+      const call = await callSessionService.getCallSessionById(callId);
+      if (!call) return false;
+
+      const identity = normalizeUserId(socketUserId);
+      if (!identity) return false;
+
+      // Symmetric check across all possible participant slots
+      return (
+        call.callerId === identity.id ||
+        call.receiverId === identity.id ||
+        call.guestId === identity.id
+      );
+    } catch (error) {
+      logger.error(`Auth check failed for call ${callId}:`, error);
+      return false;
+    }
+  }
+
   private async handleWebRTCSignal(
     socket: AuthenticatedSocket,
     data: WebRTCSignal
   ) {
     try {
-      const { callId, targetUserId, data: signalData } = data;
+      const { callId } = data;
 
-      // Verify user is part of the call in DB
-      const call = await callSessionService.getCallSessionById(callId);
-      if (
-        !call ||
-        (call.callerId !== socket.userId && call.receiverId !== socket.userId)
-      ) {
+      // Centralized authorization
+      if (!(await this.isAuthorizedForCall(callId, socket.userId))) {
+        logger.warn(
+          `Unauthorized signal attempt from ${socket.userId} for call ${callId}`
+        );
         socket.emit('error', { message: 'Unauthorized to signal this call' });
         return;
       }
 
-      // Forward signal to other participant via call room
-      logger.info(
-        `[Signal] Forwarding ${data.type} from ${socket.userId} in room call:${callId}`
-      );
+      // Forward signal to call room
+      logger.info(`[Signal] Forwarding ${data.type}`, {
+        callId,
+        from: socket.userId,
+        type: data.type,
+      });
+
       socket.to(`call:${callId}`).emit('webrtc-signal', {
         type: data.type,
         callId,
@@ -328,18 +360,21 @@ export class WebRTCService {
     try {
       const { callId, offer } = data;
 
-      // Verify user is part of the call
-      const call = await callSessionService.getCallSessionById(callId);
-      const callerId = call && (call.callerId || `guest:${call.guestId}`);
-      if (
-        !call ||
-        (callerId !== socket.userId && call.receiverId !== socket.userId)
-      ) {
+      // Centralized authorization
+      if (!(await this.isAuthorizedForCall(callId, socket.userId))) {
+        logger.warn(
+          `Unauthorized offer attempt from ${socket.userId} for call ${callId}`
+        );
         socket.emit('error', {
           message: 'Unauthorized to send offer for this call',
         });
         return;
       }
+
+      logger.info(`[Signal] Forwarding offer`, {
+        callId,
+        from: socket.userId,
+      });
 
       // Forward offer to call room (other participant)
       socketEmitter.emitToCallRoom(callId, 'webrtc-offer', {
@@ -360,18 +395,21 @@ export class WebRTCService {
     try {
       const { callId, answer } = data;
 
-      // Verify user is part of the call
-      const call = await callSessionService.getCallSessionById(callId);
-      const callerId = call && (call.callerId || `guest:${call.guestId}`);
-      if (
-        !call ||
-        (callerId !== socket.userId && call.receiverId !== socket.userId)
-      ) {
+      // Centralized authorization
+      if (!(await this.isAuthorizedForCall(callId, socket.userId))) {
+        logger.warn(
+          `Unauthorized answer attempt from ${socket.userId} for call ${callId}`
+        );
         socket.emit('error', {
           message: 'Unauthorized to send answer for this call',
         });
         return;
       }
+
+      logger.info(`[Signal] Forwarding answer`, {
+        callId,
+        from: socket.userId,
+      });
 
       // Forward answer to call room (other participant)
       socketEmitter.emitToCallRoom(callId, 'webrtc-answer', {
@@ -392,18 +430,21 @@ export class WebRTCService {
     try {
       const { callId, candidate } = data;
 
-      // Verify user is part of the call
-      const call = await callSessionService.getCallSessionById(callId);
-      const callerId = call && (call.callerId || `guest:${call.guestId}`);
-      if (
-        !call ||
-        (callerId !== socket.userId && call.receiverId !== socket.userId)
-      ) {
+      // Centralized authorization
+      if (!(await this.isAuthorizedForCall(callId, socket.userId))) {
+        logger.warn(
+          `Unauthorized ICE candidate from ${socket.userId} for call ${callId}`
+        );
         socket.emit('error', {
           message: 'Unauthorized to send ICE candidate for this call',
         });
         return;
       }
+
+      logger.info(`[Signal] Forwarding ICE candidate`, {
+        callId,
+        from: socket.userId,
+      });
 
       // Forward ICE candidate to call room (other participant)
       socketEmitter.emitToCallRoom(callId, 'webrtc-ice-candidate', {
@@ -424,24 +465,20 @@ export class WebRTCService {
     try {
       const { callId } = data;
 
-      // Verify call and get details
-      const call = await callSessionService.getCallSessionById(callId);
-      let isAuthorized = false;
-      if (socket.userId?.startsWith('guest:')) {
-        const guestId = socket.userId.split(':')[1];
-        isAuthorized = call && call.guestId === guestId;
-      } else {
-        isAuthorized = call && call.callerId === socket.userId;
-      }
-
-      if (!isAuthorized) {
+      // Centralized authorization
+      if (!(await this.isAuthorizedForCall(callId, socket.userId))) {
+        logger.warn(
+          `Unauthorized attempt to initiate call ${callId} from ${socket.userId}`
+        );
         socket.emit('error', { message: 'Unauthorized to initiate this call' });
         return;
       }
 
-      // Join the call room immediately
+      const call = await callSessionService.getCallSessionById(callId);
+
+      // Join the call room immediately (Crucial for signaling reliability)
       socket.join(`call:${callId}`);
-      logger.info(`User ${socket.userId} joined call room: ${callId}`);
+      logger.info(`[Room] ${socket.userId} joined call:${callId} (Initiator)`);
 
       // Get caller's username
       let callerUsername = 'Anonymous Caller';
@@ -514,16 +551,20 @@ export class WebRTCService {
     try {
       const { callId } = data;
 
-      // Verify call and get details
-      const call = await callSessionService.getCallSessionById(callId);
-      if (!call || call.receiverId !== socket.userId) {
+      // Centralized authorization
+      if (!(await this.isAuthorizedForCall(callId, socket.userId))) {
+        logger.warn(
+          `Unauthorized attempt to accept call ${callId} from ${socket.userId}`
+        );
         socket.emit('error', { message: 'Unauthorized to accept this call' });
         return;
       }
 
+      const call = await callSessionService.getCallSessionById(callId);
+
       // CRITICAL FIX: Join the call room BEFORE updating status
       socket.join(`call:${callId}`);
-      logger.info(`Receiver ${socket.userId} joined call room: ${callId}`);
+      logger.info(`[Room] ${socket.userId} joined call:${callId} (Receiver)`);
 
       // Update call status
       await callSessionService.updateCallStatus(
