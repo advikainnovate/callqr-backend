@@ -642,7 +642,7 @@ PATCH /api/qr-codes/:qrCodeId/reactivate
 POST /api/calls/initiate
 ```
 
-**Auth:** Required  
+**Auth:** Required (User or Guest)  
 **Body:**
 
 ```json
@@ -659,7 +659,8 @@ POST /api/calls/initiate
   "message": "Call initiated successfully",
   "data": {
     "callId": "uuid",
-    "callerId": "uuid",
+    "callerId": "uuid | null",
+    "guestId": "string | null",
     "receiverId": "uuid",
     "status": "initiated",
     "startedAt": "ISO date"
@@ -680,7 +681,7 @@ POST /api/calls/initiate
 GET /api/calls/:callId
 ```
 
-**Auth:** Required
+**Auth:** Required (User or Guest)
 
 ### Accept Call
 
@@ -688,7 +689,7 @@ GET /api/calls/:callId
 PATCH /api/calls/:callId/accept
 ```
 
-**Auth:** Required
+**Auth:** Required (User or Guest)
 
 ### Reject Call
 
@@ -696,7 +697,7 @@ PATCH /api/calls/:callId/accept
 PATCH /api/calls/:callId/reject
 ```
 
-**Auth:** Required
+**Auth:** Required (User or Guest)
 
 ### Update Call Status
 
@@ -704,7 +705,7 @@ PATCH /api/calls/:callId/reject
 PATCH /api/calls/:callId/status
 ```
 
-**Auth:** Required  
+**Auth:** Required (User or Guest)  
 **Body:**
 
 ```json
@@ -719,7 +720,7 @@ PATCH /api/calls/:callId/status
 PATCH /api/calls/:callId/end
 ```
 
-**Auth:** Required  
+**Auth:** Required (User or Guest)  
 **Body:**
 
 ```json
@@ -766,7 +767,7 @@ GET /api/calls/history/all
 GET /api/calls/active/list
 ```
 
-**Auth:** Required
+**Auth:** Required (User or Guest)
 
 ### Get Call Usage Stats
 

@@ -25,7 +25,8 @@ tests {
     expect(res.status).to.equal(201);
     expect(res.body.success).to.be.true;
     expect(res.body.data.callId).to.be.a('string');
-    expect(res.body.data.callerId).to.equal("guest:" + env.guestId);
+    expect(res.body.data.callerId).to.be.null;
+    expect(res.body.data.guestId).to.equal(env.guestId);
     
     // Store call ID for subsequent tests
     bru.setEnvVar("callId", res.body.data.callId);
