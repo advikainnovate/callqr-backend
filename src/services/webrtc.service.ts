@@ -362,23 +362,16 @@ export class WebRTCService {
         return;
       }
 
-      // Identify the other participant (target for direct signaling)
-      const currentIdentity = normalizeUserId(socket.userId);
-      const otherUserId =
-        call.callerId === currentIdentity?.id
-          ? call.receiverId
-          : call.callerId || `guest:${call.guestId}`;
+      const targetSocketId = this.resolveTargetIdentity(call, socket.userId!);
 
-      // Forward signal to call room, excluding the sender
-      logger.info(
-        `[Signal] Forwarding ${data.type} to room and user ${otherUserId}`,
-        {
-          callId,
-          from: socket.userId,
-          to: otherUserId,
-          type: data.type,
-        }
-      );
+      logger.info('[ICE ROUTE DEBUG]', {
+        type: data.type,
+        from: socket.userId,
+        resolvedTarget: targetSocketId,
+        callCaller: call.callerId,
+        callReceiver: call.receiverId,
+        callGuest: call.guestId,
+      });
 
       const payload = {
         type: data.type,
@@ -387,10 +380,13 @@ export class WebRTCService {
         data: data.data,
       };
 
-      // Deliver to both the call room AND the individual user room
-      // This solves the race condition where the peer hasn't joined the call room yet
-      socketEmitter.emitToCallRoom(callId, 'webrtc-signal', payload, socket.id);
-      socketEmitter.emitToUser(otherUserId, 'webrtc-signal', payload);
+      this.forwardWebRTCSignal(
+        callId,
+        'webrtc-signal',
+        payload,
+        socket,
+        targetSocketId
+      );
     } catch (error) {
       logger.error('Error handling WebRTC signal:', error);
       socket.emit('error', { message: 'Failed to process signal' });
@@ -416,16 +412,7 @@ export class WebRTCService {
         return;
       }
 
-      const currentIdentity = normalizeUserId(socket.userId);
-      const otherUserId =
-        call.callerId === currentIdentity?.id
-          ? call.receiverId
-          : call.callerId || `guest:${call.guestId}`;
-
-      logger.info(`[Signal] Forwarding offer to user ${otherUserId}`, {
-        callId,
-        from: socket.userId,
-      });
+      const targetSocketId = this.resolveTargetIdentity(call, socket.userId!);
 
       const payload = {
         callId,
@@ -433,16 +420,28 @@ export class WebRTCService {
         offer,
       };
 
-      // Forward granular offer event AND generic webrtc-signal event for compatibility
-      socketEmitter.emitToCallRoom(callId, 'webrtc-offer', payload, socket.id);
-      socketEmitter.emitToUser(otherUserId, 'webrtc-offer', payload);
-
-      socketEmitter.emitToUser(otherUserId, 'webrtc-signal', {
-        type: 'offer',
+      // Forward granular offer event
+      this.forwardWebRTCSignal(
         callId,
-        fromUserId: socket.userId,
-        data: offer,
-      });
+        'webrtc-offer',
+        payload,
+        socket,
+        targetSocketId
+      );
+
+      // Forward generic signal for compatibility
+      this.forwardWebRTCSignal(
+        callId,
+        'webrtc-signal',
+        {
+          type: 'offer',
+          callId,
+          fromUserId: socket.userId,
+          data: offer,
+        },
+        socket,
+        targetSocketId
+      );
     } catch (error) {
       logger.error('Error handling WebRTC offer:', error);
       socket.emit('error', { message: 'Failed to process offer' });
@@ -468,16 +467,7 @@ export class WebRTCService {
         return;
       }
 
-      const currentIdentity = normalizeUserId(socket.userId);
-      const otherUserId =
-        call.callerId === currentIdentity?.id
-          ? call.receiverId
-          : call.callerId || `guest:${call.guestId}`;
-
-      logger.info(`[Signal] Forwarding answer to user ${otherUserId}`, {
-        callId,
-        from: socket.userId,
-      });
+      const targetSocketId = this.resolveTargetIdentity(call, socket.userId!);
 
       const payload = {
         callId,
@@ -485,16 +475,28 @@ export class WebRTCService {
         answer,
       };
 
-      // Forward granular answer event AND generic webrtc-signal event for compatibility
-      socketEmitter.emitToCallRoom(callId, 'webrtc-answer', payload, socket.id);
-      socketEmitter.emitToUser(otherUserId, 'webrtc-answer', payload);
-
-      socketEmitter.emitToUser(otherUserId, 'webrtc-signal', {
-        type: 'answer',
+      // Forward granular answer event
+      this.forwardWebRTCSignal(
         callId,
-        fromUserId: socket.userId,
-        data: answer,
-      });
+        'webrtc-answer',
+        payload,
+        socket,
+        targetSocketId
+      );
+
+      // Forward generic signal
+      this.forwardWebRTCSignal(
+        callId,
+        'webrtc-signal',
+        {
+          type: 'answer',
+          callId,
+          fromUserId: socket.userId,
+          data: answer,
+        },
+        socket,
+        targetSocketId
+      );
     } catch (error) {
       logger.error('Error handling WebRTC answer:', error);
       socket.emit('error', { message: 'Failed to process answer' });
@@ -520,16 +522,7 @@ export class WebRTCService {
         return;
       }
 
-      const currentIdentity = normalizeUserId(socket.userId);
-      const otherUserId =
-        call.callerId === currentIdentity?.id
-          ? call.receiverId
-          : call.callerId || `guest:${call.guestId}`;
-
-      logger.info(`[Signal] Forwarding ICE candidate to user ${otherUserId}`, {
-        callId,
-        from: socket.userId,
-      });
+      const targetSocketId = this.resolveTargetIdentity(call, socket.userId!);
 
       const payload = {
         callId,
@@ -537,24 +530,78 @@ export class WebRTCService {
         candidate,
       };
 
-      // Forward granular ICE event AND generic webrtc-signal event for compatibility
-      socketEmitter.emitToCallRoom(
+      // Forward granular ICE event
+      this.forwardWebRTCSignal(
         callId,
         'webrtc-ice-candidate',
         payload,
-        socket.id
+        socket,
+        targetSocketId
       );
-      socketEmitter.emitToUser(otherUserId, 'webrtc-ice-candidate', payload);
 
-      socketEmitter.emitToUser(otherUserId, 'webrtc-signal', {
-        type: 'ice-candidate',
+      // Forward generic signal
+      this.forwardWebRTCSignal(
         callId,
-        fromUserId: socket.userId,
-        data: candidate,
-      });
+        'webrtc-signal',
+        {
+          type: 'ice-candidate',
+          callId,
+          fromUserId: socket.userId,
+          data: candidate,
+        },
+        socket,
+        targetSocketId
+      );
     } catch (error) {
       logger.error('Error handling WebRTC ICE candidate:', error);
       socket.emit('error', { message: 'Failed to process ICE candidate' });
+    }
+  }
+
+  /**
+   * Resolves the socket room name of the other participant in a call.
+   */
+  private resolveTargetIdentity(call: any, socketUserId: string): string {
+    const current = normalizeUserId(socketUserId);
+    if (!current) return '';
+
+    if (current.type === 'guest') {
+      // Guest is always the caller, so target is receiver
+      return call.receiverId;
+    } else {
+      // Registered user
+      if (call.callerId === current.id) {
+        // Current user is caller, target is receiver
+        return call.receiverId;
+      } else {
+        // Current user is receiver, target is guest caller
+        return `guest:${call.guestId}`;
+      }
+    }
+  }
+
+  /**
+   * Forwards a WebRTC signal using the optimal delivery strategy:
+   * 1. Primary: Broadcast to the call room (excluding sender).
+   * 2. Fallback: Direct emission to user room if room size is incomplete.
+   */
+  private forwardWebRTCSignal(
+    callId: string,
+    event: string,
+    payload: any,
+    socket: AuthenticatedSocket,
+    targetSocketId: string
+  ) {
+    const roomName = `call:${callId}`;
+
+    // 1. Primary path: Emit to the room (excluding sender)
+    // socket.to() already excludes the sender if called on the sending socket
+    socket.to(roomName).emit(event, payload);
+
+    // 2. Optimized Fallback: Double delivery ONLY if room is not yet fully formed
+    const roomSize = this.io.sockets.adapter.rooms.get(roomName)?.size || 0;
+    if (roomSize < 2 && targetSocketId) {
+      socketEmitter.emitToUser(targetSocketId, event, payload);
     }
   }
 
@@ -786,9 +833,7 @@ export class WebRTCService {
       // Get call details to notify other participant
       const call = await callSessionService.getCallSessionById(callId);
       if (call) {
-        const callerId = call.callerId || `guest:${call.guestId}`;
-        const otherUserId =
-          callerId === socket.userId ? call.receiverId : callerId;
+        const targetSocketId = this.resolveTargetIdentity(call, socket.userId!);
 
         // Notify the room so the other party gets the message
         socketEmitter.emitToCallRoom(callId, 'call-ended', {
@@ -797,10 +842,12 @@ export class WebRTCService {
         });
 
         // Fallback: Notify via personal room as well
-        socketEmitter.emitToUser(otherUserId!, 'call-ended', {
-          callId: call.id,
-          endedBy: socket.userId,
-        });
+        if (targetSocketId) {
+          socketEmitter.emitToUser(targetSocketId, 'call-ended', {
+            callId: call.id,
+            endedBy: socket.userId,
+          });
+        }
       }
 
       // Cleanup room membership

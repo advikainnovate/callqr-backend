@@ -734,22 +734,11 @@
 
         async function createOffer() {
             peerConnection = new RTCPeerConnection(iceConfig);
-            localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
-
-            peerConnection.onicecandidate = (e) => {
-                if (e.candidate) {
-                    socket.emit('webrtc-signal', {
-                        type: 'ice-candidate',
-                        callId: currentCallId,
-                        targetUserId: remoteUserId,
-                        data: e.candidate
-                    });
-                }
-            };
-
-            peerConnection.ontrack = (event) => {
-                document.getElementById('remoteVideo').srcObject = event.streams[0];
-            };
+            setupPeerConnectionListeners(peerConnection);
+            localStream.getTracks().forEach(track => {
+                console.log(`[RTC] Adding local track: ${track.kind}, enabled: ${track.enabled}`);
+                peerConnection.addTrack(track, localStream);
+            });
 
             const offer = await peerConnection.createOffer();
             await peerConnection.setLocalDescription(offer);
@@ -764,22 +753,11 @@
 
         async function handleOffer(offer, fromId) {
             peerConnection = new RTCPeerConnection(iceConfig);
-            localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
-
-            peerConnection.onicecandidate = (e) => {
-                if (e.candidate) {
-                    socket.emit('webrtc-signal', {
-                        type: 'ice-candidate',
-                        callId: currentCallId,
-                        targetUserId: fromId,
-                        data: e.candidate
-                    });
-                }
-            };
-
-            peerConnection.ontrack = (event) => {
-                document.getElementById('remoteVideo').srcObject = event.streams[0];
-            };
+            setupPeerConnectionListeners(peerConnection);
+            localStream.getTracks().forEach(track => {
+                console.log(`[RTC] Adding local track: ${track.kind}, enabled: ${track.enabled}`);
+                peerConnection.addTrack(track, localStream);
+            });
 
             await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
             const answer = await peerConnection.createAnswer();
@@ -793,12 +771,69 @@
             });
         }
 
+        function setupPeerConnectionListeners(pc) {
+            console.log('[RTC] Setting up PC listeners');
+
+            pc.oniceconnectionstatechange = () => {
+                console.log(`[RTC] ICE Connection State: ${pc.iceConnectionState}`);
+                if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
+                    console.log('✅ [RTC] ICE connected/completed!');
+                }
+            };
+
+            pc.onicecandidate = (e) => {
+                if (e.candidate) {
+                    console.log('[RTC] New local ICE candidate generated');
+                    socket.emit('webrtc-signal', {
+                        type: 'ice-candidate',
+                        callId: currentCallId,
+                        targetUserId: remoteUserId,
+                        data: e.candidate
+                    });
+                }
+            };
+
+            pc.ontrack = (event) => {
+                console.log('✅ [RTC] ontrack firing!');
+                const remoteVideo = document.getElementById('remoteVideo');
+                remoteVideo.srcObject = event.streams[0];
+                
+                event.track.onunmute = () => {
+                    console.log(`[RTC] Remote track unmuted: ${event.track.kind}, enabled: ${event.track.enabled}`);
+                };
+
+                console.log(`[RTC] Remote track received: ${event.track.kind}, enabled: ${event.track.enabled}`);
+                
+                // Audio play check
+                remoteVideo.onplay = () => {
+                    console.log('✅ [RTC] Remote video/audio element started playing');
+                };
+
+                // Explicitly call play to handle autoplay policies
+                remoteVideo.play().then(() => {
+                    console.log('✅ [RTC] Remote play() promise resolved');
+                }).catch(err => {
+                    console.error('❌ [RTC] Remote play() failed. Interaction may be required:', err);
+                    logStatus('call', 'Click anywhere to enable audio', 'warning');
+                    // Add a one-time click listener to try playing again
+                    const playOnWait = () => {
+                        remoteVideo.play();
+                        document.removeEventListener('click', playOnWait);
+                        logStatus('call', 'Audio enabled!', 'success');
+                    };
+                    document.addEventListener('click', playOnWait);
+                });
+            };
+        }
+
         async function handleAnswer(answer) {
+            console.log('[RTC] Handling Answer');
             await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
         }
 
         async function handleCandidate(candidate) {
             if (peerConnection) {
+                console.log(`[RTC] Adding remote ICE candidate: ${candidate.candidate.substring(0, 30)}...`);
                 await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
             }
         }
