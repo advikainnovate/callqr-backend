@@ -229,6 +229,6 @@ process.on('uncaughtException', error => {
 // Handle unhandled promise rejections
 process.on('unhandledRejection', (reason, promise) => {
   logger.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
-  gracefulShutdown('UNHANDLED_REJECTION');
-  setTimeout(forceShutdown, 5000);
+  // Log and continue - Do NOT crash here for common logic errors or disconnected user issues
+  // in production, as this causes catastrophic reboots.
 });

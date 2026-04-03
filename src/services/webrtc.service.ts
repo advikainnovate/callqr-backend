@@ -318,30 +318,30 @@ export class WebRTCService {
 
   /**
    * Universal authorization check for call participants (Regular users & Guests).
-   * Normalizes the socket userId before checking against caller/receiver/guest fields.
+   * returns the call object if authorized, otherwise null.
    */
-  private async isAuthorizedForCall(
+  private async getAuthorizedCallSession(
     callId: string,
     socketUserId: string | undefined
-  ): Promise<boolean> {
-    if (!socketUserId) return false;
+  ): Promise<any | null> {
+    if (!socketUserId) return null;
 
     try {
       const call = await callSessionService.getCallSessionById(callId);
-      if (!call) return false;
+      if (!call) return null;
 
       const identity = normalizeUserId(socketUserId);
-      if (!identity) return false;
+      if (!identity) return null;
 
-      // Symmetric check across all possible participant slots
-      return (
+      const isAuthorized =
         call.callerId === identity.id ||
         call.receiverId === identity.id ||
-        call.guestId === identity.id
-      );
+        call.guestId === identity.id;
+
+      return isAuthorized ? call : null;
     } catch (error) {
       logger.error(`Auth check failed for call ${callId}:`, error);
-      return false;
+      return null;
     }
   }
 
@@ -353,7 +353,8 @@ export class WebRTCService {
       const { callId } = data;
 
       // Centralized authorization
-      if (!(await this.isAuthorizedForCall(callId, socket.userId))) {
+      const call = await this.getAuthorizedCallSession(callId, socket.userId);
+      if (!call) {
         logger.warn(
           `Unauthorized signal attempt from ${socket.userId} for call ${callId}`
         );
@@ -361,24 +362,35 @@ export class WebRTCService {
         return;
       }
 
-      // Forward signal to call room, excluding the sender
-      logger.info(`[Signal] Forwarding ${data.type} (Excluded: ${socket.id})`, {
-        callId,
-        from: socket.userId,
-        type: data.type,
-      });
+      // Identify the other participant (target for direct signaling)
+      const currentIdentity = normalizeUserId(socket.userId);
+      const otherUserId =
+        call.callerId === currentIdentity?.id
+          ? call.receiverId
+          : call.callerId || `guest:${call.guestId}`;
 
-      socketEmitter.emitToCallRoom(
-        callId,
-        'webrtc-signal',
+      // Forward signal to call room, excluding the sender
+      logger.info(
+        `[Signal] Forwarding ${data.type} to room and user ${otherUserId}`,
         {
-          type: data.type,
           callId,
-          fromUserId: socket.userId,
-          data: data.data,
-        },
-        socket.id
+          from: socket.userId,
+          to: otherUserId,
+          type: data.type,
+        }
       );
+
+      const payload = {
+        type: data.type,
+        callId,
+        fromUserId: socket.userId,
+        data: data.data,
+      };
+
+      // Deliver to both the call room AND the individual user room
+      // This solves the race condition where the peer hasn't joined the call room yet
+      socketEmitter.emitToCallRoom(callId, 'webrtc-signal', payload, socket.id);
+      socketEmitter.emitToUser(otherUserId, 'webrtc-signal', payload);
     } catch (error) {
       logger.error('Error handling WebRTC signal:', error);
       socket.emit('error', { message: 'Failed to process signal' });
@@ -393,7 +405,8 @@ export class WebRTCService {
       const { callId, offer } = data;
 
       // Centralized authorization
-      if (!(await this.isAuthorizedForCall(callId, socket.userId))) {
+      const call = await this.getAuthorizedCallSession(callId, socket.userId);
+      if (!call) {
         logger.warn(
           `Unauthorized offer attempt from ${socket.userId} for call ${callId}`
         );
@@ -403,22 +416,33 @@ export class WebRTCService {
         return;
       }
 
-      logger.info(`[Signal] Forwarding offer`, {
+      const currentIdentity = normalizeUserId(socket.userId);
+      const otherUserId =
+        call.callerId === currentIdentity?.id
+          ? call.receiverId
+          : call.callerId || `guest:${call.guestId}`;
+
+      logger.info(`[Signal] Forwarding offer to user ${otherUserId}`, {
         callId,
         from: socket.userId,
       });
 
-      // Forward offer to call room, excluding the sender
-      socketEmitter.emitToCallRoom(
+      const payload = {
         callId,
-        'webrtc-offer',
-        {
-          callId,
-          fromUserId: socket.userId,
-          offer,
-        },
-        socket.id
-      );
+        fromUserId: socket.userId,
+        offer,
+      };
+
+      // Forward granular offer event AND generic webrtc-signal event for compatibility
+      socketEmitter.emitToCallRoom(callId, 'webrtc-offer', payload, socket.id);
+      socketEmitter.emitToUser(otherUserId, 'webrtc-offer', payload);
+
+      socketEmitter.emitToUser(otherUserId, 'webrtc-signal', {
+        type: 'offer',
+        callId,
+        fromUserId: socket.userId,
+        data: offer,
+      });
     } catch (error) {
       logger.error('Error handling WebRTC offer:', error);
       socket.emit('error', { message: 'Failed to process offer' });
@@ -433,7 +457,8 @@ export class WebRTCService {
       const { callId, answer } = data;
 
       // Centralized authorization
-      if (!(await this.isAuthorizedForCall(callId, socket.userId))) {
+      const call = await this.getAuthorizedCallSession(callId, socket.userId);
+      if (!call) {
         logger.warn(
           `Unauthorized answer attempt from ${socket.userId} for call ${callId}`
         );
@@ -443,22 +468,33 @@ export class WebRTCService {
         return;
       }
 
-      logger.info(`[Signal] Forwarding answer`, {
+      const currentIdentity = normalizeUserId(socket.userId);
+      const otherUserId =
+        call.callerId === currentIdentity?.id
+          ? call.receiverId
+          : call.callerId || `guest:${call.guestId}`;
+
+      logger.info(`[Signal] Forwarding answer to user ${otherUserId}`, {
         callId,
         from: socket.userId,
       });
 
-      // Forward answer to call room, excluding the sender
-      socketEmitter.emitToCallRoom(
+      const payload = {
         callId,
-        'webrtc-answer',
-        {
-          callId,
-          fromUserId: socket.userId,
-          answer,
-        },
-        socket.id
-      );
+        fromUserId: socket.userId,
+        answer,
+      };
+
+      // Forward granular answer event AND generic webrtc-signal event for compatibility
+      socketEmitter.emitToCallRoom(callId, 'webrtc-answer', payload, socket.id);
+      socketEmitter.emitToUser(otherUserId, 'webrtc-answer', payload);
+
+      socketEmitter.emitToUser(otherUserId, 'webrtc-signal', {
+        type: 'answer',
+        callId,
+        fromUserId: socket.userId,
+        data: answer,
+      });
     } catch (error) {
       logger.error('Error handling WebRTC answer:', error);
       socket.emit('error', { message: 'Failed to process answer' });
@@ -473,7 +509,8 @@ export class WebRTCService {
       const { callId, candidate } = data;
 
       // Centralized authorization
-      if (!(await this.isAuthorizedForCall(callId, socket.userId))) {
+      const call = await this.getAuthorizedCallSession(callId, socket.userId);
+      if (!call) {
         logger.warn(
           `Unauthorized ICE candidate from ${socket.userId} for call ${callId}`
         );
@@ -483,22 +520,38 @@ export class WebRTCService {
         return;
       }
 
-      logger.info(`[Signal] Forwarding ICE candidate`, {
+      const currentIdentity = normalizeUserId(socket.userId);
+      const otherUserId =
+        call.callerId === currentIdentity?.id
+          ? call.receiverId
+          : call.callerId || `guest:${call.guestId}`;
+
+      logger.info(`[Signal] Forwarding ICE candidate to user ${otherUserId}`, {
         callId,
         from: socket.userId,
       });
 
-      // Forward ICE candidate to call room, excluding the sender
+      const payload = {
+        callId,
+        fromUserId: socket.userId,
+        candidate,
+      };
+
+      // Forward granular ICE event AND generic webrtc-signal event for compatibility
       socketEmitter.emitToCallRoom(
         callId,
         'webrtc-ice-candidate',
-        {
-          callId,
-          fromUserId: socket.userId,
-          candidate,
-        },
+        payload,
         socket.id
       );
+      socketEmitter.emitToUser(otherUserId, 'webrtc-ice-candidate', payload);
+
+      socketEmitter.emitToUser(otherUserId, 'webrtc-signal', {
+        type: 'ice-candidate',
+        callId,
+        fromUserId: socket.userId,
+        data: candidate,
+      });
     } catch (error) {
       logger.error('Error handling WebRTC ICE candidate:', error);
       socket.emit('error', { message: 'Failed to process ICE candidate' });
@@ -513,15 +566,14 @@ export class WebRTCService {
       const { callId } = data;
 
       // Centralized authorization
-      if (!(await this.isAuthorizedForCall(callId, socket.userId))) {
+      const call = await this.getAuthorizedCallSession(callId, socket.userId);
+      if (!call) {
         logger.warn(
           `Unauthorized attempt to initiate call ${callId} from ${socket.userId}`
         );
         socket.emit('error', { message: 'Unauthorized to initiate this call' });
         return;
       }
-
-      const call = await callSessionService.getCallSessionById(callId);
 
       // Join the call room immediately (Crucial for signaling reliability)
       socket.join(`call:${callId}`);
@@ -634,15 +686,14 @@ export class WebRTCService {
       const { callId } = data;
 
       // Centralized authorization
-      if (!(await this.isAuthorizedForCall(callId, socket.userId))) {
+      const call = await this.getAuthorizedCallSession(callId, socket.userId);
+      if (!call) {
         logger.warn(
           `Unauthorized attempt to accept call ${callId} from ${socket.userId}`
         );
         socket.emit('error', { message: 'Unauthorized to accept this call' });
         return;
       }
-
-      const call = await callSessionService.getCallSessionById(callId);
 
       // CRITICAL FIX: Join the call room BEFORE updating status
       socket.join(`call:${callId}`);

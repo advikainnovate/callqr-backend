@@ -31,7 +31,12 @@ export const authenticateToken = asyncHandler(
       return next(new UnauthorizedError('Access token required'));
     }
 
-    const decoded = jwt.verify(token, appConfig.jwt.secret) as any;
+    let decoded: any;
+    try {
+      decoded = jwt.verify(token, appConfig.jwt.secret);
+    } catch (err) {
+      return next(new UnauthorizedError('Invalid or expired token'));
+    }
 
     if (decoded.type !== 'user' || !decoded.userId) {
       return next(new ForbiddenError('User authentication required'));
@@ -72,7 +77,12 @@ export const authenticateTokenOrGuest = asyncHandler(
     const guestIdHeader = req.headers['x-guest-id'] as string;
 
     if (token) {
-      const decoded = jwt.verify(token, appConfig.jwt.secret) as any;
+      let decoded: any;
+      try {
+        decoded = jwt.verify(token, appConfig.jwt.secret);
+      } catch (err) {
+        return next(new UnauthorizedError('Invalid or expired token'));
+      }
 
       if (decoded.type === 'user' && decoded.userId) {
         req.user = {
