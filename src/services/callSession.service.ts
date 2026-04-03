@@ -11,6 +11,7 @@ import {
 import { qrCodeService } from './qrCode.service';
 import { userService } from './user.service';
 import { subscriptionService } from './subscription.service';
+import { parseIdentity } from '../utils/identityUtils';
 
 export class CallSessionService {
   async initiateCall(
@@ -94,18 +95,19 @@ export class CallSessionService {
   ): Promise<CallSession> {
     const existingCall = await this.getCallSessionById(callId);
 
-    // Authorization check
-    let isAuthorized = false;
-    if (userId.startsWith('guest:')) {
-      const guestId = userId.split(':')[1];
-      isAuthorized =
-        existingCall.guestId === guestId || existingCall.receiverId === userId;
-    } else {
-      isAuthorized =
-        existingCall.callerId === userId || existingCall.receiverId === userId;
+    // Authorization check using unified identity parsing
+    const identity = parseIdentity(userId);
+    if (!identity) {
+      throw new ForbiddenError('Invalid user identity');
     }
 
+    const isAuthorized =
+      existingCall.callerId === identity.id ||
+      existingCall.receiverId === identity.id ||
+      existingCall.guestId === identity.id;
+
     if (!isAuthorized) {
+      logger.warn(`Unauthorized update attempt on call ${callId} by ${userId}`);
       throw new ForbiddenError(
         'You do not have permission to update this call'
       );
@@ -155,35 +157,38 @@ export class CallSessionService {
     userId: string,
     limit: number = 50
   ): Promise<CallSession[]> {
-    const isGuest = userId.startsWith('guest:');
-    const id = isGuest ? userId.split(':')[1] : userId;
+    const identity = parseIdentity(userId);
+    if (!identity) return [];
 
     return db
       .select()
       .from(callSessions)
       .where(
-        isGuest
-          ? eq(callSessions.guestId, id)
-          : or(eq(callSessions.callerId, id), eq(callSessions.receiverId, id))
+        identity.type === 'guest'
+          ? eq(callSessions.guestId, identity.id)
+          : or(
+              eq(callSessions.callerId, identity.id),
+              eq(callSessions.receiverId, identity.id)
+            )
       )
       .orderBy(desc(callSessions.startedAt))
       .limit(limit);
   }
 
   async getActiveCalls(userId: string): Promise<CallSession[]> {
-    const isGuest = userId.startsWith('guest:');
-    const id = isGuest ? userId.split(':')[1] : userId;
+    const identity = parseIdentity(userId);
+    if (!identity) return [];
 
     return db
       .select()
       .from(callSessions)
       .where(
         and(
-          isGuest
-            ? eq(callSessions.guestId, id)
+          identity.type === 'guest'
+            ? eq(callSessions.guestId, identity.id)
             : or(
-                eq(callSessions.callerId, id),
-                eq(callSessions.receiverId, id)
+                eq(callSessions.callerId, identity.id),
+                eq(callSessions.receiverId, identity.id)
               ),
           or(
             eq(callSessions.status, 'initiated'),

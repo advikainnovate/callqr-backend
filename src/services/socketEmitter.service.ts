@@ -77,12 +77,43 @@ class SocketEmitterService {
   // ─── Calls ────────────────────────────────────────────────────────────────
 
   emitToUser(userId: string, event: string, payload: any) {
+    const roomSize = this.io?.sockets.adapter.rooms.get(userId)?.size || 0;
+
+    if (roomSize === 0) {
+      logger.warn(
+        `[Socket] No active sockets in room for user: ${userId}. Event ${event} may be lost.`
+      );
+    }
+
     this.socket.to(userId).emit(event, payload);
-    logger.debug(`[Socket] ${event} emitted to user:${userId}`);
+    logger.debug(
+      `[Socket] ${event} emitted to user room: ${userId} (Room size: ${roomSize})`
+    );
   }
 
   emitToCallRoom(callId: string, event: string, payload: any) {
-    this.socket.to(`call:${callId}`).emit(event, payload);
+    const roomName = `call:${callId}`;
+    const roomSize = this.io?.sockets.adapter.rooms.get(roomName)?.size || 0;
+
+    if (roomSize === 0) {
+      logger.warn(
+        `[Socket] No active sockets in call room: ${roomName}. Event ${event} may be lost.`
+      );
+    }
+
+    this.socket.to(roomName).emit(event, payload);
+    logger.debug(
+      `[Socket] ${event} emitted to ${roomName} (Room size: ${roomSize})`
+    );
+  }
+
+  emitCallStatus(callId: string, status: string, payload: any = {}) {
+    this.emitToCallRoom(callId, 'call-status', {
+      callId,
+      status,
+      ...payload,
+      timestamp: new Date().toISOString(),
+    });
   }
 
   leaveCallRoom(callId: string) {

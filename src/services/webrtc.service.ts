@@ -12,7 +12,7 @@ import {
   ConnectionRateLimiter,
   rateLimitProfiles,
 } from '../middleware/socketRateLimit';
-import { normalizeUserId } from '../utils/identityUtils';
+import { normalizeUserId, parseIdentity } from '../utils/identityUtils';
 
 interface AuthenticatedSocket extends Socket {
   userId?: string;
@@ -225,6 +225,10 @@ export class WebRTCService {
         await this.handleCallEnd(socket, data);
       });
 
+      socket.on('call:end', async (data: { callId: string }) => {
+        await this.handleCallEnd(socket, data);
+      });
+
       // Chat event handlers
       socket.on('join-chat', async (data: { chatSessionId: string }) => {
         await this.handleJoinChat(socket, data);
@@ -254,37 +258,60 @@ export class WebRTCService {
         async (data: { chatSessionId: string; messageId: string }) => {
           await this.handleMessageDelivered(socket, data);
         }
-      );
-
-      // Handle disconnection
+      ); // Handle disconnection with 5s grace period for network flickers
       socket.on('disconnect', async reason => {
         logger.info(
-          `User disconnected from WebRTC: ${userId}. Reason: ${reason}`
+          `User socket disconnected from WebRTC: ${userId}. Reason: ${reason}`
         );
-        this.connectedUsers.delete(userId);
 
-        // End any active calls this user was part of
-        try {
-          const endedCalls = await callSessionService.endActiveCallsForUser(
-            userId,
-            'error'
-          );
-          for (const call of endedCalls) {
-            const callerId = call.callerId || `guest:${call.guestId}`;
-            const otherUserId =
-              callerId === userId ? call.receiverId : callerId;
-            socketEmitter.emitToUser(otherUserId, 'call-ended', {
-              callId: call.id,
-              endedBy: 'disconnect',
-            });
-            socketEmitter.leaveCallRoom(call.id);
+        // Wait 5 seconds before cleaning up sessions
+        setTimeout(async () => {
+          // Check if user has reconnected with a new socket in the meantime
+          const sockets = await this.io.in(userId).fetchSockets();
+          if (sockets.length > 0) {
+            logger.info(
+              `User ${userId} reconnected within grace period. Skipping call cleanup.`
+            );
+            return;
           }
-        } catch (err) {
-          logger.error(
-            `Error cleaning up calls on disconnect for user ${userId}:`,
-            err
+
+          logger.info(
+            `Cleaning up calls for user ${userId} after grace period.`
           );
-        }
+          this.connectedUsers.delete(userId);
+
+          try {
+            const endedCalls = await callSessionService.endActiveCallsForUser(
+              userId,
+              'error'
+            );
+            for (const call of endedCalls) {
+              const callerId = call.callerId || `guest:${call.guestId}`;
+              const otherUserId =
+                callerId === userId ? call.receiverId : callerId;
+
+              // Emit to the other party's personal room (guaranteed delivery)
+              socketEmitter.emitToUser(otherUserId, 'call-ended', {
+                callId: call.id,
+                endedBy: userId,
+                reason: 'disconnect',
+              });
+
+              // Broadast to call room (if anyone still there)
+              socketEmitter.emitCallStatus(call.id, 'ended', {
+                endedBy: userId,
+                reason: 'disconnect',
+              });
+
+              socketEmitter.leaveCallRoom(call.id);
+            }
+          } catch (err) {
+            logger.error(
+              `Error cleaning up calls on disconnect for user ${userId}:`,
+              err
+            );
+          }
+        }, 5000);
       });
     });
   }
@@ -532,12 +559,47 @@ export class WebRTCService {
       );
 
       // 🔴 IMPORTANT: Notify the caller that signaling can now start
-      // This sends them the ICE servers and confirms the call is ready for WebRTC negotiation
       socket.emit('call-initiated', {
         callId: call.id,
         receiverId: call.receiverId,
         iceServers: this.iceConfig.iceServers,
       });
+
+      // Broadcast status update for UI sync
+      socketEmitter.emitCallStatus(callId, 'ringing', {
+        callerId: call.callerId || `guest:${call.guestId}`,
+        receiverId: call.receiverId,
+      });
+
+      // Implement a 30s connection timeout
+      // If the call doesn't reach 'connected' state within 30s, end it automatically.
+      setTimeout(async () => {
+        try {
+          const currentCall =
+            await callSessionService.getCallSessionById(callId);
+          if (
+            currentCall.status === 'initiated' ||
+            currentCall.status === 'ringing'
+          ) {
+            logger.info(`Call ${callId} timed out before connection.`);
+            await callSessionService.endCall(callId, 'system', 'timeout');
+            socketEmitter.emitCallStatus(callId, 'ended', {
+              reason: 'timeout',
+            });
+            socketEmitter.emitToUser(call.receiverId, 'call-ended', {
+              callId,
+              reason: 'timeout',
+            });
+            const initiatorId = call.callerId || `guest:${call.guestId}`;
+            socketEmitter.emitToUser(initiatorId, 'call-ended', {
+              callId,
+              reason: 'timeout',
+            });
+          }
+        } catch (err) {
+          logger.error(`Error in call ${callId} connection timeout:`, err);
+        }
+      }, 30000);
     } catch (error) {
       logger.error('Error handling call initiation:', error);
       socket.emit('error', { message: 'Failed to initiate call' });
@@ -591,6 +653,9 @@ export class WebRTCService {
         callId: call.id,
         iceServers: this.iceConfig.iceServers,
       });
+
+      // Broadcast status update for UI sync
+      socketEmitter.emitCallStatus(callId, 'connected');
     } catch (error) {
       logger.error('Error handling call acceptance:', error);
       socket.emit('error', { message: 'Failed to accept call' });
@@ -639,7 +704,8 @@ export class WebRTCService {
       // End the call in DB
       const updatedCall = await callSessionService.endCall(
         callId,
-        socket.userId!
+        socket.userId!,
+        'rejected' // Default reason for explicit hangup is success/rejected depending on state
       );
       if (!updatedCall) {
         socket.emit('error', { message: 'Failed to end call' });
@@ -668,6 +734,11 @@ export class WebRTCService {
 
       // Cleanup room membership
       socket.leave(`call:${callId}`);
+
+      // Broadcast status update for UI sync
+      socketEmitter.emitCallStatus(callId, 'ended', {
+        endedBy: socket.userId,
+      });
 
       // Confirm to sender
       socket.emit('call-ended', { callId });
