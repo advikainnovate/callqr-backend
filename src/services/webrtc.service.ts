@@ -361,19 +361,24 @@ export class WebRTCService {
         return;
       }
 
-      // Forward signal to call room
-      logger.info(`[Signal] Forwarding ${data.type}`, {
+      // Forward signal to call room, excluding the sender
+      logger.info(`[Signal] Forwarding ${data.type} (Excluded: ${socket.id})`, {
         callId,
         from: socket.userId,
         type: data.type,
       });
 
-      socket.to(`call:${callId}`).emit('webrtc-signal', {
-        type: data.type,
+      socketEmitter.emitToCallRoom(
         callId,
-        fromUserId: socket.userId,
-        data: data.data,
-      });
+        'webrtc-signal',
+        {
+          type: data.type,
+          callId,
+          fromUserId: socket.userId,
+          data: data.data,
+        },
+        socket.id
+      );
     } catch (error) {
       logger.error('Error handling WebRTC signal:', error);
       socket.emit('error', { message: 'Failed to process signal' });
@@ -403,12 +408,17 @@ export class WebRTCService {
         from: socket.userId,
       });
 
-      // Forward offer to call room (other participant)
-      socketEmitter.emitToCallRoom(callId, 'webrtc-offer', {
+      // Forward offer to call room, excluding the sender
+      socketEmitter.emitToCallRoom(
         callId,
-        fromUserId: socket.userId,
-        offer,
-      });
+        'webrtc-offer',
+        {
+          callId,
+          fromUserId: socket.userId,
+          offer,
+        },
+        socket.id
+      );
     } catch (error) {
       logger.error('Error handling WebRTC offer:', error);
       socket.emit('error', { message: 'Failed to process offer' });
@@ -438,12 +448,17 @@ export class WebRTCService {
         from: socket.userId,
       });
 
-      // Forward answer to call room (other participant)
-      socketEmitter.emitToCallRoom(callId, 'webrtc-answer', {
+      // Forward answer to call room, excluding the sender
+      socketEmitter.emitToCallRoom(
         callId,
-        fromUserId: socket.userId,
-        answer,
-      });
+        'webrtc-answer',
+        {
+          callId,
+          fromUserId: socket.userId,
+          answer,
+        },
+        socket.id
+      );
     } catch (error) {
       logger.error('Error handling WebRTC answer:', error);
       socket.emit('error', { message: 'Failed to process answer' });
@@ -473,12 +488,17 @@ export class WebRTCService {
         from: socket.userId,
       });
 
-      // Forward ICE candidate to call room (other participant)
-      socketEmitter.emitToCallRoom(callId, 'webrtc-ice-candidate', {
+      // Forward ICE candidate to call room, excluding the sender
+      socketEmitter.emitToCallRoom(
         callId,
-        fromUserId: socket.userId,
-        candidate,
-      });
+        'webrtc-ice-candidate',
+        {
+          callId,
+          fromUserId: socket.userId,
+          candidate,
+        },
+        socket.id
+      );
     } catch (error) {
       logger.error('Error handling WebRTC ICE candidate:', error);
       socket.emit('error', { message: 'Failed to process ICE candidate' });

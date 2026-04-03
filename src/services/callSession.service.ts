@@ -96,12 +96,18 @@ export class CallSessionService {
     const existingCall = await this.getCallSessionById(callId);
 
     // Authorization check using unified identity parsing
-    const identity = parseIdentity(userId);
+    // 'system' user is used for server-side timeout operations
+    const identity =
+      userId === 'system'
+        ? { id: 'system', type: 'user' as const, socketId: 'system' }
+        : parseIdentity(userId);
+
     if (!identity) {
       throw new ForbiddenError('Invalid user identity');
     }
 
     const isAuthorized =
+      userId === 'system' ||
       existingCall.callerId === identity.id ||
       existingCall.receiverId === identity.id ||
       existingCall.guestId === identity.id;

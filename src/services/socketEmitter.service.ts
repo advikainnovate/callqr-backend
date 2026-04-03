@@ -76,7 +76,12 @@ class SocketEmitterService {
 
   // ─── Calls ────────────────────────────────────────────────────────────────
 
-  emitToUser(userId: string, event: string, payload: any) {
+  emitToUser(
+    userId: string,
+    event: string,
+    payload: any,
+    excludeSocketId?: string
+  ) {
     const roomSize = this.io?.sockets.adapter.rooms.get(userId)?.size || 0;
 
     if (roomSize === 0) {
@@ -85,13 +90,22 @@ class SocketEmitterService {
       );
     }
 
-    this.socket.to(userId).emit(event, payload);
+    let emitter = this.socket.to(userId);
+    if (excludeSocketId) {
+      emitter = emitter.except(excludeSocketId);
+    }
+    emitter.emit(event, payload);
     logger.debug(
-      `[Socket] ${event} emitted to user room: ${userId} (Room size: ${roomSize})`
+      `[Socket] ${event} emitted to user room: ${userId} (Room size: ${roomSize}, Excluded: ${excludeSocketId || 'none'})`
     );
   }
 
-  emitToCallRoom(callId: string, event: string, payload: any) {
+  emitToCallRoom(
+    callId: string,
+    event: string,
+    payload: any,
+    excludeSocketId?: string
+  ) {
     const roomName = `call:${callId}`;
     const roomSize = this.io?.sockets.adapter.rooms.get(roomName)?.size || 0;
 
@@ -101,9 +115,13 @@ class SocketEmitterService {
       );
     }
 
-    this.socket.to(roomName).emit(event, payload);
+    let emitter = this.socket.to(roomName);
+    if (excludeSocketId) {
+      emitter = emitter.except(excludeSocketId);
+    }
+    emitter.emit(event, payload);
     logger.debug(
-      `[Socket] ${event} emitted to ${roomName} (Room size: ${roomSize})`
+      `[Socket] ${event} emitted to ${roomName} (Room size: ${roomSize}, Excluded: ${excludeSocketId || 'none'})`
     );
   }
 
