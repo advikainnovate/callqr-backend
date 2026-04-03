@@ -19,8 +19,6 @@ export const qrCodes = pgTable(
       onDelete: 'set null',
     }),
     status: varchar('status', { length: 20 }).notNull().default('unassigned'), // unassigned, active, disabled, revoked
-    redirectUrl: text('redirect_url'),
-    isRedirectEnabled: boolean('is_redirect_enabled').notNull().default(false),
     createdAt: timestamp('created_at').defaultNow(),
     assignedAt: timestamp('assigned_at'),
   },

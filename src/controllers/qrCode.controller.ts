@@ -8,19 +8,13 @@ import { appConfig } from '../config';
 export class QRCodeController {
   createQRCode = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
-      const { redirectUrl, isRedirectEnabled } = req.body;
-      const qrCode = await qrCodeService.createQRCode(
-        redirectUrl,
-        isRedirectEnabled
-      );
+      const qrCode = await qrCodeService.createQRCode();
 
       sendSuccessResponse(res, 201, 'QR code created successfully', {
         id: qrCode.id,
         token: qrCode.token,
         humanToken: qrCode.humanToken,
         status: qrCode.status,
-        redirectUrl: qrCode.redirectUrl,
-        isRedirectEnabled: qrCode.isRedirectEnabled,
         createdAt: qrCode.createdAt,
       });
     }
@@ -28,12 +22,8 @@ export class QRCodeController {
 
   bulkCreateQRCodes = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
-      const { count, redirectUrl, isRedirectEnabled } = req.body;
-      const qrCodes = await qrCodeService.bulkCreateQRCodes(
-        count,
-        redirectUrl,
-        isRedirectEnabled
-      );
+      const { count } = req.body;
+      const qrCodes = await qrCodeService.bulkCreateQRCodes(count);
 
       sendSuccessResponse(res, 201, `${count} QR codes created successfully`, {
         count: qrCodes.length,
@@ -42,8 +32,6 @@ export class QRCodeController {
           token: qr.token,
           humanToken: qr.humanToken,
           status: qr.status,
-          redirectUrl: qr.redirectUrl,
-          isRedirectEnabled: qr.isRedirectEnabled,
           createdAt: qr.createdAt,
         })),
       });
@@ -238,12 +226,7 @@ export class QRCodeController {
         return res.redirect(302, baseUrl);
       }
 
-      // If redirect is enabled and NOT from our app, redirect to external URL
-      if (qrCode.isRedirectEnabled && qrCode.redirectUrl && !isApp) {
-        return res.redirect(302, qrCode.redirectUrl);
-      }
-
-      // Otherwise redirect to the frontend calling page
+      // Redirect assigned QR codes to the frontend calling page
       const frontendUrl = `${baseUrl}/call/${token}`;
       res.redirect(302, frontendUrl);
     }

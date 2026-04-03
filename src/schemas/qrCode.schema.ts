@@ -1,17 +1,12 @@
 import { z } from 'zod';
 
 export const createQRCodeSchema = z.object({
-  body: z.object({
-    redirectUrl: z.string().url().nullable().optional(),
-    isRedirectEnabled: z.boolean().optional(),
-  }),
+  body: z.object({}),
 });
 
 export const bulkCreateQRCodeSchema = z.object({
   body: z.object({
     count: z.number().int().min(1).max(2000),
-    redirectUrl: z.string().url().nullable().optional(),
-    isRedirectEnabled: z.boolean().optional(),
   }),
 });
 
