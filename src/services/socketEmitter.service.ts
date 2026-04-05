@@ -13,9 +13,34 @@ class SocketEmitterService {
     this.io = io;
   }
 
-  private get socket(): SocketIOServer {
+  private get ioServer(): SocketIOServer {
     if (!this.io) throw new Error('SocketEmitterService not initialized');
     return this.io;
+  }
+
+  // ─── Room Checks ──────────────────────────────────────────────────────────
+
+  /**
+   * Checks if a user has any active socket connected and joined to a specific chat room.
+   */
+  isUserInChatRoom(userId: string, chatSessionId: string): boolean {
+    if (!this.io) return false;
+    const roomName = `chat:${chatSessionId}`;
+    const sockets = this.io.sockets.adapter.rooms.get(roomName);
+
+    if (!sockets) return false;
+
+    // Check if any socket in the chat room belongs to the user
+    // This is efficient because adapters handle room membership natively
+    const userSockets = this.io.sockets.adapter.rooms.get(userId);
+    if (!userSockets) return false;
+
+    // Intersection check: Does the user have a socket that is also in the chat room?
+    for (const socketId of userSockets) {
+      if (sockets.has(socketId)) return true;
+    }
+
+    return false;
   }
 
   // ─── Chat ─────────────────────────────────────────────────────────────────
@@ -34,7 +59,7 @@ class SocketEmitterService {
       sentAt: Date | null;
     }
   ) {
-    this.socket.to(`chat:${chatSessionId}`).emit('new-message', payload);
+    this.ioServer.to(`chat:${chatSessionId}`).emit('new-message', payload);
     logger.debug(`[Socket] new-message emitted to chat:${chatSessionId}`);
   }
 
@@ -47,7 +72,9 @@ class SocketEmitterService {
       deliveredAt: string;
     }
   ) {
-    this.socket.to(`chat:${chatSessionId}`).emit('message-delivered', payload);
+    this.ioServer
+      .to(`chat:${chatSessionId}`)
+      .emit('message-delivered', payload);
   }
 
   emitMessageRead(
@@ -59,17 +86,17 @@ class SocketEmitterService {
       readAt?: string;
     }
   ) {
-    this.socket.to(`chat:${chatSessionId}`).emit('message-read', payload);
+    this.ioServer.to(`chat:${chatSessionId}`).emit('message-read', payload);
   }
 
   emitUserTyping(chatSessionId: string, userId: string) {
-    this.socket
+    this.ioServer
       .to(`chat:${chatSessionId}`)
       .emit('user-typing', { chatSessionId, userId });
   }
 
   emitUserStoppedTyping(chatSessionId: string, userId: string) {
-    this.socket
+    this.ioServer
       .to(`chat:${chatSessionId}`)
       .emit('user-stopped-typing', { chatSessionId, userId });
   }
@@ -90,7 +117,7 @@ class SocketEmitterService {
       );
     }
 
-    let emitter = this.socket.to(userId);
+    let emitter = this.ioServer.to(userId);
     if (excludeSocketId) {
       emitter = emitter.except(excludeSocketId);
     }
@@ -115,7 +142,7 @@ class SocketEmitterService {
       );
     }
 
-    let emitter = this.socket.to(roomName);
+    let emitter = this.ioServer.to(roomName);
     if (excludeSocketId) {
       emitter = emitter.except(excludeSocketId);
     }
@@ -135,13 +162,13 @@ class SocketEmitterService {
   }
 
   leaveCallRoom(callId: string) {
-    this.socket.socketsLeave(`call:${callId}`);
+    this.ioServer.socketsLeave(`call:${callId}`);
   }
 
   // ─── Broadcast ────────────────────────────────────────────────────────────
 
   broadcast(event: string, payload: any) {
-    this.socket.emit(event, payload);
+    this.ioServer.emit(event, payload);
   }
 }
 

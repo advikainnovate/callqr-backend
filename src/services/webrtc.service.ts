@@ -48,6 +48,8 @@ export class WebRTCService {
     string,
     { event: string; payload: any; timestamp: number }[]
   > = new Map();
+  private pendingDeliveries: Map<string, NodeJS.Timeout> = new Map(); // messageId -> timeout
+  private lastTypingEmitted: Map<string, number> = new Map(); // userId -> lastTimestamp
 
   constructor(server: HTTPServer) {
     // Initialize rate limiters
@@ -301,6 +303,7 @@ export class WebRTCService {
             `Cleaning up calls for user ${userId} after grace period.`
           );
           this.connectedUsers.delete(userId);
+          this.lastTypingEmitted.delete(userId);
 
           try {
             const endedCalls = await callSessionService.endActiveCallsForUser(
@@ -876,11 +879,14 @@ export class WebRTCService {
     try {
       const { messageId, chatSessionId } = data;
 
-      // Mark message as delivered in database
+      // Mark message as delivered in database (Idempotent)
       const { messageService } = await import('./message.service');
       await messageService.markAsDelivered(messageId, socket.userId!);
 
-      // Notify sender about delivery
+      // Cancel server-side fallback timeout
+      this.cancelDeliveryTimeout(messageId);
+
+      // Notify sender about delivery (now via room for multi-device sync)
       socketEmitter.emitMessageDelivered(chatSessionId, {
         messageId,
         chatSessionId,
@@ -901,7 +907,14 @@ export class WebRTCService {
     try {
       const { chatSessionId } = data;
 
-      // Broadcast typing indicator to chat room (except sender)
+      // Throttle typing indicators (500ms per user)
+      const now = Date.now();
+      const lastEmitted = this.lastTypingEmitted.get(socket.userId!) || 0;
+      if (now - lastEmitted < 500) return;
+
+      this.lastTypingEmitted.set(socket.userId!, now);
+
+      // Broadcast typing indicator to chat room (via io.to)
       socketEmitter.emitUserTyping(chatSessionId, socket.userId!);
     } catch (error) {
       logger.error('Error handling typing start:', error);
@@ -929,7 +942,10 @@ export class WebRTCService {
     try {
       const { chatSessionId, messageId } = data;
 
-      // Broadcast read receipt to chat room (except sender)
+      // Cancel delivery timeout if any (Read implies Delivered)
+      this.cancelDeliveryTimeout(messageId);
+
+      // Broadcast read receipt to chat room
       socketEmitter.emitMessageRead(chatSessionId, {
         messageId,
         chatSessionId,
@@ -1038,6 +1054,68 @@ export class WebRTCService {
 
       // 3. IMPORTANT: Clear the queue once delivered
       this.signalQueue.delete(callId);
+    }
+  }
+
+  /**
+   * Tracks a message delivery and provides a 5s fallback if no client ACK is received.
+   * Only triggers if the receiver is currently online.
+   */
+  public trackMessageDelivery(
+    messageId: string,
+    chatSessionId: string,
+    receiverId: string
+  ) {
+    // Correct logic: Only fallback-deliver if user is ONLINE
+    if (!this.isUserOnline(receiverId)) return;
+
+    // Safety: Clear existing timer if any (though message IDs should be unique)
+    this.cancelDeliveryTimeout(messageId);
+
+    const timeout = setTimeout(async () => {
+      try {
+        // RE-VERIFY: Only mark if STILL online (prevents false delivery on disconnect)
+        if (!this.isUserOnline(receiverId)) {
+          this.pendingDeliveries.delete(messageId);
+          return;
+        }
+
+        const { messageService } = await import('./message.service');
+
+        // Idempotent DB update (returns null if already delivered)
+        const updatedMessage = await messageService.markAsDelivered(
+          messageId,
+          receiverId
+        );
+
+        if (updatedMessage) {
+          logger.info(
+            `[Reliability] Fallback delivered message ${messageId} after timeout (Receiver online)`
+          );
+
+          // Notify sender (status update)
+          socketEmitter.emitMessageDelivered(chatSessionId, {
+            messageId,
+            chatSessionId,
+            deliveredBy: receiverId,
+            deliveredAt: new Date().toISOString(),
+          });
+        }
+
+        this.pendingDeliveries.delete(messageId);
+      } catch (error) {
+        logger.error(`Error in delivery fallback for ${messageId}:`, error);
+      }
+    }, 5000);
+
+    this.pendingDeliveries.set(messageId, timeout);
+  }
+
+  private cancelDeliveryTimeout(messageId: string) {
+    const timer = this.pendingDeliveries.get(messageId);
+    if (timer) {
+      clearTimeout(timer);
+      this.pendingDeliveries.delete(messageId);
     }
   }
 

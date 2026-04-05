@@ -463,7 +463,7 @@ export class MessageService {
         isDelivered: true,
         deliveredAt: new Date(),
       })
-      .where(eq(messages.id, messageId))
+      .where(and(eq(messages.id, messageId), eq(messages.isDelivered, false)))
       .returning();
 
     logger.info(`Message marked as delivered: ${messageId} by user ${userId}`);
