@@ -24,6 +24,20 @@ body:json {
   }
 }
 
+docs {
+  # Initiate Call
+  
+  Creates a new call session using a QR token.
+  
+  ## Post-Initiation Flow:
+  1. **Socket Connect**: Caller must be connected to Socket.IO.
+  2. **Emit `initiate-call`**: Send `{ callId }` via socket to start ringing.
+  3. **Early Signaling**: Caller can immediately emit `webrtc-offer` and `webrtc-ice-candidate`.
+  
+  > [!TIP]
+  > **Signal Queuing**: The backend now queues all signaling events. Even if the receiver hasn't accepted yet, the caller can send the Offer and ICE candidates. They will be replayed to the receiver automatically upon joining.
+}
+
 tests {
   test("Should initiate call successfully", function() {
     expect(res.status).to.equal(201);
