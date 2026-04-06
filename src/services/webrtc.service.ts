@@ -44,6 +44,12 @@ export class WebRTCService {
   private rateLimiter: SocketRateLimiter;
   private connectionLimiter: ConnectionRateLimiter;
   private staleCallTimer: NodeJS.Timeout | null = null;
+  private signalQueue: Map<
+    string,
+    { event: string; payload: any; timestamp: number }[]
+  > = new Map();
+  private pendingDeliveries: Map<string, NodeJS.Timeout> = new Map(); // messageId -> timeout
+  private lastTypingEmitted: Map<string, number> = new Map(); // userId -> lastTimestamp
 
   constructor(server: HTTPServer) {
     // Initialize rate limiters
@@ -130,20 +136,43 @@ export class WebRTCService {
 
         if (token) {
           const decoded = jwt.verify(token, appConfig.jwt.secret) as any;
-          const user = await userService.getUserById(decoded.userId);
 
-          if (!user || user.status !== 'active') {
-            return next(new Error('Invalid user'));
+          // Case 1: Guest Token (type 'guest')
+          if (decoded.type === 'guest' && decoded.guestId) {
+            socket.userId = `guest:${decoded.guestId}`;
+            socket.email = 'Anonymous Caller';
+            logger.info(
+              `Guest socket authenticated via token: ${socket.userId}`
+            );
+            return next();
           }
 
-          socket.userId = user.id;
-          socket.email = user.username;
-          return next();
+          // Case 2: User Token (type 'user')
+          if (decoded.type === 'user' && decoded.userId) {
+            const user = await userService.getUserById(decoded.userId);
+
+            if (!user || user.status !== 'active') {
+              return next(new Error('Invalid or inactive user'));
+            }
+
+            socket.userId = user.id;
+            socket.email = user.username;
+            logger.info(
+              `User socket authenticated via token: ${socket.userId}`
+            );
+            return next();
+          }
+
+          return next(new Error('Invalid token payload or type'));
         }
 
+        // Case 3: Direct Guest ID (Backward Compatibility)
         if (guestId) {
           socket.userId = `guest:${guestId}`;
           socket.email = 'Anonymous Caller';
+          logger.info(
+            `Guest socket authenticated via guestId: ${socket.userId}`
+          );
           return next();
         }
 
@@ -177,11 +206,6 @@ export class WebRTCService {
         // ... (rest of the rate limit logic)
       });
       */
-
-      // Handle WebRTC signaling
-      socket.on('webrtc-signal', async (data: WebRTCSignal) => {
-        await this.handleWebRTCSignal(socket, data);
-      });
 
       // Handle specific WebRTC events
       socket.on(
@@ -279,6 +303,7 @@ export class WebRTCService {
             `Cleaning up calls for user ${userId} after grace period.`
           );
           this.connectedUsers.delete(userId);
+          this.lastTypingEmitted.delete(userId);
 
           try {
             const endedCalls = await callSessionService.endActiveCallsForUser(
@@ -345,54 +370,6 @@ export class WebRTCService {
     }
   }
 
-  private async handleWebRTCSignal(
-    socket: AuthenticatedSocket,
-    data: WebRTCSignal
-  ) {
-    try {
-      const { callId } = data;
-
-      // Centralized authorization
-      const call = await this.getAuthorizedCallSession(callId, socket.userId);
-      if (!call) {
-        logger.warn(
-          `Unauthorized signal attempt from ${socket.userId} for call ${callId}`
-        );
-        socket.emit('error', { message: 'Unauthorized to signal this call' });
-        return;
-      }
-
-      const targetSocketId = this.resolveTargetIdentity(call, socket.userId!);
-
-      logger.info('[ICE ROUTE DEBUG]', {
-        type: data.type,
-        from: socket.userId,
-        resolvedTarget: targetSocketId,
-        callCaller: call.callerId,
-        callReceiver: call.receiverId,
-        callGuest: call.guestId,
-      });
-
-      const payload = {
-        type: data.type,
-        callId,
-        fromUserId: socket.userId,
-        data: data.data,
-      };
-
-      this.forwardWebRTCSignal(
-        callId,
-        'webrtc-signal',
-        payload,
-        socket,
-        targetSocketId
-      );
-    } catch (error) {
-      logger.error('Error handling WebRTC signal:', error);
-      socket.emit('error', { message: 'Failed to process signal' });
-    }
-  }
-
   private async handleWebRTCOffer(
     socket: AuthenticatedSocket,
     data: { callId: string; offer: any }
@@ -425,20 +402,6 @@ export class WebRTCService {
         callId,
         'webrtc-offer',
         payload,
-        socket,
-        targetSocketId
-      );
-
-      // Forward generic signal for compatibility
-      this.forwardWebRTCSignal(
-        callId,
-        'webrtc-signal',
-        {
-          type: 'offer',
-          callId,
-          fromUserId: socket.userId,
-          data: offer,
-        },
         socket,
         targetSocketId
       );
@@ -483,20 +446,6 @@ export class WebRTCService {
         socket,
         targetSocketId
       );
-
-      // Forward generic signal
-      this.forwardWebRTCSignal(
-        callId,
-        'webrtc-signal',
-        {
-          type: 'answer',
-          callId,
-          fromUserId: socket.userId,
-          data: answer,
-        },
-        socket,
-        targetSocketId
-      );
     } catch (error) {
       logger.error('Error handling WebRTC answer:', error);
       socket.emit('error', { message: 'Failed to process answer' });
@@ -535,20 +484,6 @@ export class WebRTCService {
         callId,
         'webrtc-ice-candidate',
         payload,
-        socket,
-        targetSocketId
-      );
-
-      // Forward generic signal
-      this.forwardWebRTCSignal(
-        callId,
-        'webrtc-signal',
-        {
-          type: 'ice-candidate',
-          callId,
-          fromUserId: socket.userId,
-          data: candidate,
-        },
         socket,
         targetSocketId
       );
@@ -593,16 +528,28 @@ export class WebRTCService {
     targetSocketId: string
   ) {
     const roomName = `call:${callId}`;
-
-    // 1. Primary path: Emit to the room (excluding sender)
-    // socket.to() already excludes the sender if called on the sending socket
-    socket.to(roomName).emit(event, payload);
-
-    // 2. Optimized Fallback: Double delivery ONLY if room is not yet fully formed
     const roomSize = this.io.sockets.adapter.rooms.get(roomName)?.size || 0;
-    if (roomSize < 2 && targetSocketId) {
-      socketEmitter.emitToUser(targetSocketId, event, payload);
+
+    // 1. If both peers present → send normally
+    if (roomSize >= 2) {
+      socket.to(roomName).emit(event, payload);
+      return;
     }
+
+    // 2. Otherwise → queue the signal for replay
+    if (!this.signalQueue.has(callId)) {
+      this.signalQueue.set(callId, []);
+    }
+
+    this.signalQueue.get(callId)!.push({
+      event,
+      payload,
+      timestamp: Date.now(),
+    });
+
+    logger.warn(
+      `[QUEUE] Signal ${event} queued for call ${callId} (roomSize=${roomSize})`
+    );
   }
 
   private async handleCallInitiation(
@@ -625,6 +572,9 @@ export class WebRTCService {
       // Join the call room immediately (Crucial for signaling reliability)
       socket.join(`call:${callId}`);
       logger.info(`[Room] ${socket.userId} joined call:${callId} (Initiator)`);
+
+      // Flush any queued signals for this call immediately (Handles Reconnection)
+      this.flushSignalQueue(callId);
 
       // Get caller's username
       let callerUsername = 'Anonymous Caller';
@@ -746,6 +696,9 @@ export class WebRTCService {
       socket.join(`call:${callId}`);
       logger.info(`[Room] ${socket.userId} joined call:${callId} (Receiver)`);
 
+      // Flush any queued signals for this call immediately after joining
+      this.flushSignalQueue(callId);
+
       // Update call status
       await callSessionService.updateCallStatus(
         callId,
@@ -804,6 +757,9 @@ export class WebRTCService {
         receiverId: call.receiverId,
       });
 
+      // Cleanup signal queue immediately on rejection
+      this.signalQueue.delete(callId);
+
       // Ensure they leave the room (if they ever joined)
       socket.leave(`call:${callId}`);
     } catch (error) {
@@ -849,6 +805,9 @@ export class WebRTCService {
           });
         }
       }
+
+      // Clean up signaling queue for this call
+      this.signalQueue.delete(callId);
 
       // Cleanup room membership
       socket.leave(`call:${callId}`);
@@ -920,11 +879,14 @@ export class WebRTCService {
     try {
       const { messageId, chatSessionId } = data;
 
-      // Mark message as delivered in database
+      // Mark message as delivered in database (Idempotent)
       const { messageService } = await import('./message.service');
       await messageService.markAsDelivered(messageId, socket.userId!);
 
-      // Notify sender about delivery
+      // Cancel server-side fallback timeout
+      this.cancelDeliveryTimeout(messageId);
+
+      // Notify sender about delivery (now via room for multi-device sync)
       socketEmitter.emitMessageDelivered(chatSessionId, {
         messageId,
         chatSessionId,
@@ -945,7 +907,14 @@ export class WebRTCService {
     try {
       const { chatSessionId } = data;
 
-      // Broadcast typing indicator to chat room (except sender)
+      // Throttle typing indicators (500ms per user)
+      const now = Date.now();
+      const lastEmitted = this.lastTypingEmitted.get(socket.userId!) || 0;
+      if (now - lastEmitted < 500) return;
+
+      this.lastTypingEmitted.set(socket.userId!, now);
+
+      // Broadcast typing indicator to chat room (via io.to)
       socketEmitter.emitUserTyping(chatSessionId, socket.userId!);
     } catch (error) {
       logger.error('Error handling typing start:', error);
@@ -973,7 +942,10 @@ export class WebRTCService {
     try {
       const { chatSessionId, messageId } = data;
 
-      // Broadcast read receipt to chat room (except sender)
+      // Cancel delivery timeout if any (Read implies Delivered)
+      this.cancelDeliveryTimeout(messageId);
+
+      // Broadcast read receipt to chat room
       socketEmitter.emitMessageRead(chatSessionId, {
         messageId,
         chatSessionId,
@@ -1056,6 +1028,95 @@ export class WebRTCService {
     logger.info('✅ Internal state cleared');
 
     logger.info('✅ WebRTC service shutdown complete');
+  }
+
+  /**
+   * Replays all queued signals in chronological order to the entire call room.
+   * Both receiver and caller receive the signals (frontend fromUserId check handles filtering).
+   */
+  private flushSignalQueue(callId: string) {
+    const queuedSignals = this.signalQueue.get(callId);
+
+    if (queuedSignals && queuedSignals.length > 0) {
+      // 1. Sort by timestamp to ensure correct WebRTC state transitions
+      queuedSignals.sort((a, b) => a.timestamp - b.timestamp);
+
+      logger.info(
+        `[FLUSH] Replaying ${queuedSignals.length} signals for call ${callId}`
+      );
+
+      // 2. Broadcast to the entire room (io.to includes sender)
+      // This ensures both peers see all missing context
+      const roomName = `call:${callId}`;
+      for (const signal of queuedSignals) {
+        this.io.to(roomName).emit(signal.event, signal.payload);
+      }
+
+      // 3. IMPORTANT: Clear the queue once delivered
+      this.signalQueue.delete(callId);
+    }
+  }
+
+  /**
+   * Tracks a message delivery and provides a 5s fallback if no client ACK is received.
+   * Only triggers if the receiver is currently online.
+   */
+  public trackMessageDelivery(
+    messageId: string,
+    chatSessionId: string,
+    receiverId: string
+  ) {
+    // Correct logic: Only fallback-deliver if user is ONLINE
+    if (!this.isUserOnline(receiverId)) return;
+
+    // Safety: Clear existing timer if any (though message IDs should be unique)
+    this.cancelDeliveryTimeout(messageId);
+
+    const timeout = setTimeout(async () => {
+      try {
+        // RE-VERIFY: Only mark if STILL online (prevents false delivery on disconnect)
+        if (!this.isUserOnline(receiverId)) {
+          this.pendingDeliveries.delete(messageId);
+          return;
+        }
+
+        const { messageService } = await import('./message.service');
+
+        // Idempotent DB update (returns null if already delivered)
+        const updatedMessage = await messageService.markAsDelivered(
+          messageId,
+          receiverId
+        );
+
+        if (updatedMessage) {
+          logger.info(
+            `[Reliability] Fallback delivered message ${messageId} after timeout (Receiver online)`
+          );
+
+          // Notify sender (status update)
+          socketEmitter.emitMessageDelivered(chatSessionId, {
+            messageId,
+            chatSessionId,
+            deliveredBy: receiverId,
+            deliveredAt: new Date().toISOString(),
+          });
+        }
+
+        this.pendingDeliveries.delete(messageId);
+      } catch (error) {
+        logger.error(`Error in delivery fallback for ${messageId}:`, error);
+      }
+    }, 5000);
+
+    this.pendingDeliveries.set(messageId, timeout);
+  }
+
+  private cancelDeliveryTimeout(messageId: string) {
+    const timer = this.pendingDeliveries.get(messageId);
+    if (timer) {
+      clearTimeout(timer);
+      this.pendingDeliveries.delete(messageId);
+    }
   }
 
   /**

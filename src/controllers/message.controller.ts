@@ -32,7 +32,7 @@ export class MessageController {
         mediaFiles
       );
 
-      // Emit to ALL room members (including sender) so both sides update in real-time
+      // 1. Emit to ALL room members (including sender) via io.to
       socketEmitter.emitNewMessage(chatSessionId, {
         id: message.id,
         chatSessionId: message.chatSessionId,
@@ -45,34 +45,67 @@ export class MessageController {
         sentAt: message.sentAt,
       });
 
-      // Push notification for offline receiver
+      // 2. Handle Reliability and Fallback Delivery
       try {
         const otherParticipantId =
           await chatSessionService.getOtherParticipantId(
             chatSessionId,
             senderId
           );
+
         const { getWebRTCService } = await import('../services/webrtc.service');
         const ws = getWebRTCService();
-        if (!ws || !ws.isUserOnline(otherParticipantId)) {
-          const [sender, deviceTokens] = await Promise.all([
-            userService.getUserById(senderId),
-            userService.getUserDeviceTokens(otherParticipantId),
-          ]);
-          await notificationService.sendMessageNotification(deviceTokens, {
-            chatSessionId,
-            senderId,
-            senderUsername: sender.username,
-            messagePreview:
-              message.messageType === 'text'
-                ? message.content
-                : '📎 Sent an attachment',
-          });
+
+        if (ws) {
+          const isOnline = ws.isUserOnline(otherParticipantId);
+          const isInChatRoom = socketEmitter.isUserInChatRoom(
+            otherParticipantId,
+            chatSessionId
+          );
+
+          // SMART DOUBLE DELIVERY: Only emit to user room if they aren't in the chat room
+          if (isOnline && !isInChatRoom) {
+            socketEmitter.emitToUser(otherParticipantId, 'new-message', {
+              id: message.id,
+              chatSessionId: message.chatSessionId,
+              senderId: message.senderId,
+              messageType: message.messageType,
+              content: message.content,
+              mediaAttachments: message.mediaAttachments,
+              isDelivered: message.isDelivered,
+              isRead: message.isRead,
+              sentAt: message.sentAt,
+            });
+          }
+
+          // FALLBACK TRACKING: Only if online
+          if (isOnline) {
+            ws.trackMessageDelivery(
+              message.id,
+              chatSessionId,
+              otherParticipantId
+            );
+          } else {
+            // OFFLINE: Send push notification
+            const [sender, deviceTokens] = await Promise.all([
+              userService.getUserById(senderId),
+              userService.getUserDeviceTokens(otherParticipantId),
+            ]);
+            await notificationService.sendMessageNotification(deviceTokens, {
+              chatSessionId,
+              senderId,
+              senderUsername: sender.username,
+              messagePreview:
+                message.messageType === 'text'
+                  ? message.content
+                  : '📎 Sent an attachment',
+            });
+          }
         }
-      } catch (pushError) {
+      } catch (reliabilityError) {
         logger.warn(
-          `Push notification failed for chat ${chatSessionId}:`,
-          pushError
+          `Reliability/Push logic failed for message ${message.id}:`,
+          reliabilityError
         );
       }
 

@@ -20,6 +20,16 @@ body:json {
   }
 }
 
+docs {
+  # Guest Initiate Call
+  
+  Allows an anonymous guest to initiate a call using a QR token.
+  
+  ## Reliability Logic:
+  - **Identities**: Guest ID is normalized from the `x-guest-id` header or the auth token.
+  - **Signal Queuing**: Like registered users, guests can send WebRTC signals (Offers/ICE) immediately after initiation. Signals are safely queued until the owner accepts.
+}
+
 tests {
   test("Should initiate call as guest successfully", function() {
     expect(res.status).to.equal(201);

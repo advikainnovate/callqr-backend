@@ -110,39 +110,45 @@ socket.on('call-accepted', async ({ callId }) => {
   const offer = await pc.createOffer();
   await pc.setLocalDescription(offer);
 
-  socket.emit('webrtc-signal', {
+  // NEW: Emit granular event instead of generic 'webrtc-signal'
+  socket.emit('webrtc-offer', {
     callId,
-    targetUserId: receiverId,
-    type: 'offer',
-    data: offer,
+    offer,
   });
 });
 
-// Receiver: handle incoming offer, send answer
-socket.on('webrtc-signal', async ({ type, data, fromUserId, callId }) => {
-  if (type === 'offer') {
-    await pc.setRemoteDescription(data);
-    const answer = await pc.createAnswer();
-    await pc.setLocalDescription(answer);
-    socket.emit('webrtc-signal', {
-      callId,
-      targetUserId: fromUserId,
-      type: 'answer',
-      data: answer,
-    });
-  }
-  if (type === 'answer') await pc.setRemoteDescription(data);
-  if (type === 'ice-candidate') await pc.addIceCandidate(data);
+// Receiver: handle incoming signals
+// NOTE: These may be "replayed" by the server if you joined late.
+socket.on('webrtc-offer', async ({ offer, fromUserId, callId }) => {
+  // DEDUPLICATION: Always check if you are the one who sent this
+  if (fromUserId === myUserId) return;
+
+  await pc.setRemoteDescription(offer);
+  const answer = await pc.createAnswer();
+  await pc.setLocalDescription(answer);
+
+  socket.emit('webrtc-answer', {
+    callId,
+    answer,
+  });
+});
+
+socket.on('webrtc-answer', async ({ answer, fromUserId }) => {
+  if (fromUserId === myUserId) return;
+  await pc.setRemoteDescription(answer);
+});
+
+socket.on('webrtc-ice-candidate', async ({ candidate, fromUserId }) => {
+  if (fromUserId === myUserId) return;
+  await pc.addIceCandidate(candidate);
 });
 
 // Both sides: send ICE candidates as they are gathered
 pc.onicecandidate = ({ candidate }) => {
   if (candidate)
-    socket.emit('webrtc-signal', {
+    socket.emit('webrtc-ice-candidate', {
       callId,
-      targetUserId,
-      type: 'ice-candidate',
-      data: candidate,
+      candidate,
     });
 };
 
@@ -166,41 +172,24 @@ pc.close();
 ```mermaid
 sequenceDiagram
     participant CA as Caller App
-    participant BE as Backend
-    participant FCM as Firebase
+    participant BE as Backend (Signal Queue)
     participant RA as Receiver App
 
-    CA->>BE: POST /calls/initiate { qrToken } → callId
-    CA->>CA: new RTCPeerConnection(iceConfig)
+    CA->>BE: POST /calls/initiate → callId
     CA->>BE: Socket "initiate-call" { callId }
 
-    alt Receiver Online
-        BE->>RA: Socket "incoming-call" { callId, callerUsername }
-    else Receiver Offline
-        BE->>FCM: sendCallNotification (HIGH priority)
-        FCM->>RA: Wakes device
-        RA->>BE: Socket connect (app opened)
-    end
+    Note over CA, BE: Caller can send signaling immediately
+    CA->>BE: Socket "webrtc-offer"
+    BE->>BE: Queue offer (roomSize=1)
 
-    BE->>BE: Status → "ringing"
     RA->>BE: Socket "accept-call" { callId }
-    BE->>CA: Socket "call-accepted" { callId }
-    BE->>RA: Socket "call-connected" { callId }
-    BE->>BE: Status → "connected"
+    BE->>BE: Replay Queue (Offer first)
+    BE->>RA: Socket "webrtc-offer" (Replayed)
 
-    CA->>CA: createOffer()
-    CA->>BE: Socket "webrtc-signal" type:"offer"
-    BE->>RA: Socket "webrtc-signal" type:"offer"
-    RA->>RA: createAnswer()
-    RA->>BE: Socket "webrtc-signal" type:"answer"
-    BE->>CA: Socket "webrtc-signal" type:"answer"
+    RA->>BE: Socket "webrtc-answer"
+    BE->>CA: Socket "webrtc-answer" (Real-time)
 
-    CA->>RA: ICE candidates exchanged
-    CA->>RA: Direct P2P media stream 🎤
-
-    CA->>BE: Socket "end-call" { callId }
-    BE->>RA: Socket "call-ended"
-    BE->>BE: Status → "ended"
+    CA->>RA: P2P media stream established 🎤
 ```
 
 ---
@@ -209,24 +198,28 @@ sequenceDiagram
 
 ### Emit (client → server)
 
-| Event           | Payload                                |
-| --------------- | -------------------------------------- |
-| `initiate-call` | `{ callId }`                           |
-| `accept-call`   | `{ callId }`                           |
-| `reject-call`   | `{ callId }`                           |
-| `end-call`      | `{ callId }`                           |
-| `webrtc-signal` | `{ callId, targetUserId, type, data }` |
+| Event                  | Payload                 | Description                             |
+| ---------------------- | ----------------------- | --------------------------------------- |
+| `initiate-call`        | `{ callId }`            | Start ringing and join call room.       |
+| `accept-call`          | `{ callId }`            | Join call room and trigger queue flush. |
+| `webrtc-offer`         | `{ callId, offer }`     | **NEW** Granular offer event.           |
+| `webrtc-answer`        | `{ callId, answer }`    | **NEW** Granular answer event.          |
+| `webrtc-ice-candidate` | `{ callId, candidate }` | **NEW** Granular ICE event.             |
 
 ### Listen (server → client)
 
-| Event            | Payload                                | Who         |
-| ---------------- | -------------------------------------- | ----------- |
-| `incoming-call`  | `{ callId, callerId, callerUsername }` | Receiver    |
-| `call-accepted`  | `{ callId, receiverId }`               | Caller      |
-| `call-rejected`  | `{ callId, receiverId }`               | Caller      |
-| `call-connected` | `{ callId }`                           | Receiver    |
-| `call-ended`     | `{ callId, endedBy }`                  | Other party |
-| `webrtc-signal`  | `{ callId, fromUserId, type, data }`   | Target user |
+| Event                  | Payload                             | Description                                       |
+| ---------------------- | ----------------------------------- | ------------------------------------------------- |
+| `webrtc-offer`         | `{ callId, offer, fromUserId }`     | Replayed OR real-time. **Deduplicate on client.** |
+| `webrtc-answer`        | `{ callId, answer, fromUserId }`    | Real-time. **Deduplicate on client.**             |
+| `webrtc-ice-candidate` | `{ callId, candidate, fromUserId }` | Replayed OR real-time. **Deduplicate on client.** |
+| `incoming-call`        | `{ callId, callerUsername }`        | Ring notification.                                |
+| `call-accepted`        | `{ callId, receiverId }`            | Sent to caller when receiver accepts.             |
+
+> [!IMPORTANT]
+> **Deduplication**: Because the server now uses `io.to(room).emit()` for stability, you will receive your own signaling events back. You **MUST** filter these out by checking if `fromUserId` matches your own ID.
+>
+> **Queuing**: You no longer need to wait for `call-accepted` to start sending signaling. The server will safely queue your Offer and ICE candidates and replay them as soon as the receiver joins.
 
 ---
 

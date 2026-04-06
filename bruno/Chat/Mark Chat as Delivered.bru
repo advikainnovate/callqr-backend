@@ -29,6 +29,9 @@ docs {
   - Only affects messages not sent by the current user
   - Returns count of messages marked as delivered
   
+  > [!NOTE]
+  > **Reliability Support**: This is useful for bulk delivery ACKs. The system also includes an automated 5-second fallback for online users if individual ACKs are missed.
+  
   ## Response:
   Returns the number of messages that were marked as delivered.
 }

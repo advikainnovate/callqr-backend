@@ -243,46 +243,46 @@ socket.on('chat-joined', ({ chatSessionId }) => {
 > The server verifies you are a participant before allowing you into the room.
 > If you are not a participant, you receive an `error` event and are not joined.
 
-### Send a message — REST only, no socket emit
-
-```javascript
 // Just call REST. Server emits new-message to the room automatically.
 const { data } = await api.post('/messages', {
-  chatSessionId,
-  content: text,
-  messageType: 'text',
+chatSessionId,
+content: text,
+messageType: 'text',
 });
-// data.data contains the full message — render it locally immediately
-```
 
-### Receive messages
+// IMPORTANT: render it locally using the returned data immediately.
+// You will ALSO receive a 'new-message' socket event (even for your own message).
+// You MUST use message.id to deduplicate so you don't show it twice.
 
-The `new-message` event carries the full message payload — no extra REST fetch needed.
+````
+
+### Receive messages (Real-time)
+
+The `new-message` event now carries a **Dual Delivery** guarantee:
+1.  **Chat Room**: Sent to `chat:${chatSessionId}` for users currently viewing the chat.
+2.  **User Room**: Sent to the recipient's personal room (`userId`) if they are **not** currently in the chat room.
+
+**Client Requirement**:
+You **must** listen for `new-message` globally (on the main socket instance) to ensure messages are received even when the specific chat UI isn't mounted.
 
 ```javascript
 socket.on('new-message', message => {
-  // message shape:
-  // {
-  //   id, chatSessionId, senderId, messageType,
-  //   content, mediaAttachments, isDelivered, isRead, sentAt
-  // }
+  // 1. DEDUPLICATE: Check if you already have this message ID
+  if (existsInStore(message.id)) return;
+
+  // 2. Append to UI/Store
   appendMessage(message);
 
-  // Send receipts
+  // 3. ACKNOWLEDGEMENT (CRITICAL):
+  // You MUST notify the server that you received it.
+  // If you don't, the server will fallback-mark it as delivered after 5 seconds
+  // (only if you were detected as online).
   socket.emit('message-delivered', {
     chatSessionId: message.chatSessionId,
     messageId: message.id,
   });
-
-  // If the chat screen is currently open and visible
-  if (isChatOpen(message.chatSessionId)) {
-    socket.emit('message-read', {
-      chatSessionId: message.chatSessionId,
-      messageId: message.id,
-    });
-  }
 });
-```
+````
 
 ### Delivery & read tick updates
 
@@ -305,6 +305,7 @@ const stopTyping = debounce(
 );
 
 const onTextChange = () => {
+  // NOTE: Server throttles typing-start to once every 500ms
   socket.emit('typing-start', { chatSessionId });
   stopTyping();
 };
@@ -338,15 +339,14 @@ socket.emit('leave-chat', { chatSessionId });
 
 ### Server → Client
 
-| Event                 | Payload                                                                                                | Meaning                      |
-| --------------------- | ------------------------------------------------------------------------------------------------------ | ---------------------------- |
-| `chat-joined`         | `{ chatSessionId }`                                                                                    | Room join confirmed          |
-| `new-message`         | `{ id, chatSessionId, senderId, messageType, content, mediaAttachments, isDelivered, isRead, sentAt }` | New message received         |
-| `message-delivered`   | `{ messageId, chatSessionId, deliveredBy, deliveredAt }`                                               | Other party received message |
-| `message-read`        | `{ messageId, chatSessionId, readBy }`                                                                 | Other party read message     |
-| `user-typing`         | `{ chatSessionId, userId }`                                                                            | Other party is typing        |
-| `user-stopped-typing` | `{ chatSessionId, userId }`                                                                            | Other party stopped typing   |
-| `error`               | `{ message }`                                                                                          | Something went wrong         |
+| Event               | Payload                                                                                                | Usage Tip                                                              |
+| ------------------- | ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------- |
+| `new-message`       | `{ id, chatSessionId, senderId, messageType, content, mediaAttachments, isDelivered, isRead, sentAt }` | **Deduplicate with `message.id`**. Arrives via Chat Room OR User Room. |
+| `message-delivered` | `{ messageId, chatSessionId, deliveredBy, deliveredAt }`                                               | Update UI tick to double-check.                                        |
+| `message-read`      | `{ messageId, chatSessionId, readBy }`                                                                 | Update UI tick to blue.                                                |
+
+> [!IMPORTANT]
+> **Reliability Timeout**: If the recipient is online but fails to emit `message-delivered` (e.g., app in background), the server will automatically mark the message as delivered after **5 seconds**. The sender will receive a `message-delivered` socket event in this case.
 
 ---
 

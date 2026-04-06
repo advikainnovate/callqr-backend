@@ -29,11 +29,14 @@ docs {
   - Only the recipient (not sender) can mark message as delivered
   - Triggers Socket.IO event to notify sender
   
+  > [!NOTE]
+  > **Automated Fallback**: To ensure reliability, if the recipient is online but fails to ACK the message via Socket.IO, the backend will automatically mark the message as delivered after 5 seconds.
+  
   ## Response:
   Returns updated message delivery status with timestamps.
   
   ## Message Status Flow:
   1. **Sent**: Message created in database
-  2. **Delivered**: Recipient receives message (this endpoint)
+  2. **Delivered**: Recipient receives message OR **Server Fallback** marks it (if online)
   3. **Read**: Recipient reads message
 }
