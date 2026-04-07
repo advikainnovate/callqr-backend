@@ -1,10 +1,23 @@
 import { eq, and, desc, gte } from 'drizzle-orm';
 import { db } from '../db';
-import { subscriptions, type NewSubscription, type Subscription } from '../models';
+import {
+  subscriptions,
+  type NewSubscription,
+  type Subscription,
+} from '../models';
 import { v4 as uuidv4 } from 'uuid';
-import { logger, NotFoundError, BadRequestError, TooManyRequestsError } from '../utils';
+import {
+  logger,
+  NotFoundError,
+  BadRequestError,
+  TooManyRequestsError,
+} from '../utils';
 import { userService } from './user.service';
-import { SUBSCRIPTION_PLANS, DAILY_CALL_LIMITS, type SubscriptionPlan } from '../constants/subscriptions';
+import {
+  SUBSCRIPTION_PLANS,
+  DAILY_CALL_LIMITS,
+  type SubscriptionPlan,
+} from '../constants/subscriptions';
 
 export class SubscriptionService {
   async createSubscription(
@@ -41,12 +54,21 @@ export class SubscriptionService {
     const [subscription] = await db
       .select()
       .from(subscriptions)
-      .where(and(eq(subscriptions.userId, userId), eq(subscriptions.status, 'active')))
+      .where(
+        and(
+          eq(subscriptions.userId, userId),
+          eq(subscriptions.status, 'active')
+        )
+      )
       .orderBy(desc(subscriptions.startedAt))
       .limit(1);
 
     // Check if subscription has expired
-    if (subscription && subscription.expiresAt && subscription.expiresAt < new Date()) {
+    if (
+      subscription &&
+      subscription.expiresAt &&
+      subscription.expiresAt < new Date()
+    ) {
       await this.expireSubscription(subscription.id);
       return null;
     }
@@ -62,7 +84,11 @@ export class SubscriptionService {
       .orderBy(desc(subscriptions.startedAt));
   }
 
-  async upgradePlan(userId: string, newPlan: SubscriptionPlan, expiresAt?: Date): Promise<Subscription> {
+  async upgradePlan(
+    userId: string,
+    newPlan: SubscriptionPlan,
+    expiresAt?: Date
+  ): Promise<Subscription> {
     // Cancel current subscription
     const currentSubscription = await this.getActiveSubscription(userId);
     if (currentSubscription) {
@@ -73,9 +99,12 @@ export class SubscriptionService {
     return this.createSubscription(userId, newPlan, expiresAt);
   }
 
-  async downgradePlan(userId: string, newPlan: SubscriptionPlan): Promise<Subscription> {
+  async downgradePlan(
+    userId: string,
+    newPlan: SubscriptionPlan
+  ): Promise<Subscription> {
     const currentSubscription = await this.getActiveSubscription(userId);
-    
+
     if (!currentSubscription) {
       throw new BadRequestError('No active subscription to downgrade');
     }
@@ -90,7 +119,9 @@ export class SubscriptionService {
     };
 
     if (planHierarchy[newPlan] >= planHierarchy[currentPlan]) {
-      throw new BadRequestError('New plan must be lower than current plan. Use upgrade endpoint for upgrades.');
+      throw new BadRequestError(
+        'New plan must be lower than current plan. Use upgrade endpoint for upgrades.'
+      );
     }
 
     // Check if user can downgrade based on current usage
@@ -100,15 +131,25 @@ export class SubscriptionService {
     await this.cancelSubscription(currentSubscription.id);
 
     // Create new subscription (FREE plan has no expiry)
-    const expiresAt = newPlan === SUBSCRIPTION_PLANS.FREE ? undefined : undefined;
-    const newSubscription = await this.createSubscription(userId, newPlan, expiresAt);
+    const expiresAt =
+      newPlan === SUBSCRIPTION_PLANS.FREE ? undefined : undefined;
+    const newSubscription = await this.createSubscription(
+      userId,
+      newPlan,
+      expiresAt
+    );
 
     logger.info(`User ${userId} downgraded from ${currentPlan} to ${newPlan}`);
     return newSubscription;
   }
 
-  async validateDowngrade(userId: string, newPlan: SubscriptionPlan): Promise<void> {
-    const { DAILY_MESSAGE_LIMITS, ACTIVE_CHAT_LIMITS } = await import('../constants/subscriptions');
+  async validateDowngrade(
+    userId: string,
+    newPlan: SubscriptionPlan
+  ): Promise<void> {
+    const { DAILY_MESSAGE_LIMITS, ACTIVE_CHAT_LIMITS } = await import(
+      '../constants/subscriptions'
+    );
     const { chatSessionService } = await import('./chatSession.service');
     const { messageService } = await import('./message.service');
 
@@ -126,15 +167,21 @@ export class SubscriptionService {
 
     // Check if current usage exceeds new limits
     if (callUsage.used > newCallLimit) {
-      warnings.push(`You have already used ${callUsage.used} calls today, which exceeds the ${newPlan} plan limit of ${newCallLimit} calls/day.`);
+      warnings.push(
+        `You have already used ${callUsage.used} calls today, which exceeds the ${newPlan} plan limit of ${newCallLimit} calls/day.`
+      );
     }
 
     if (newMessageLimit !== -1 && dailyMessageCount > newMessageLimit) {
-      warnings.push(`You have sent ${dailyMessageCount} messages today, which exceeds the ${newPlan} plan limit of ${newMessageLimit} messages/day.`);
+      warnings.push(
+        `You have sent ${dailyMessageCount} messages today, which exceeds the ${newPlan} plan limit of ${newMessageLimit} messages/day.`
+      );
     }
 
     if (newChatLimit !== -1 && activeChatCount > newChatLimit) {
-      warnings.push(`You have ${activeChatCount} active chats, which exceeds the ${newPlan} plan limit of ${newChatLimit} active chats.`);
+      warnings.push(
+        `You have ${activeChatCount} active chats, which exceeds the ${newPlan} plan limit of ${newChatLimit} active chats.`
+      );
     }
 
     // If there are warnings, throw error with details
@@ -145,7 +192,10 @@ export class SubscriptionService {
     }
   }
 
-  async getDowngradeEligibility(userId: string, targetPlan: SubscriptionPlan): Promise<{
+  async getDowngradeEligibility(
+    userId: string,
+    targetPlan: SubscriptionPlan
+  ): Promise<{
     eligible: boolean;
     currentPlan: string;
     targetPlan: string;
@@ -157,9 +207,13 @@ export class SubscriptionService {
     };
   }> {
     const currentSubscription = await this.getActiveSubscription(userId);
-    const currentPlan = currentSubscription?.plan as SubscriptionPlan || SUBSCRIPTION_PLANS.FREE;
+    const currentPlan =
+      (currentSubscription?.plan as SubscriptionPlan) ||
+      SUBSCRIPTION_PLANS.FREE;
 
-    const { DAILY_MESSAGE_LIMITS, ACTIVE_CHAT_LIMITS } = await import('../constants/subscriptions');
+    const { DAILY_MESSAGE_LIMITS, ACTIVE_CHAT_LIMITS } = await import(
+      '../constants/subscriptions'
+    );
     const { chatSessionService } = await import('./chatSession.service');
     const { messageService } = await import('./message.service');
 
@@ -178,17 +232,23 @@ export class SubscriptionService {
 
     // Check if current usage exceeds new limits
     if (callUsage.used > newCallLimit) {
-      warnings.push(`Current calls today (${callUsage.used}) exceeds ${targetPlan} limit (${newCallLimit})`);
+      warnings.push(
+        `Current calls today (${callUsage.used}) exceeds ${targetPlan} limit (${newCallLimit})`
+      );
       eligible = false;
     }
 
     if (newMessageLimit !== -1 && dailyMessageCount > newMessageLimit) {
-      warnings.push(`Current messages today (${dailyMessageCount}) exceeds ${targetPlan} limit (${newMessageLimit})`);
+      warnings.push(
+        `Current messages today (${dailyMessageCount}) exceeds ${targetPlan} limit (${newMessageLimit})`
+      );
       eligible = false;
     }
 
     if (newChatLimit !== -1 && activeChatCount > newChatLimit) {
-      warnings.push(`Current active chats (${activeChatCount}) exceeds ${targetPlan} limit (${newChatLimit})`);
+      warnings.push(
+        `Current active chats (${activeChatCount}) exceeds ${targetPlan} limit (${newChatLimit})`
+      );
       eligible = false;
     }
 
@@ -199,8 +259,14 @@ export class SubscriptionService {
       warnings,
       currentUsage: {
         calls: { used: callUsage.used, newLimit: newCallLimit },
-        messages: { used: dailyMessageCount, newLimit: newMessageLimit === -1 ? 'unlimited' : newMessageLimit },
-        chats: { active: activeChatCount, newLimit: newChatLimit === -1 ? 'unlimited' : newChatLimit },
+        messages: {
+          used: dailyMessageCount,
+          newLimit: newMessageLimit === -1 ? 'unlimited' : newMessageLimit,
+        },
+        chats: {
+          active: activeChatCount,
+          newLimit: newChatLimit === -1 ? 'unlimited' : newChatLimit,
+        },
       },
     };
   }
@@ -263,7 +329,12 @@ export class SubscriptionService {
     const [result] = await db
       .select({ count: sql<number>`count(*)` })
       .from(callSessions)
-      .where(and(eq(callSessions.receiverId, userId), gte(callSessions.startedAt, startOfDay)));
+      .where(
+        and(
+          eq(callSessions.receiverId, userId),
+          gte(callSessions.initiatedAt, startOfDay)
+        )
+      );
 
     const callCount = Number(result.count);
 
@@ -292,7 +363,12 @@ export class SubscriptionService {
     const [result] = await db
       .select({ count: sql<number>`count(*)` })
       .from(callSessions)
-      .where(and(eq(callSessions.receiverId, userId), gte(callSessions.startedAt, startOfDay)));
+      .where(
+        and(
+          eq(callSessions.receiverId, userId),
+          gte(callSessions.initiatedAt, startOfDay)
+        )
+      );
 
     const used = Number(result.count);
 

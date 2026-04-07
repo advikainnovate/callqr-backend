@@ -26,7 +26,7 @@ export class MessageService {
     chatSessionId: string,
     senderId: string,
     content: string,
-    messageType: 'text' | 'image' | 'file' | 'system' = 'text',
+    messageType: 'text' | 'image' = 'text',
     mediaFiles?: Express.Multer.File[]
   ): Promise<Message & { senderName?: string | null }> {
     // Validate input parameters
@@ -75,6 +75,10 @@ export class MessageService {
     // Check daily message limit
     await this.checkDailyMessageLimit(senderId);
 
+    if (messageType !== 'text' && messageType !== 'image') {
+      throw new BadRequestError('Unsupported message type');
+    }
+
     // Validate content based on message type
     if (messageType === 'text') {
       if (!content || content.trim().length === 0) {
@@ -111,6 +115,15 @@ export class MessageService {
       }
     }
 
+    if (
+      messageType === 'image' &&
+      (!mediaAttachments || mediaAttachments.length === 0)
+    ) {
+      throw new BadRequestError(
+        'At least one image is required for image messages'
+      );
+    }
+
     // Create message
     const [message] = await db
       .insert(messages)
@@ -119,7 +132,7 @@ export class MessageService {
         chatSessionId,
         senderId,
         messageType,
-        content: content.trim(),
+        content: (content || '').trim(),
         mediaAttachments,
         isRead: false,
         isDeleted: false,

@@ -1,7 +1,12 @@
 import { Response } from 'express';
 import { messageService } from '../services/message.service';
 import { AuthenticatedRequest } from '../middlewares/auth.middleware';
-import { asyncHandler, logger, UnauthorizedError } from '../utils';
+import {
+  asyncHandler,
+  BadRequestError,
+  logger,
+  UnauthorizedError,
+} from '../utils';
 import { sendSuccessResponse } from '../utils/responseHandler';
 import { socketEmitter } from '../services/socketEmitter.service';
 import { userService } from '../services/user.service';
@@ -9,6 +14,18 @@ import { notificationService } from '../services/notification.service';
 import { chatSessionService } from '../services/chatSession.service';
 
 export class MessageController {
+  private normalizeLimit(raw: unknown, fallback: number, max: number): number {
+    const parsed = Number(raw);
+    if (!Number.isFinite(parsed)) return fallback;
+    return Math.max(1, Math.min(max, Math.trunc(parsed)));
+  }
+
+  private normalizeOffset(raw: unknown, fallback: number = 0): number {
+    const parsed = Number(raw);
+    if (!Number.isFinite(parsed)) return fallback;
+    return Math.max(0, Math.trunc(parsed));
+  }
+
   sendMessage = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
       const identity = req.identity;
@@ -102,10 +119,8 @@ export class MessageController {
         throw new UnauthorizedError('User authentication required');
       }
       const userId = identity.userId;
-      const limit = req.query.limit ? parseInt(req.query.limit as string) : 50;
-      const offset = req.query.offset
-        ? parseInt(req.query.offset as string)
-        : 0;
+      const limit = this.normalizeLimit(req.query.limit, 50, 100);
+      const offset = this.normalizeOffset(req.query.offset, 0);
 
       const messages = await messageService.getMessages(
         chatSessionId,
@@ -282,7 +297,7 @@ export class MessageController {
       const { query } = req.query;
 
       if (!query || typeof query !== 'string') {
-        return sendSuccessResponse(res, 400, 'Search query is required', null);
+        throw new BadRequestError('Search query is required');
       }
 
       const messages = await messageService.searchMessages(

@@ -6,6 +6,12 @@ import { asyncHandler, UnauthorizedError } from '../utils';
 import { sendSuccessResponse } from '../utils/responseHandler';
 
 export class CallController {
+  private normalizeLimit(raw: unknown, fallback: number, max: number): number {
+    const parsed = Number(raw);
+    if (!Number.isFinite(parsed)) return fallback;
+    return Math.max(1, Math.min(max, Math.trunc(parsed)));
+  }
+
   initiateCall = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
       const identity = req.identity;
@@ -35,7 +41,21 @@ export class CallController {
   getCallSession = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
       const { callId } = req.params;
-      const callSession = await callSessionService.getCallSessionById(callId);
+      const identity = req.identity;
+
+      if (!identity) {
+        throw new UnauthorizedError('Authentication required');
+      }
+
+      const actorId =
+        identity.type === 'user'
+          ? identity.userId
+          : `guest:${identity.guestId}`;
+
+      const callSession = await callSessionService.getCallSessionForActor(
+        callId,
+        actorId
+      );
 
       sendSuccessResponse(res, 200, 'Call session retrieved successfully', {
         id: callSession.id,
@@ -172,7 +192,7 @@ export class CallController {
           ? identity.userId
           : `guest:${identity.guestId}`;
 
-      const limit = req.query.limit ? parseInt(req.query.limit as string) : 50;
+      const limit = this.normalizeLimit(req.query.limit, 50, 100);
 
       const callHistory = await callSessionService.getUserCallHistory(
         userId,

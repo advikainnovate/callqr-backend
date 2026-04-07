@@ -327,18 +327,10 @@ export class WebRTCService {
     if (!socketUserId) return null;
 
     try {
-      const call = await callSessionService.getCallSessionById(callId);
-      if (!call) return null;
-
-      const identity = normalizeUserId(socketUserId);
-      if (!identity) return null;
-
-      const isAuthorized =
-        call.callerId === identity.id ||
-        call.receiverId === identity.id ||
-        call.guestId === identity.id;
-
-      return isAuthorized ? call : null;
+      return await callSessionService.getCallSessionForActor(
+        callId,
+        socketUserId
+      );
     } catch (error) {
       logger.error(`Auth check failed for call ${callId}:`, error);
       return null;
@@ -574,8 +566,8 @@ export class WebRTCService {
         // Current user is caller, target is receiver
         return call.receiverId;
       } else {
-        // Current user is receiver, target is guest caller
-        return `guest:${call.guestId}`;
+        // Current user is receiver, target is whoever initiated the call
+        return call.callerId || (call.guestId ? `guest:${call.guestId}` : '');
       }
     }
   }
@@ -747,11 +739,7 @@ export class WebRTCService {
       logger.info(`[Room] ${socket.userId} joined call:${callId} (Receiver)`);
 
       // Update call status
-      await callSessionService.updateCallStatus(
-        callId,
-        socket.userId!,
-        'connected'
-      );
+      await callSessionService.acceptCall(callId, socket.userId!);
 
       // Notify caller via call room AND personal room (double delivery)
       socketEmitter.emitToCallRoom(callId, 'call-accepted', {
@@ -787,9 +775,8 @@ export class WebRTCService {
     try {
       const { callId } = data;
 
-      // Verify call and get details
-      const call = await callSessionService.getCallSessionById(callId);
-      if (!call || call.receiverId !== socket.userId) {
+      const call = await this.getAuthorizedCallSession(callId, socket.userId);
+      if (!call || call.receiverId !== normalizeUserId(socket.userId!)?.id) {
         socket.emit('error', { message: 'Unauthorized to reject this call' });
         return;
       }
@@ -823,7 +810,7 @@ export class WebRTCService {
       const updatedCall = await callSessionService.endCall(
         callId,
         socket.userId!,
-        'rejected' // Default reason for explicit hangup is success/rejected depending on state
+        undefined
       );
       if (!updatedCall) {
         socket.emit('error', { message: 'Failed to end call' });
