@@ -183,6 +183,8 @@ export class CallController {
           callerId: call.callerId,
           guestId: call.guestId,
           receiverId: call.receiverId,
+          callerName: call.callerName,
+          receiverName: call.receiverName,
           status: call.status,
           endedReason: call.endedReason,
           startedAt: call.startedAt,

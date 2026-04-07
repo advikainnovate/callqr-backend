@@ -1,6 +1,11 @@
 import { eq, and, desc, sql, gte, or, lt } from 'drizzle-orm';
 import { db } from '../db';
-import { callSessions, type NewCallSession, type CallSession } from '../models';
+import {
+  users,
+  callSessions,
+  type NewCallSession,
+  type CallSession,
+} from '../models';
 import { v4 as uuidv4 } from 'uuid';
 import {
   logger,
@@ -162,13 +167,28 @@ export class CallSessionService {
   async getUserCallHistory(
     userId: string,
     limit: number = 50
-  ): Promise<CallSession[]> {
+  ): Promise<
+    (CallSession & { callerName: string | null; receiverName: string | null })[]
+  > {
     const identity = parseIdentity(userId);
     if (!identity) return [];
 
-    return db
-      .select()
+    const results = await db
+      .select({
+        call: callSessions,
+        caller: {
+          username: users.username,
+        },
+        receiver: {
+          username: sql<string>`receiver.username`,
+        },
+      })
       .from(callSessions)
+      .leftJoin(users, eq(callSessions.callerId, users.id))
+      .leftJoin(
+        sql`users as receiver`,
+        sql`${callSessions.receiverId} = receiver.id`
+      )
       .where(
         identity.type === 'guest'
           ? eq(callSessions.guestId, identity.id)
@@ -179,6 +199,12 @@ export class CallSessionService {
       )
       .orderBy(desc(callSessions.startedAt))
       .limit(limit);
+
+    return results.map(row => ({
+      ...row.call,
+      callerName: row.caller?.username || null,
+      receiverName: row.receiver?.username || null,
+    }));
   }
 
   async getActiveCalls(userId: string): Promise<CallSession[]> {
