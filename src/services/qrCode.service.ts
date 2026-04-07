@@ -124,10 +124,15 @@ export class QRCodeService {
         .limit(1);
       qrCode = found;
     } else if (token) {
+      const extractedToken = extractQRCodeToken(token);
+      if (!extractedToken) {
+        throw new BadRequestError('Invalid QR token format');
+      }
+
       const [found] = await db
         .select()
         .from(qrCodes)
-        .where(eq(qrCodes.token, token))
+        .where(eq(qrCodes.token, extractedToken))
         .limit(1);
       qrCode = found;
     }
