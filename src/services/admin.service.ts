@@ -66,7 +66,7 @@ export class AdminService {
     const [todayCalls] = await db
       .select({ count: sql<number>`count(*)` })
       .from(callSessions)
-      .where(gte(callSessions.startedAt, today));
+      .where(gte(callSessions.initiatedAt, today));
 
     const [todayChats] = await db
       .select({ count: sql<number>`count(*)` })
@@ -389,10 +389,10 @@ export class AdminService {
 
     const conditions = [];
     if (startDate) {
-      conditions.push(gte(callSessions.startedAt, startDate));
+      conditions.push(gte(callSessions.initiatedAt, startDate));
     }
     if (endDate) {
-      conditions.push(lte(callSessions.startedAt, endDate));
+      conditions.push(lte(callSessions.initiatedAt, endDate));
     }
     if (status) {
       conditions.push(eq(callSessions.status, status as any));
@@ -411,7 +411,7 @@ export class AdminService {
     }
 
     const calls = await query
-      .orderBy(desc(callSessions.startedAt))
+      .orderBy(desc(callSessions.initiatedAt))
       .limit(limit)
       .offset(offset);
 
@@ -629,7 +629,7 @@ export class AdminService {
     const [totalCalls] = await db
       .select({ count: sql<number>`count(*)` })
       .from(callSessions)
-      .where(gte(callSessions.startedAt, startDate));
+      .where(gte(callSessions.initiatedAt, startDate));
 
     // Calls by status
     const callsByStatus = await db
@@ -638,7 +638,7 @@ export class AdminService {
         count: sql<number>`count(*)`,
       })
       .from(callSessions)
-      .where(gte(callSessions.startedAt, startDate))
+      .where(gte(callSessions.initiatedAt, startDate))
       .groupBy(callSessions.status);
 
     // Average call duration (only for ended calls)
@@ -649,7 +649,7 @@ export class AdminService {
       .from(callSessions)
       .where(
         and(
-          gte(callSessions.startedAt, startDate),
+          gte(callSessions.initiatedAt, startDate),
           eq(callSessions.status, 'ended'),
           sql`${callSessions.endedAt} IS NOT NULL`
         )
@@ -658,24 +658,24 @@ export class AdminService {
     // Calls over time (daily)
     const callsOverTime = await db
       .select({
-        date: sql<string>`DATE(${callSessions.startedAt})`,
+        date: sql<string>`DATE(${callSessions.initiatedAt})`,
         count: sql<number>`count(*)`,
       })
       .from(callSessions)
-      .where(gte(callSessions.startedAt, startDate))
-      .groupBy(sql`DATE(${callSessions.startedAt})`)
-      .orderBy(sql`DATE(${callSessions.startedAt})`);
+      .where(gte(callSessions.initiatedAt, startDate))
+      .groupBy(sql`DATE(${callSessions.initiatedAt})`)
+      .orderBy(sql`DATE(${callSessions.initiatedAt})`);
 
     // Calls by hour of day
     const callsByHour = await db
       .select({
-        hour: sql<number>`EXTRACT(HOUR FROM ${callSessions.startedAt})`,
+        hour: sql<number>`EXTRACT(HOUR FROM ${callSessions.initiatedAt})`,
         count: sql<number>`count(*)`,
       })
       .from(callSessions)
-      .where(gte(callSessions.startedAt, startDate))
-      .groupBy(sql`EXTRACT(HOUR FROM ${callSessions.startedAt})`)
-      .orderBy(sql`EXTRACT(HOUR FROM ${callSessions.startedAt})`);
+      .where(gte(callSessions.initiatedAt, startDate))
+      .groupBy(sql`EXTRACT(HOUR FROM ${callSessions.initiatedAt})`)
+      .orderBy(sql`EXTRACT(HOUR FROM ${callSessions.initiatedAt})`);
 
     // Success rate
     const connectedCalls =
@@ -1036,7 +1036,7 @@ export class AdminService {
           eq(callSessions.status, 'connected')
         )
       )
-      .orderBy(desc(callSessions.startedAt));
+      .orderBy(desc(callSessions.initiatedAt));
 
     return activeCalls.map(c => ({
       ...c.call,
@@ -1112,11 +1112,11 @@ export class AdminService {
     const recentCalls = await db
       .select({
         type: sql<string>`'call_initiated'`,
-        timestamp: callSessions.startedAt,
+        timestamp: callSessions.initiatedAt,
         data: sql`json_build_object('callId', ${callSessions.id}, 'callerId', ${callSessions.callerId}, 'receiverId', ${callSessions.receiverId}, 'status', ${callSessions.status})`,
       })
       .from(callSessions)
-      .orderBy(desc(callSessions.startedAt))
+      .orderBy(desc(callSessions.initiatedAt))
       .limit(limit);
 
     // Get recent chats
@@ -1271,10 +1271,10 @@ export class AdminService {
 
     const conditions = [];
     if (startDate) {
-      conditions.push(gte(callSessions.startedAt, startDate));
+      conditions.push(gte(callSessions.initiatedAt, startDate));
     }
     if (endDate) {
-      conditions.push(lte(callSessions.startedAt, endDate));
+      conditions.push(lte(callSessions.initiatedAt, endDate));
     }
     if (status) {
       conditions.push(eq(callSessions.status, status as any));
@@ -1284,7 +1284,7 @@ export class AdminService {
       query = query.where(and(...conditions)) as any;
     }
 
-    const calls = await query.orderBy(desc(callSessions.startedAt));
+    const calls = await query.orderBy(desc(callSessions.initiatedAt));
 
     return calls.map(c => ({
       callId: c.call.id,
@@ -1293,6 +1293,7 @@ export class AdminService {
       qrCode: c.qrCode?.humanToken,
       status: c.call.status,
       endedReason: c.call.endedReason,
+      initiatedAt: c.call.initiatedAt,
       startedAt: c.call.startedAt,
       endedAt: c.call.endedAt,
       duration:

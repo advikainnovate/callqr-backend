@@ -21,7 +21,7 @@ export const callSessions = pgTable(
       .notNull()
       .default('registered'), // registered, anonymous
     status: varchar('status', { length: 20 }).notNull().default('initiated'), // initiated, ringing, connected, ended, failed
-    endedReason: varchar('ended_reason', { length: 50 }), // busy, rejected, timeout, error
+    endedReason: varchar('ended_reason', { length: 50 }), // busy, rejected, timeout, error, completed
     initiatedAt: timestamp('initiated_at').defaultNow(), // when the call was first created
     startedAt: timestamp('started_at'), // when both parties connected
     endedAt: timestamp('ended_at'),

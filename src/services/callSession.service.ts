@@ -24,7 +24,7 @@ type CallActor =
   | { kind: 'system'; id: 'system'; rawId: 'system' };
 
 type CallStatus = 'initiated' | 'ringing' | 'connected' | 'ended' | 'failed';
-type CallEndReason = 'busy' | 'rejected' | 'timeout' | 'error';
+type CallEndReason = 'busy' | 'rejected' | 'timeout' | 'error' | 'completed';
 
 export class CallSessionService {
   async initiateCall(

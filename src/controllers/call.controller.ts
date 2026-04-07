@@ -33,6 +33,7 @@ export class CallController {
         guestId: callSession.guestId,
         receiverId: callSession.receiverId,
         status: callSession.status,
+        initiatedAt: callSession.initiatedAt,
         startedAt: callSession.startedAt,
       });
     }
@@ -67,6 +68,7 @@ export class CallController {
         qrId: callSession.qrId,
         status: callSession.status,
         endedReason: callSession.endedReason,
+        initiatedAt: callSession.initiatedAt,
         startedAt: callSession.startedAt,
         endedAt: callSession.endedAt,
       });
@@ -209,6 +211,7 @@ export class CallController {
           receiverName: call.receiverName,
           status: call.status,
           endedReason: call.endedReason,
+          initiatedAt: call.initiatedAt,
           startedAt: call.startedAt,
           endedAt: call.endedAt,
         })),
@@ -238,6 +241,7 @@ export class CallController {
           guestId: call.guestId,
           receiverId: call.receiverId,
           status: call.status,
+          initiatedAt: call.initiatedAt,
           startedAt: call.startedAt,
         })),
       });

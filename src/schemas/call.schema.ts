@@ -23,7 +23,9 @@ export const getCallSessionSchema = z.object({
 
 export const endCallSchema = z.object({
   body: z.object({
-    reason: z.enum(['busy', 'rejected', 'timeout', 'error']).optional(),
+    reason: z
+      .enum(['busy', 'rejected', 'timeout', 'error', 'completed'])
+      .optional(),
   }),
   params: z.object({
     callId: z.string().uuid(),
