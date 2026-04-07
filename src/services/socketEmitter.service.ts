@@ -26,6 +26,7 @@ class SocketEmitterService {
       id: string;
       chatSessionId: string;
       senderId: string;
+      senderName?: string | null;
       messageType: string;
       content: string;
       mediaAttachments: any;

@@ -66,6 +66,7 @@ export class UserService {
   async createUser(userData: {
     username: string;
     password: string;
+    emergencyContact: string;
     phone?: string;
     email?: string;
     status?: string;
@@ -106,6 +107,7 @@ export class UserService {
         email,
         phoneHash,
         emailHash,
+        emergencyContact: userData.emergencyContact,
         status: userData.status || 'active',
       })
       .returning();
@@ -271,6 +273,7 @@ export class UserService {
       username?: string;
       phone?: string;
       email?: string;
+      emergencyContact?: string;
       status?: 'active' | 'blocked' | 'deleted';
     }
   ): Promise<User> {
@@ -301,6 +304,8 @@ export class UserService {
       updatePayload.email = this.encryptData(updateData.email);
       updatePayload.emailHash = this.hashData(updateData.email);
     }
+    if (updateData.emergencyContact)
+      updatePayload.emergencyContact = updateData.emergencyContact;
     if (updateData.status) updatePayload.status = updateData.status;
 
     const [updatedUser] = await db

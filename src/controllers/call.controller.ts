@@ -42,6 +42,8 @@ export class CallController {
         callerId: callSession.callerId,
         guestId: callSession.guestId,
         receiverId: callSession.receiverId,
+        callerName: callSession.callerName,
+        receiverName: callSession.receiverName,
         qrId: callSession.qrId,
         status: callSession.status,
         endedReason: callSession.endedReason,

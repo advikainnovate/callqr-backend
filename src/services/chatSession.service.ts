@@ -1,15 +1,34 @@
 import { eq, and, desc, sql, or } from 'drizzle-orm';
 import { db } from '../db';
-import { chatSessions, type NewChatSession, type ChatSession } from '../models';
+import {
+  chatSessions,
+  type NewChatSession,
+  type ChatSession,
+  users,
+} from '../models';
 import { v4 as uuidv4 } from 'uuid';
-import { logger, NotFoundError, BadRequestError, ForbiddenError, TooManyRequestsError } from '../utils';
+import {
+  logger,
+  NotFoundError,
+  BadRequestError,
+  ForbiddenError,
+  TooManyRequestsError,
+} from '../utils';
 import { qrCodeService } from './qrCode.service';
 import { userService } from './user.service';
 import { subscriptionService } from './subscription.service';
 import { ACTIVE_CHAT_LIMITS } from '../constants/subscriptions';
 
 export class ChatSessionService {
-  async initiateChat(initiatorId: string, qrToken: string): Promise<ChatSession> {
+  async initiateChat(
+    initiatorId: string,
+    qrToken: string
+  ): Promise<
+    ChatSession & {
+      participant1Name?: string | null;
+      participant2Name?: string | null;
+    }
+  > {
     // Validate QR code and get receiver info
     const qrCode = await qrCodeService.validateQRCode(qrToken);
 
@@ -29,16 +48,22 @@ export class ChatSessionService {
     }
 
     // NEW: Check if receiver has blocked the initiator
-    const isBlocked = await userService.isUserBlocked(qrCode.assignedUserId, initiatorId);
+    const isBlocked = await userService.isUserBlocked(
+      qrCode.assignedUserId,
+      initiatorId
+    );
     if (isBlocked) {
       throw new ForbiddenError('Unable to initiate chat');
     }
 
     // Check if chat session already exists between these users
-    const existingChat = await this.getChatSessionByParticipants(initiatorId, qrCode.assignedUserId);
+    const existingChat = await this.getChatSessionByParticipants(
+      initiatorId,
+      qrCode.assignedUserId
+    );
     if (existingChat && existingChat.status === 'active') {
       logger.info(`Returning existing chat session: ${existingChat.id}`);
-      return existingChat;
+      return this.getChatSessionById(existingChat.id);
     }
 
     // Check active chat limit for initiator
@@ -57,32 +82,65 @@ export class ChatSessionService {
       })
       .returning();
 
-    logger.info(`Chat session initiated: ${chatSession.id} between ${initiatorId} and ${qrCode.assignedUserId}`);
-    return chatSession;
+    logger.info(
+      `Chat session initiated: ${chatSession.id} between ${initiatorId} and ${qrCode.assignedUserId}`
+    );
+    return this.getChatSessionById(chatSession.id);
   }
 
-  async getChatSessionById(chatSessionId: string): Promise<ChatSession> {
-    const [chatSession] = await db
-      .select()
+  async getChatSessionById(
+    chatSessionId: string
+  ): Promise<
+    ChatSession & {
+      participant1Name?: string | null;
+      participant2Name?: string | null;
+    }
+  > {
+    const results = await db
+      .select({
+        chat: chatSessions,
+        participant1: { username: users.username },
+        participant2: { username: sql<string>`participant2.username` },
+      })
       .from(chatSessions)
+      .leftJoin(users, eq(chatSessions.participant1Id, users.id))
+      .leftJoin(
+        sql`users as participant2`,
+        sql`${chatSessions.participant2Id} = participant2.id`
+      )
       .where(eq(chatSessions.id, chatSessionId))
       .limit(1);
 
-    if (!chatSession) {
+    const result = results[0];
+
+    if (!result || !result.chat) {
       throw new NotFoundError('Chat session not found');
     }
 
-    return chatSession;
+    return {
+      ...result.chat,
+      participant1Name: result.participant1?.username || null,
+      participant2Name: result.participant2?.username || null,
+    };
   }
 
-  async getChatSessionByParticipants(user1Id: string, user2Id: string): Promise<ChatSession | null> {
+  async getChatSessionByParticipants(
+    user1Id: string,
+    user2Id: string
+  ): Promise<ChatSession | null> {
     const [chatSession] = await db
       .select()
       .from(chatSessions)
       .where(
         or(
-          and(eq(chatSessions.participant1Id, user1Id), eq(chatSessions.participant2Id, user2Id)),
-          and(eq(chatSessions.participant1Id, user2Id), eq(chatSessions.participant2Id, user1Id))
+          and(
+            eq(chatSessions.participant1Id, user1Id),
+            eq(chatSessions.participant2Id, user2Id)
+          ),
+          and(
+            eq(chatSessions.participant1Id, user2Id),
+            eq(chatSessions.participant2Id, user1Id)
+          )
         )
       )
       .orderBy(desc(chatSessions.createdAt))
@@ -91,33 +149,92 @@ export class ChatSessionService {
     return chatSession || null;
   }
 
-  async getUserChatSessions(userId: string, limit: number = 50): Promise<ChatSession[]> {
-    return db
-      .select()
+  async getUserChatSessions(
+    userId: string,
+    limit: number = 50
+  ): Promise<
+    (ChatSession & {
+      participant1Name: string | null;
+      participant2Name: string | null;
+    })[]
+  > {
+    const results = await db
+      .select({
+        chat: chatSessions,
+        participant1: { username: users.username },
+        participant2: { username: sql<string>`participant2.username` },
+      })
       .from(chatSessions)
-      .where(or(eq(chatSessions.participant1Id, userId), eq(chatSessions.participant2Id, userId)))
+      .leftJoin(users, eq(chatSessions.participant1Id, users.id))
+      .leftJoin(
+        sql`users as participant2`,
+        sql`${chatSessions.participant2Id} = participant2.id`
+      )
+      .where(
+        or(
+          eq(chatSessions.participant1Id, userId),
+          eq(chatSessions.participant2Id, userId)
+        )
+      )
       .orderBy(desc(chatSessions.lastMessageAt))
       .limit(limit);
+
+    return results.map(row => ({
+      ...row.chat,
+      participant1Name: row.participant1?.username || null,
+      participant2Name: row.participant2?.username || null,
+    }));
   }
 
-  async getActiveChatSessions(userId: string): Promise<ChatSession[]> {
-    return db
-      .select()
+  async getActiveChatSessions(
+    userId: string
+  ): Promise<
+    (ChatSession & {
+      participant1Name: string | null;
+      participant2Name: string | null;
+    })[]
+  > {
+    const results = await db
+      .select({
+        chat: chatSessions,
+        participant1: { username: users.username },
+        participant2: { username: sql<string>`participant2.username` },
+      })
       .from(chatSessions)
+      .leftJoin(users, eq(chatSessions.participant1Id, users.id))
+      .leftJoin(
+        sql`users as participant2`,
+        sql`${chatSessions.participant2Id} = participant2.id`
+      )
       .where(
         and(
-          or(eq(chatSessions.participant1Id, userId), eq(chatSessions.participant2Id, userId)),
+          or(
+            eq(chatSessions.participant1Id, userId),
+            eq(chatSessions.participant2Id, userId)
+          ),
           eq(chatSessions.status, 'active')
         )
       )
       .orderBy(desc(chatSessions.lastMessageAt));
+
+    return results.map(row => ({
+      ...row.chat,
+      participant1Name: row.participant1?.username || null,
+      participant2Name: row.participant2?.username || null,
+    }));
   }
 
-  async endChatSession(chatSessionId: string, userId: string): Promise<ChatSession> {
+  async endChatSession(
+    chatSessionId: string,
+    userId: string
+  ): Promise<ChatSession> {
     const existingChat = await this.getChatSessionById(chatSessionId);
 
     // Authorization check
-    if (existingChat.participant1Id !== userId && existingChat.participant2Id !== userId) {
+    if (
+      existingChat.participant1Id !== userId &&
+      existingChat.participant2Id !== userId
+    ) {
       throw new ForbiddenError('You do not have permission to end this chat');
     }
 
@@ -134,11 +251,17 @@ export class ChatSessionService {
     return updatedChat;
   }
 
-  async blockChatSession(chatSessionId: string, userId: string): Promise<ChatSession> {
+  async blockChatSession(
+    chatSessionId: string,
+    userId: string
+  ): Promise<ChatSession> {
     const existingChat = await this.getChatSessionById(chatSessionId);
 
     // Authorization check
-    if (existingChat.participant1Id !== userId && existingChat.participant2Id !== userId) {
+    if (
+      existingChat.participant1Id !== userId &&
+      existingChat.participant2Id !== userId
+    ) {
       throw new ForbiddenError('You do not have permission to block this chat');
     }
 
@@ -170,7 +293,10 @@ export class ChatSessionService {
       .from(chatSessions)
       .where(
         and(
-          or(eq(chatSessions.participant1Id, userId), eq(chatSessions.participant2Id, userId)),
+          or(
+            eq(chatSessions.participant1Id, userId),
+            eq(chatSessions.participant2Id, userId)
+          ),
           eq(chatSessions.status, 'active')
         )
       );
@@ -194,15 +320,21 @@ export class ChatSessionService {
     }
   }
 
-  async verifyParticipant(chatSessionId: string, userId: string): Promise<boolean> {
+  async verifyParticipant(
+    chatSessionId: string,
+    userId: string
+  ): Promise<boolean> {
     // Validate UUID format first
     if (!chatSessionId || typeof chatSessionId !== 'string') {
       throw new BadRequestError('Invalid chat session ID format');
     }
-    
+
     try {
       const chatSession = await this.getChatSessionById(chatSessionId);
-      return chatSession.participant1Id === userId || chatSession.participant2Id === userId;
+      return (
+        chatSession.participant1Id === userId ||
+        chatSession.participant2Id === userId
+      );
     } catch (error) {
       if (error instanceof NotFoundError) {
         return false; // Chat session doesn't exist, so user is not a participant
@@ -211,15 +343,18 @@ export class ChatSessionService {
     }
   }
 
-  async getOtherParticipantId(chatSessionId: string, userId: string): Promise<string> {
+  async getOtherParticipantId(
+    chatSessionId: string,
+    userId: string
+  ): Promise<string> {
     const chatSession = await this.getChatSessionById(chatSessionId);
-    
+
     if (chatSession.participant1Id === userId) {
       return chatSession.participant2Id;
     } else if (chatSession.participant2Id === userId) {
       return chatSession.participant1Id;
     }
-    
+
     throw new ForbiddenError('You are not a participant in this chat');
   }
 }

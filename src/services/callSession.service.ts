@@ -150,18 +150,41 @@ export class CallSessionService {
     return updatedCall;
   }
 
-  async getCallSessionById(callId: string): Promise<CallSession> {
-    const [callSession] = await db
-      .select()
+  async getCallSessionById(
+    callId: string
+  ): Promise<
+    CallSession & { callerName?: string | null; receiverName?: string | null }
+  > {
+    const results = await db
+      .select({
+        call: callSessions,
+        caller: {
+          username: users.username,
+        },
+        receiver: {
+          username: sql<string>`receiver.username`,
+        },
+      })
       .from(callSessions)
+      .leftJoin(users, eq(callSessions.callerId, users.id))
+      .leftJoin(
+        sql`users as receiver`,
+        sql`${callSessions.receiverId} = receiver.id`
+      )
       .where(eq(callSessions.id, callId))
       .limit(1);
 
-    if (!callSession) {
+    const result = results[0];
+
+    if (!result || !result.call) {
       throw new NotFoundError('Call session not found');
     }
 
-    return callSession;
+    return {
+      ...result.call,
+      callerName: result.caller?.username || null,
+      receiverName: result.receiver?.username || null,
+    };
   }
 
   async getUserCallHistory(

@@ -5,6 +5,7 @@ import {
   type NewMessage,
   type Message,
   type MessageMedia,
+  users,
 } from '../models';
 import { v4 as uuidv4 } from 'uuid';
 import {
@@ -27,7 +28,7 @@ export class MessageService {
     content: string,
     messageType: 'text' | 'image' | 'file' | 'system' = 'text',
     mediaFiles?: Express.Multer.File[]
-  ): Promise<Message> {
+  ): Promise<Message & { senderName?: string | null }> {
     // Validate input parameters
     if (!chatSessionId || !senderId) {
       throw new BadRequestError('Chat session ID and sender ID are required');
@@ -132,7 +133,18 @@ export class MessageService {
     logger.info(
       `Message sent: ${message.id} in chat ${chatSessionId} (type: ${messageType})`
     );
-    return message;
+
+    // Fetch sender username to include in the returned message
+    const [sender] = await db
+      .select({ username: users.username })
+      .from(users)
+      .where(eq(users.id, senderId))
+      .limit(1);
+
+    return {
+      ...message,
+      senderName: sender?.username || null,
+    };
   }
 
   async getMessages(
@@ -140,7 +152,7 @@ export class MessageService {
     userId: string,
     limit: number = 50,
     offset: number = 0
-  ): Promise<Message[]> {
+  ): Promise<(Message & { senderName?: string | null })[]> {
     // Verify user is participant in chat
     const isParticipant = await chatSessionService.verifyParticipant(
       chatSessionId,
@@ -150,9 +162,13 @@ export class MessageService {
       throw new ForbiddenError('You are not a participant in this chat');
     }
 
-    const result = await db
-      .select()
+    const results = await db
+      .select({
+        msg: messages,
+        sender: { username: users.username },
+      })
       .from(messages)
+      .leftJoin(users, eq(messages.senderId, users.id))
       .where(
         and(
           eq(messages.chatSessionId, chatSessionId),
@@ -163,7 +179,10 @@ export class MessageService {
       .limit(limit)
       .offset(offset);
 
-    return result.reverse();
+    return results.reverse().map(result => ({
+      ...result.msg,
+      senderName: result.sender?.username || null,
+    }));
   }
 
   async markAsRead(messageId: string, userId: string): Promise<Message> {
@@ -341,7 +360,7 @@ export class MessageService {
     chatSessionId: string,
     userId: string,
     query: string
-  ): Promise<Message[]> {
+  ): Promise<(Message & { senderName?: string | null })[]> {
     // Verify user is participant in chat
     const isParticipant = await chatSessionService.verifyParticipant(
       chatSessionId,
@@ -355,9 +374,13 @@ export class MessageService {
       throw new BadRequestError('Search query cannot be empty');
     }
 
-    const result = await db
-      .select()
+    const results = await db
+      .select({
+        msg: messages,
+        sender: { username: users.username },
+      })
       .from(messages)
+      .leftJoin(users, eq(messages.senderId, users.id))
       .where(
         and(
           eq(messages.chatSessionId, chatSessionId),
@@ -368,7 +391,10 @@ export class MessageService {
       .orderBy(desc(messages.sentAt))
       .limit(50);
 
-    return result.reverse();
+    return results.reverse().map(result => ({
+      ...result.msg,
+      senderName: result.sender?.username || null,
+    }));
   }
 
   async getDailyMessageCount(userId: string): Promise<number> {
@@ -416,10 +442,16 @@ export class MessageService {
     return message;
   }
 
-  async getLastMessage(chatSessionId: string): Promise<Message | null> {
-    const [message] = await db
-      .select()
+  async getLastMessage(
+    chatSessionId: string
+  ): Promise<(Message & { senderName?: string | null }) | null> {
+    const results = await db
+      .select({
+        msg: messages,
+        sender: { username: users.username },
+      })
       .from(messages)
+      .leftJoin(users, eq(messages.senderId, users.id))
       .where(
         and(
           eq(messages.chatSessionId, chatSessionId),
@@ -429,7 +461,10 @@ export class MessageService {
       .orderBy(desc(messages.sentAt))
       .limit(1);
 
-    return message || null;
+    const result = results[0];
+    return result
+      ? { ...result.msg, senderName: result.sender?.username || null }
+      : null;
   }
 
   async markAsDelivered(messageId: string, userId: string): Promise<Message> {
