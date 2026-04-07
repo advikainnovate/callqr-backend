@@ -103,7 +103,14 @@ Important:
 
 ## Response Shape Notes
 
-Call responses may now include both `initiatedAt` and `startedAt`.
+Call responses now include display-ready name fields where applicable.
+
+- `callerName`
+- `receiverName`
+
+For guest callers, `callerName` is returned as `Anonymous Caller`.
+
+Call responses may now also include both `initiatedAt` and `startedAt`.
 
 ### Newly initiated call
 
@@ -115,6 +122,8 @@ Expected shape:
   "callerId": "uuid-or-null",
   "guestId": "guest-id-or-null",
   "receiverId": "uuid",
+  "callerName": "Anonymous Caller",
+  "receiverName": "Owner Username",
   "status": "initiated",
   "initiatedAt": "ISO date",
   "startedAt": null
@@ -128,6 +137,8 @@ Expected shape:
 ```json
 {
   "id": "uuid",
+  "callerName": "Caller Username or Anonymous Caller",
+  "receiverName": "Receiver Username",
   "status": "connected",
   "initiatedAt": "ISO date",
   "startedAt": "ISO date",
@@ -140,6 +151,8 @@ Expected shape:
 - Treat `initiatedAt` as the created timestamp.
 - Treat `startedAt` as optional until the call is connected.
 - Do not assume `startedAt` exists on unanswered or rejected calls.
+- Prefer backend-provided `callerName` and `receiverName` for display.
+- If `callerId` is null and `guestId` is present, display should rely on `callerName`.
 - Use `completed` when a connected call ends normally.
 - Use explicit accept/reject/end endpoints for those actions.
 - Do not let a guest client attempt receiver actions.

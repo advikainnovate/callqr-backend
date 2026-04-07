@@ -4,6 +4,7 @@ import { AuthenticatedRequest } from '../middlewares/auth.middleware';
 import { asyncHandler, logger, UnauthorizedError } from '../utils';
 import { sendSuccessResponse } from '../utils/responseHandler';
 import { generateAccessToken, generateGuestToken } from '../utils/jwt';
+import { SUBSCRIPTION_PLANS } from '../constants/subscriptions';
 import crypto from 'crypto';
 
 export class AuthController {
@@ -210,7 +211,7 @@ export class AuthController {
               expiresAt: subscription.expiresAt,
             }
           : {
-              plan: 'FREE',
+              plan: SUBSCRIPTION_PLANS.FREE,
               status: 'active',
               startedAt: null,
               expiresAt: null,

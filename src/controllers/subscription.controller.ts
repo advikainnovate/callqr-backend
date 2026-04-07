@@ -58,6 +58,8 @@ export class SubscriptionController {
         sendSuccessResponse(res, 200, 'No active subscription found', {
           plan: SUBSCRIPTION_PLANS.FREE,
           status: 'active',
+          startedAt: null,
+          expiresAt: null,
         });
       }
     }

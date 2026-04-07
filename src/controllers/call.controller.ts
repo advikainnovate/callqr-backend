@@ -12,6 +12,15 @@ export class CallController {
     return Math.max(1, Math.min(max, Math.trunc(parsed)));
   }
 
+  private getCallerName(call: {
+    callerName?: string | null;
+    guestId?: string | null;
+  }): string | null {
+    if (call.callerName) return call.callerName;
+    if (call.guestId) return 'Anonymous Caller';
+    return null;
+  }
+
   initiateCall = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
       const identity = req.identity;
@@ -26,15 +35,20 @@ export class CallController {
         guestId,
         guestIp
       );
+      const hydratedCall = await callSessionService.getCallSessionById(
+        callSession.id
+      );
 
       sendSuccessResponse(res, 201, 'Call initiated successfully', {
-        callId: callSession.id,
-        callerId: callSession.callerId,
-        guestId: callSession.guestId,
-        receiverId: callSession.receiverId,
-        status: callSession.status,
-        initiatedAt: callSession.initiatedAt,
-        startedAt: callSession.startedAt,
+        callId: hydratedCall.id,
+        callerId: hydratedCall.callerId,
+        guestId: hydratedCall.guestId,
+        receiverId: hydratedCall.receiverId,
+        callerName: this.getCallerName(hydratedCall),
+        receiverName: hydratedCall.receiverName,
+        status: hydratedCall.status,
+        initiatedAt: hydratedCall.initiatedAt,
+        startedAt: hydratedCall.startedAt,
       });
     }
   );
@@ -63,7 +77,7 @@ export class CallController {
         callerId: callSession.callerId,
         guestId: callSession.guestId,
         receiverId: callSession.receiverId,
-        callerName: callSession.callerName,
+        callerName: this.getCallerName(callSession),
         receiverName: callSession.receiverName,
         qrId: callSession.qrId,
         status: callSession.status,
@@ -97,12 +111,22 @@ export class CallController {
         status,
         endedReason
       );
+      const hydratedCall = await callSessionService.getCallSessionById(
+        callSession.id
+      );
 
       sendSuccessResponse(res, 200, 'Call status updated successfully', {
-        id: callSession.id,
-        status: callSession.status,
-        endedReason: callSession.endedReason,
-        endedAt: callSession.endedAt,
+        id: hydratedCall.id,
+        callerId: hydratedCall.callerId,
+        guestId: hydratedCall.guestId,
+        receiverId: hydratedCall.receiverId,
+        callerName: this.getCallerName(hydratedCall),
+        receiverName: hydratedCall.receiverName,
+        status: hydratedCall.status,
+        endedReason: hydratedCall.endedReason,
+        initiatedAt: hydratedCall.initiatedAt,
+        startedAt: hydratedCall.startedAt,
+        endedAt: hydratedCall.endedAt,
       });
     }
   );
@@ -125,12 +149,22 @@ export class CallController {
       userId,
       reason
     );
+    const hydratedCall = await callSessionService.getCallSessionById(
+      callSession.id
+    );
 
     sendSuccessResponse(res, 200, 'Call ended successfully', {
-      id: callSession.id,
-      status: callSession.status,
-      endedReason: callSession.endedReason,
-      endedAt: callSession.endedAt,
+      id: hydratedCall.id,
+      callerId: hydratedCall.callerId,
+      guestId: hydratedCall.guestId,
+      receiverId: hydratedCall.receiverId,
+      callerName: this.getCallerName(hydratedCall),
+      receiverName: hydratedCall.receiverName,
+      status: hydratedCall.status,
+      endedReason: hydratedCall.endedReason,
+      initiatedAt: hydratedCall.initiatedAt,
+      startedAt: hydratedCall.startedAt,
+      endedAt: hydratedCall.endedAt,
     });
   });
 
@@ -149,10 +183,20 @@ export class CallController {
           : `guest:${identity.guestId}`;
 
       const callSession = await callSessionService.acceptCall(callId, userId);
+      const hydratedCall = await callSessionService.getCallSessionById(
+        callSession.id
+      );
 
       sendSuccessResponse(res, 200, 'Call accepted successfully', {
-        id: callSession.id,
-        status: callSession.status,
+        id: hydratedCall.id,
+        callerId: hydratedCall.callerId,
+        guestId: hydratedCall.guestId,
+        receiverId: hydratedCall.receiverId,
+        callerName: this.getCallerName(hydratedCall),
+        receiverName: hydratedCall.receiverName,
+        status: hydratedCall.status,
+        initiatedAt: hydratedCall.initiatedAt,
+        startedAt: hydratedCall.startedAt,
       });
     }
   );
@@ -172,11 +216,21 @@ export class CallController {
           : `guest:${identity.guestId}`;
 
       const callSession = await callSessionService.rejectCall(callId, userId);
+      const hydratedCall = await callSessionService.getCallSessionById(
+        callSession.id
+      );
 
       sendSuccessResponse(res, 200, 'Call rejected successfully', {
-        id: callSession.id,
-        status: callSession.status,
-        endedReason: callSession.endedReason,
+        id: hydratedCall.id,
+        callerId: hydratedCall.callerId,
+        guestId: hydratedCall.guestId,
+        receiverId: hydratedCall.receiverId,
+        callerName: this.getCallerName(hydratedCall),
+        receiverName: hydratedCall.receiverName,
+        status: hydratedCall.status,
+        endedReason: hydratedCall.endedReason,
+        initiatedAt: hydratedCall.initiatedAt,
+        endedAt: hydratedCall.endedAt,
       });
     }
   );
@@ -207,7 +261,7 @@ export class CallController {
           callerId: call.callerId,
           guestId: call.guestId,
           receiverId: call.receiverId,
-          callerName: call.callerName,
+          callerName: this.getCallerName(call),
           receiverName: call.receiverName,
           status: call.status,
           endedReason: call.endedReason,
@@ -233,13 +287,18 @@ export class CallController {
           : `guest:${identity.guestId}`;
 
       const activeCalls = await callSessionService.getActiveCalls(userId);
+      const activeCallsWithNames = await Promise.all(
+        activeCalls.map(call => callSessionService.getCallSessionById(call.id))
+      );
 
       sendSuccessResponse(res, 200, 'Active calls retrieved successfully', {
-        calls: activeCalls.map(call => ({
+        calls: activeCallsWithNames.map(call => ({
           id: call.id,
           callerId: call.callerId,
           guestId: call.guestId,
           receiverId: call.receiverId,
+          callerName: this.getCallerName(call),
+          receiverName: call.receiverName,
           status: call.status,
           initiatedAt: call.initiatedAt,
           startedAt: call.startedAt,

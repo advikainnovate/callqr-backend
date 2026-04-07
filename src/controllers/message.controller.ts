@@ -84,7 +84,7 @@ export class MessageController {
             messagePreview:
               message.messageType === 'text'
                 ? message.content
-                : '📎 Sent an attachment',
+                : 'Sent an attachment',
           });
         }
       } catch (pushError) {

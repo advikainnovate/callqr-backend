@@ -153,8 +153,8 @@ router.post(
  *                       properties:
  *                         plan:
  *                           type: string
- *                           enum: [FREE, PRO, ENTERPRISE]
- *                           example: "PRO"
+ *                           enum: [free, pro, enterprise]
+ *                           example: "pro"
  *                         status:
  *                           type: string
  *                           example: "active"

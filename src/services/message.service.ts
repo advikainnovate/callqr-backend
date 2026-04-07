@@ -1,4 +1,4 @@
-import { eq, and, desc, sql, gte, like, inArray } from 'drizzle-orm';
+import { eq, and, desc, sql, gte, ilike, inArray } from 'drizzle-orm';
 import { db } from '../db';
 import {
   messages,
@@ -398,7 +398,7 @@ export class MessageService {
         and(
           eq(messages.chatSessionId, chatSessionId),
           eq(messages.isDeleted, false),
-          like(messages.content, `%${query.trim()}%`)
+          ilike(messages.content, `%${query.trim()}%`)
         )
       )
       .orderBy(desc(messages.sentAt))
