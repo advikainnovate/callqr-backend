@@ -26,6 +26,6 @@ export const blockChatSessionSchema = z.object({
 
 export const getMyChatSessionsSchema = z.object({
   query: z.object({
-    limit: z.string().transform(Number).optional(),
+    limit: z.coerce.number().int().min(1).max(100).optional(),
   }),
 });

@@ -2,6 +2,13 @@ jest.mock('../chatSession.service', () => ({
   chatSessionService: {
     verifyParticipant: jest.fn(),
     getChatSessionById: jest.fn(),
+    getUserChatSessions: jest.fn(),
+  },
+}));
+
+jest.mock('../../db', () => ({
+  db: {
+    select: jest.fn(),
   },
 }));
 
@@ -79,5 +86,25 @@ describe('MessageService', () => {
     ).rejects.toMatchObject({
       message: 'At least one image is required for image messages',
     });
+  });
+
+  it('counts unread messages across all chats without relying on paginated chat lists', async () => {
+    const { messageService } = await import('../message.service');
+    const { chatSessionService } = await import('../chatSession.service');
+    const { db } = await import('../../db');
+
+    const where = jest.fn().mockResolvedValue([{ count: 73 }]);
+    const innerJoin = jest.fn().mockReturnValue({ where });
+    const from = jest.fn().mockReturnValue({ innerJoin });
+    (db.select as jest.Mock).mockReturnValue({ from });
+
+    const result = await messageService.getUnreadCount('user-1');
+
+    expect(result).toBe(73);
+    expect(chatSessionService.getUserChatSessions).not.toHaveBeenCalled();
+    expect(db.select).toHaveBeenCalled();
+    expect(from).toHaveBeenCalled();
+    expect(innerJoin).toHaveBeenCalled();
+    expect(where).toHaveBeenCalled();
   });
 });

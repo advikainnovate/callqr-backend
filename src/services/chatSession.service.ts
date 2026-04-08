@@ -88,9 +88,7 @@ export class ChatSessionService {
     return this.getChatSessionById(chatSession.id);
   }
 
-  async getChatSessionById(
-    chatSessionId: string
-  ): Promise<
+  async getChatSessionById(chatSessionId: string): Promise<
     ChatSession & {
       participant1Name?: string | null;
       participant2Name?: string | null;
@@ -122,6 +120,27 @@ export class ChatSessionService {
       participant1Name: result.participant1?.username || null,
       participant2Name: result.participant2?.username || null,
     };
+  }
+
+  async getChatSessionForUser(
+    chatSessionId: string,
+    userId: string
+  ): Promise<
+    ChatSession & {
+      participant1Name?: string | null;
+      participant2Name?: string | null;
+    }
+  > {
+    const chatSession = await this.getChatSessionById(chatSessionId);
+
+    if (
+      chatSession.participant1Id !== userId &&
+      chatSession.participant2Id !== userId
+    ) {
+      throw new NotFoundError('Chat session not found');
+    }
+
+    return chatSession;
   }
 
   async getChatSessionByParticipants(
@@ -186,9 +205,7 @@ export class ChatSessionService {
     }));
   }
 
-  async getActiveChatSessions(
-    userId: string
-  ): Promise<
+  async getActiveChatSessions(userId: string): Promise<
     (ChatSession & {
       participant1Name: string | null;
       participant2Name: string | null;

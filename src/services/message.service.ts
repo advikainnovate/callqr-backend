@@ -1,10 +1,11 @@
-import { eq, and, desc, sql, gte, ilike, inArray } from 'drizzle-orm';
+import { eq, and, desc, sql, gte, ilike, or } from 'drizzle-orm';
 import { db } from '../db';
 import {
   messages,
   type NewMessage,
   type Message,
   type MessageMedia,
+  chatSessions,
   users,
 } from '../models';
 import { v4 as uuidv4 } from 'uuid';
@@ -315,23 +316,16 @@ export class MessageService {
   }
 
   async getUnreadCount(userId: string): Promise<number> {
-    // Get all chat sessions where user is participant
-    const chatSessions = await chatSessionService.getUserChatSessions(userId);
-
-    if (chatSessions.length === 0) {
-      return 0;
-    }
-
-    // Use Drizzle's inArray for safe parameter binding
-    const chatSessionIds = chatSessions.map(chat => chat.id);
-
-    // Count unread messages in all user's chats (excluding user's own messages)
     const [result] = await db
       .select({ count: sql<number>`count(*)` })
       .from(messages)
+      .innerJoin(chatSessions, eq(messages.chatSessionId, chatSessions.id))
       .where(
         and(
-          inArray(messages.chatSessionId, chatSessionIds),
+          or(
+            eq(chatSessions.participant1Id, userId),
+            eq(chatSessions.participant2Id, userId)
+          ),
           eq(messages.isRead, false),
           eq(messages.isDeleted, false),
           sql`${messages.senderId} != ${userId}`
