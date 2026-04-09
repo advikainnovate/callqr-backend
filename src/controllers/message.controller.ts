@@ -1,7 +1,12 @@
 import { Response } from 'express';
 import { messageService } from '../services/message.service';
 import { AuthenticatedRequest } from '../middlewares/auth.middleware';
-import { asyncHandler, logger, UnauthorizedError } from '../utils';
+import {
+  asyncHandler,
+  BadRequestError,
+  logger,
+  UnauthorizedError,
+} from '../utils';
 import { sendSuccessResponse } from '../utils/responseHandler';
 import { socketEmitter } from '../services/socketEmitter.service';
 import { userService } from '../services/user.service';
@@ -9,6 +14,18 @@ import { notificationService } from '../services/notification.service';
 import { chatSessionService } from '../services/chatSession.service';
 
 export class MessageController {
+  private normalizeLimit(raw: unknown, fallback: number, max: number): number {
+    const parsed = Number(raw);
+    if (!Number.isFinite(parsed)) return fallback;
+    return Math.max(1, Math.min(max, Math.trunc(parsed)));
+  }
+
+  private normalizeOffset(raw: unknown, fallback: number = 0): number {
+    const parsed = Number(raw);
+    if (!Number.isFinite(parsed)) return fallback;
+    return Math.max(0, Math.trunc(parsed));
+  }
+
   sendMessage = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
       const identity = req.identity;
@@ -37,6 +54,7 @@ export class MessageController {
         id: message.id,
         chatSessionId: message.chatSessionId,
         senderId: message.senderId,
+        senderName: message.senderName,
         messageType: message.messageType,
         content: message.content,
         mediaAttachments: message.mediaAttachments,
@@ -55,52 +73,20 @@ export class MessageController {
 
         const { getWebRTCService } = await import('../services/webrtc.service');
         const ws = getWebRTCService();
-
-        if (ws) {
-          const isOnline = ws.isUserOnline(otherParticipantId);
-          const isInChatRoom = socketEmitter.isUserInChatRoom(
-            otherParticipantId,
-            chatSessionId
-          );
-
-          // SMART DOUBLE DELIVERY: Only emit to user room if they aren't in the chat room
-          if (isOnline && !isInChatRoom) {
-            socketEmitter.emitToUser(otherParticipantId, 'new-message', {
-              id: message.id,
-              chatSessionId: message.chatSessionId,
-              senderId: message.senderId,
-              messageType: message.messageType,
-              content: message.content,
-              mediaAttachments: message.mediaAttachments,
-              isDelivered: message.isDelivered,
-              isRead: message.isRead,
-              sentAt: message.sentAt,
-            });
-          }
-
-          // FALLBACK TRACKING: Only if online
-          if (isOnline) {
-            ws.trackMessageDelivery(
-              message.id,
-              chatSessionId,
-              otherParticipantId
-            );
-          } else {
-            // OFFLINE: Send push notification
-            const [sender, deviceTokens] = await Promise.all([
-              userService.getUserById(senderId),
-              userService.getUserDeviceTokens(otherParticipantId),
-            ]);
-            await notificationService.sendMessageNotification(deviceTokens, {
-              chatSessionId,
-              senderId,
-              senderUsername: sender.username,
-              messagePreview:
-                message.messageType === 'text'
-                  ? message.content
-                  : '📎 Sent an attachment',
-            });
-          }
+        if (!ws || !ws.isUserOnline(otherParticipantId)) {
+          const [sender, deviceTokens] = await Promise.all([
+            userService.getUserById(senderId),
+            userService.getUserDeviceTokens(otherParticipantId),
+          ]);
+          await notificationService.sendMessageNotification(deviceTokens, {
+            chatSessionId,
+            senderId,
+            senderUsername: sender.username,
+            messagePreview:
+              message.messageType === 'text'
+                ? message.content
+                : 'Sent an attachment',
+          });
         }
       } catch (reliabilityError) {
         logger.warn(
@@ -113,6 +99,7 @@ export class MessageController {
         id: message.id,
         chatSessionId: message.chatSessionId,
         senderId: message.senderId,
+        senderName: message.senderName,
         messageType: message.messageType,
         content: message.content,
         mediaAttachments: message.mediaAttachments,
@@ -133,10 +120,8 @@ export class MessageController {
         throw new UnauthorizedError('User authentication required');
       }
       const userId = identity.userId;
-      const limit = req.query.limit ? parseInt(req.query.limit as string) : 50;
-      const offset = req.query.offset
-        ? parseInt(req.query.offset as string)
-        : 0;
+      const limit = this.normalizeLimit(req.query.limit, 50, 100);
+      const offset = this.normalizeOffset(req.query.offset, 0);
 
       const messages = await messageService.getMessages(
         chatSessionId,
@@ -150,6 +135,7 @@ export class MessageController {
           id: msg.id,
           chatSessionId: msg.chatSessionId,
           senderId: msg.senderId,
+          senderName: msg.senderName,
           messageType: msg.messageType,
           content: msg.content,
           mediaAttachments: msg.mediaAttachments,
@@ -312,7 +298,7 @@ export class MessageController {
       const { query } = req.query;
 
       if (!query || typeof query !== 'string') {
-        return sendSuccessResponse(res, 400, 'Search query is required', null);
+        throw new BadRequestError('Search query is required');
       }
 
       const messages = await messageService.searchMessages(
@@ -326,6 +312,7 @@ export class MessageController {
           id: msg.id,
           chatSessionId: msg.chatSessionId,
           senderId: msg.senderId,
+          senderName: msg.senderName,
           messageType: msg.messageType,
           content: msg.content,
           mediaAttachments: msg.mediaAttachments,

@@ -15,6 +15,13 @@
       "when": 1774341120129,
       "tag": "0001_robust_wallop",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1775539160661,
+      "tag": "0002_flimsy_zeigeist",
+      "breakpoints": true
     }
   ]
 }

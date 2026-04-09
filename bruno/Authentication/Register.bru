@@ -15,6 +15,7 @@ body:json {
     "username": "testuser",
     "password": "password123",
     "phone": "+1234567890",
+    "emergencyContact": "+1234567891",
     "email": "testuser@example.com"
   }
 }
@@ -25,9 +26,10 @@ docs {
   Required fields:
   - username: 3-50 characters
   - password: minimum 6 characters
-  
-  Optional fields:
   - phone: phone number
+  - emergencyContact: emergency contact phone number
+
+  Optional fields:
   - email: email address
   
   Returns:

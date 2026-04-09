@@ -1,10 +1,12 @@
-import { eq, and, desc, sql, gte, like, inArray } from 'drizzle-orm';
+import { eq, and, desc, sql, gte, ilike, or } from 'drizzle-orm';
 import { db } from '../db';
 import {
   messages,
   type NewMessage,
   type Message,
   type MessageMedia,
+  chatSessions,
+  users,
 } from '../models';
 import { v4 as uuidv4 } from 'uuid';
 import {
@@ -25,9 +27,9 @@ export class MessageService {
     chatSessionId: string,
     senderId: string,
     content: string,
-    messageType: 'text' | 'image' | 'file' | 'system' = 'text',
+    messageType: 'text' | 'image' = 'text',
     mediaFiles?: Express.Multer.File[]
-  ): Promise<Message> {
+  ): Promise<Message & { senderName?: string | null }> {
     // Validate input parameters
     if (!chatSessionId || !senderId) {
       throw new BadRequestError('Chat session ID and sender ID are required');
@@ -74,6 +76,10 @@ export class MessageService {
     // Check daily message limit
     await this.checkDailyMessageLimit(senderId);
 
+    if (messageType !== 'text' && messageType !== 'image') {
+      throw new BadRequestError('Unsupported message type');
+    }
+
     // Validate content based on message type
     if (messageType === 'text') {
       if (!content || content.trim().length === 0) {
@@ -110,6 +116,15 @@ export class MessageService {
       }
     }
 
+    if (
+      messageType === 'image' &&
+      (!mediaAttachments || mediaAttachments.length === 0)
+    ) {
+      throw new BadRequestError(
+        'At least one image is required for image messages'
+      );
+    }
+
     // Create message
     const [message] = await db
       .insert(messages)
@@ -118,7 +133,7 @@ export class MessageService {
         chatSessionId,
         senderId,
         messageType,
-        content: content.trim(),
+        content: (content || '').trim(),
         mediaAttachments,
         isRead: false,
         isDeleted: false,
@@ -132,7 +147,18 @@ export class MessageService {
     logger.info(
       `Message sent: ${message.id} in chat ${chatSessionId} (type: ${messageType})`
     );
-    return message;
+
+    // Fetch sender username to include in the returned message
+    const [sender] = await db
+      .select({ username: users.username })
+      .from(users)
+      .where(eq(users.id, senderId))
+      .limit(1);
+
+    return {
+      ...message,
+      senderName: sender?.username || null,
+    };
   }
 
   async getMessages(
@@ -140,7 +166,7 @@ export class MessageService {
     userId: string,
     limit: number = 50,
     offset: number = 0
-  ): Promise<Message[]> {
+  ): Promise<(Message & { senderName?: string | null })[]> {
     // Verify user is participant in chat
     const isParticipant = await chatSessionService.verifyParticipant(
       chatSessionId,
@@ -150,9 +176,13 @@ export class MessageService {
       throw new ForbiddenError('You are not a participant in this chat');
     }
 
-    const result = await db
-      .select()
+    const results = await db
+      .select({
+        msg: messages,
+        sender: { username: users.username },
+      })
       .from(messages)
+      .leftJoin(users, eq(messages.senderId, users.id))
       .where(
         and(
           eq(messages.chatSessionId, chatSessionId),
@@ -163,7 +193,10 @@ export class MessageService {
       .limit(limit)
       .offset(offset);
 
-    return result.reverse();
+    return results.reverse().map(result => ({
+      ...result.msg,
+      senderName: result.sender?.username || null,
+    }));
   }
 
   async markAsRead(messageId: string, userId: string): Promise<Message> {
@@ -283,23 +316,16 @@ export class MessageService {
   }
 
   async getUnreadCount(userId: string): Promise<number> {
-    // Get all chat sessions where user is participant
-    const chatSessions = await chatSessionService.getUserChatSessions(userId);
-
-    if (chatSessions.length === 0) {
-      return 0;
-    }
-
-    // Use Drizzle's inArray for safe parameter binding
-    const chatSessionIds = chatSessions.map(chat => chat.id);
-
-    // Count unread messages in all user's chats (excluding user's own messages)
     const [result] = await db
       .select({ count: sql<number>`count(*)` })
       .from(messages)
+      .innerJoin(chatSessions, eq(messages.chatSessionId, chatSessions.id))
       .where(
         and(
-          inArray(messages.chatSessionId, chatSessionIds),
+          or(
+            eq(chatSessions.participant1Id, userId),
+            eq(chatSessions.participant2Id, userId)
+          ),
           eq(messages.isRead, false),
           eq(messages.isDeleted, false),
           sql`${messages.senderId} != ${userId}`
@@ -341,7 +367,7 @@ export class MessageService {
     chatSessionId: string,
     userId: string,
     query: string
-  ): Promise<Message[]> {
+  ): Promise<(Message & { senderName?: string | null })[]> {
     // Verify user is participant in chat
     const isParticipant = await chatSessionService.verifyParticipant(
       chatSessionId,
@@ -355,20 +381,27 @@ export class MessageService {
       throw new BadRequestError('Search query cannot be empty');
     }
 
-    const result = await db
-      .select()
+    const results = await db
+      .select({
+        msg: messages,
+        sender: { username: users.username },
+      })
       .from(messages)
+      .leftJoin(users, eq(messages.senderId, users.id))
       .where(
         and(
           eq(messages.chatSessionId, chatSessionId),
           eq(messages.isDeleted, false),
-          like(messages.content, `%${query.trim()}%`)
+          ilike(messages.content, `%${query.trim()}%`)
         )
       )
       .orderBy(desc(messages.sentAt))
       .limit(50);
 
-    return result.reverse();
+    return results.reverse().map(result => ({
+      ...result.msg,
+      senderName: result.sender?.username || null,
+    }));
   }
 
   async getDailyMessageCount(userId: string): Promise<number> {
@@ -416,10 +449,16 @@ export class MessageService {
     return message;
   }
 
-  async getLastMessage(chatSessionId: string): Promise<Message | null> {
-    const [message] = await db
-      .select()
+  async getLastMessage(
+    chatSessionId: string
+  ): Promise<(Message & { senderName?: string | null }) | null> {
+    const results = await db
+      .select({
+        msg: messages,
+        sender: { username: users.username },
+      })
       .from(messages)
+      .leftJoin(users, eq(messages.senderId, users.id))
       .where(
         and(
           eq(messages.chatSessionId, chatSessionId),
@@ -429,7 +468,10 @@ export class MessageService {
       .orderBy(desc(messages.sentAt))
       .limit(1);
 
-    return message || null;
+    const result = results[0];
+    return result
+      ? { ...result.msg, senderName: result.sender?.username || null }
+      : null;
   }
 
   async markAsDelivered(messageId: string, userId: string): Promise<Message> {

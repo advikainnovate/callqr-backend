@@ -4,11 +4,12 @@ import { AuthenticatedRequest } from '../middlewares/auth.middleware';
 import { asyncHandler, logger, UnauthorizedError } from '../utils';
 import { sendSuccessResponse } from '../utils/responseHandler';
 import { generateAccessToken, generateGuestToken } from '../utils/jwt';
+import { SUBSCRIPTION_PLANS } from '../constants/subscriptions';
 import crypto from 'crypto';
 
 export class AuthController {
   register = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
-    const { username, password, phone, email } = req.body;
+    const { username, password, phone, email, emergencyContact } = req.body;
 
     // Validate that phone is provided
     if (!phone) {
@@ -19,10 +20,20 @@ export class AuthController {
       return;
     }
 
+    // Validate emergency contact
+    if (!emergencyContact) {
+      res.status(400).json({
+        success: false,
+        message: 'Emergency contact is required for registration',
+      });
+      return;
+    }
+
     // Create user with pending_verification status
     const user = await userService.createUser({
       username,
       password,
+      emergencyContact,
       phone,
       email,
       status: 'pending_verification',
@@ -200,7 +211,7 @@ export class AuthController {
               expiresAt: subscription.expiresAt,
             }
           : {
-              plan: 'FREE',
+              plan: SUBSCRIPTION_PLANS.FREE,
               status: 'active',
               startedAt: null,
               expiresAt: null,

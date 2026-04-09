@@ -8,8 +8,7 @@ export const initiateCallSchema = z.object({
 
 export const updateCallStatusSchema = z.object({
   body: z.object({
-    status: z.enum(['initiated', 'ringing', 'connected', 'ended', 'failed']),
-    endedReason: z.enum(['busy', 'rejected', 'timeout', 'error']).optional(),
+    status: z.enum(['ringing', 'connected']),
   }),
   params: z.object({
     callId: z.string().uuid(),
@@ -24,7 +23,9 @@ export const getCallSessionSchema = z.object({
 
 export const endCallSchema = z.object({
   body: z.object({
-    reason: z.enum(['busy', 'rejected', 'timeout', 'error']).optional(),
+    reason: z
+      .enum(['busy', 'rejected', 'timeout', 'error', 'completed'])
+      .optional(),
   }),
   params: z.object({
     callId: z.string().uuid(),
@@ -45,6 +46,6 @@ export const rejectCallSchema = z.object({
 
 export const getCallHistorySchema = z.object({
   query: z.object({
-    limit: z.string().transform(Number).optional(),
+    limit: z.coerce.number().int().min(1).max(100).optional(),
   }),
 });

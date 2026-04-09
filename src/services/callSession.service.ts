@@ -1,6 +1,11 @@
 import { eq, and, desc, sql, gte, or, lt } from 'drizzle-orm';
 import { db } from '../db';
-import { callSessions, type NewCallSession, type CallSession } from '../models';
+import {
+  users,
+  callSessions,
+  type NewCallSession,
+  type CallSession,
+} from '../models';
 import { v4 as uuidv4 } from 'uuid';
 import {
   logger,
@@ -12,6 +17,14 @@ import { qrCodeService } from './qrCode.service';
 import { userService } from './user.service';
 import { subscriptionService } from './subscription.service';
 import { parseIdentity } from '../utils/identityUtils';
+
+type CallActor =
+  | { kind: 'user'; id: string; rawId: string }
+  | { kind: 'guest'; id: string; rawId: string }
+  | { kind: 'system'; id: 'system'; rawId: 'system' };
+
+type CallStatus = 'initiated' | 'ringing' | 'connected' | 'ended' | 'failed';
+type CallEndReason = 'busy' | 'rejected' | 'timeout' | 'error' | 'completed';
 
 export class CallSessionService {
   async initiateCall(
@@ -90,85 +103,111 @@ export class CallSessionService {
   async updateCallStatus(
     callId: string,
     userId: string,
-    status: 'initiated' | 'ringing' | 'connected' | 'ended' | 'failed',
-    endedReason?: 'busy' | 'rejected' | 'timeout' | 'error'
+    status: CallStatus,
+    endedReason?: CallEndReason
   ): Promise<CallSession> {
+    const actor = this.parseActor(userId);
     const existingCall = await this.getCallSessionById(callId);
+    this.assertActorCanView(existingCall, actor, callId);
 
-    // Authorization check using unified identity parsing
-    // 'system' user is used for server-side timeout operations
-    const identity =
-      userId === 'system'
-        ? { id: 'system', type: 'user' as const, socketId: 'system' }
-        : parseIdentity(userId);
-
-    if (!identity) {
-      throw new ForbiddenError('Invalid user identity');
+    if (status === 'ringing') {
+      return this.transitionCall(existingCall, actor, 'ringing');
     }
 
-    const isAuthorized =
-      userId === 'system' ||
-      existingCall.callerId === identity.id ||
-      existingCall.receiverId === identity.id ||
-      existingCall.guestId === identity.id;
+    if (status === 'connected') {
+      return this.transitionCall(existingCall, actor, 'connected');
+    }
 
-    if (!isAuthorized) {
-      logger.warn(`Unauthorized update attempt on call ${callId} by ${userId}`);
-      throw new ForbiddenError(
-        'You do not have permission to update this call'
+    if (status === 'ended') {
+      return this.transitionCall(existingCall, actor, 'ended', endedReason);
+    }
+
+    if (status === 'failed') {
+      return this.transitionCall(
+        existingCall,
+        actor,
+        'failed',
+        endedReason || 'error'
       );
     }
 
-    const updateData: Partial<NewCallSession> = {
-      status,
-    };
-
-    if (endedReason) {
-      updateData.endedReason = endedReason;
-    }
-
-    if (status === 'connected' && existingCall.status !== 'connected') {
-      updateData.startedAt = new Date(); // record when media actually started
-    }
-
-    if (status === 'ended' || status === 'failed') {
-      updateData.endedAt = new Date();
-    }
-
-    const [updatedCall] = await db
-      .update(callSessions)
-      .set(updateData)
-      .where(eq(callSessions.id, callId))
-      .returning();
-
-    logger.info(`Call session ${callId} updated to status: ${status}`);
-    return updatedCall;
+    throw new BadRequestError('Unsupported call status update');
   }
 
-  async getCallSessionById(callId: string): Promise<CallSession> {
-    const [callSession] = await db
-      .select()
+  async getCallSessionById(
+    callId: string
+  ): Promise<
+    CallSession & { callerName?: string | null; receiverName?: string | null }
+  > {
+    const results = await db
+      .select({
+        call: callSessions,
+        caller: {
+          username: users.username,
+        },
+        receiver: {
+          username: sql<string>`receiver.username`,
+        },
+      })
       .from(callSessions)
+      .leftJoin(users, eq(callSessions.callerId, users.id))
+      .leftJoin(
+        sql`users as receiver`,
+        sql`${callSessions.receiverId} = receiver.id`
+      )
       .where(eq(callSessions.id, callId))
       .limit(1);
 
-    if (!callSession) {
+    const result = results[0];
+
+    if (!result || !result.call) {
       throw new NotFoundError('Call session not found');
     }
 
-    return callSession;
+    return {
+      ...result.call,
+      callerName: result.caller?.username || null,
+      receiverName: result.receiver?.username || null,
+    };
+  }
+
+  async getCallSessionForActor(
+    callId: string,
+    userId: string
+  ): Promise<
+    CallSession & { callerName?: string | null; receiverName?: string | null }
+  > {
+    const actor = this.parseActor(userId);
+    const call = await this.getCallSessionById(callId);
+    this.assertActorCanView(call, actor, callId);
+    return call;
   }
 
   async getUserCallHistory(
     userId: string,
     limit: number = 50
-  ): Promise<CallSession[]> {
+  ): Promise<
+    (CallSession & { callerName: string | null; receiverName: string | null })[]
+  > {
     const identity = parseIdentity(userId);
     if (!identity) return [];
 
-    return db
-      .select()
+    const results = await db
+      .select({
+        call: callSessions,
+        caller: {
+          username: users.username,
+        },
+        receiver: {
+          username: sql<string>`receiver.username`,
+        },
+      })
       .from(callSessions)
+      .leftJoin(users, eq(callSessions.callerId, users.id))
+      .leftJoin(
+        sql`users as receiver`,
+        sql`${callSessions.receiverId} = receiver.id`
+      )
       .where(
         identity.type === 'guest'
           ? eq(callSessions.guestId, identity.id)
@@ -177,8 +216,14 @@ export class CallSessionService {
               eq(callSessions.receiverId, identity.id)
             )
       )
-      .orderBy(desc(callSessions.startedAt))
+      .orderBy(desc(callSessions.initiatedAt))
       .limit(limit);
+
+    return results.map(row => ({
+      ...row.call,
+      callerName: row.caller?.username || null,
+      receiverName: row.receiver?.username || null,
+    }));
   }
 
   async getActiveCalls(userId: string): Promise<CallSession[]> {
@@ -203,35 +248,47 @@ export class CallSessionService {
           )
         )
       )
-      .orderBy(desc(callSessions.startedAt));
+      .orderBy(desc(callSessions.initiatedAt));
   }
 
   async endCall(
     callId: string,
     userId: string,
-    reason?: 'busy' | 'rejected' | 'timeout' | 'error'
+    reason?: CallEndReason
   ): Promise<CallSession> {
-    return this.updateCallStatus(callId, userId, 'ended', reason);
+    const actor = this.parseActor(userId);
+    const call = await this.getCallSessionById(callId);
+    this.assertActorCanView(call, actor, callId);
+    return this.transitionCall(call, actor, 'ended', reason);
   }
 
   async rejectCall(callId: string, userId: string): Promise<CallSession> {
-    return this.updateCallStatus(callId, userId, 'failed', 'rejected');
+    const actor = this.parseActor(userId);
+    const call = await this.getCallSessionById(callId);
+
+    if (!this.isReceiver(call, actor)) {
+      throw new ForbiddenError('Only the receiver can reject the call');
+    }
+
+    return this.transitionCall(call, actor, 'failed', 'rejected');
   }
 
   async acceptCall(callId: string, userId: string): Promise<CallSession> {
+    const actor = this.parseActor(userId);
     const existingCall = await this.getCallSessionById(callId);
 
-    // Only receiver can accept
-    if (existingCall.receiverId !== userId) {
+    if (!this.isReceiver(existingCall, actor)) {
       throw new ForbiddenError('Only the receiver can accept the call');
     }
 
-    // REST accept moves straight to connected (socket handler does the same)
-    return this.updateCallStatus(callId, userId, 'connected');
+    return this.transitionCall(existingCall, actor, 'connected');
   }
 
   async connectCall(callId: string, userId: string): Promise<CallSession> {
-    return this.updateCallStatus(callId, userId, 'connected');
+    const actor = this.parseActor(userId);
+    const call = await this.getCallSessionById(callId);
+    this.assertActorCanView(call, actor, callId);
+    return this.transitionCall(call, actor, 'connected');
   }
 
   /**
@@ -326,11 +383,156 @@ export class CallSessionService {
       .where(
         and(
           eq(callSessions.receiverId, userId),
-          gte(callSessions.startedAt, startOfDay)
+          gte(callSessions.initiatedAt, startOfDay)
         )
       );
 
     return Number(result.count);
+  }
+
+  private parseActor(rawUserId: string): CallActor {
+    if (rawUserId === 'system') {
+      return { kind: 'system', id: 'system', rawId: 'system' };
+    }
+
+    const identity = parseIdentity(rawUserId);
+    if (!identity) {
+      throw new ForbiddenError('Invalid user identity');
+    }
+
+    return identity.type === 'guest'
+      ? { kind: 'guest', id: identity.id, rawId: rawUserId }
+      : { kind: 'user', id: identity.id, rawId: rawUserId };
+  }
+
+  private assertActorCanView(
+    call: CallSession,
+    actor: CallActor,
+    callId: string
+  ): void {
+    if (actor.kind === 'system') {
+      return;
+    }
+
+    const isParticipant =
+      call.receiverId === actor.id ||
+      call.callerId === actor.id ||
+      (actor.kind === 'guest' && call.guestId === actor.id);
+
+    if (!isParticipant) {
+      logger.warn(
+        `Unauthorized call access attempt on ${callId} by ${actor.rawId}`
+      );
+      throw new ForbiddenError(
+        'You do not have permission to access this call'
+      );
+    }
+  }
+
+  private isReceiver(call: CallSession, actor: CallActor): boolean {
+    return actor.kind === 'user' && call.receiverId === actor.id;
+  }
+
+  private isCaller(call: CallSession, actor: CallActor): boolean {
+    if (actor.kind === 'guest') {
+      return call.guestId === actor.id;
+    }
+
+    if (actor.kind === 'user') {
+      return call.callerId === actor.id;
+    }
+
+    return false;
+  }
+
+  private canTransition(
+    call: CallSession,
+    actor: CallActor,
+    nextStatus: Exclude<CallStatus, 'initiated'>,
+    endedReason?: CallEndReason
+  ): void {
+    if (actor.kind === 'system') {
+      if (nextStatus === 'ended' || nextStatus === 'failed') {
+        return;
+      }
+      throw new ForbiddenError('System cannot perform this call action');
+    }
+
+    if (call.status === 'ended' || call.status === 'failed') {
+      throw new BadRequestError('Call has already finished');
+    }
+
+    if (nextStatus === 'ringing') {
+      if (!this.isCaller(call, actor)) {
+        throw new ForbiddenError('Only the caller can move a call to ringing');
+      }
+      if (call.status !== 'initiated') {
+        throw new BadRequestError('Call can only ring after initiation');
+      }
+      return;
+    }
+
+    if (nextStatus === 'connected') {
+      if (!this.isReceiver(call, actor)) {
+        throw new ForbiddenError('Only the receiver can connect the call');
+      }
+      if (call.status !== 'initiated' && call.status !== 'ringing') {
+        throw new BadRequestError('Only a pending call can be connected');
+      }
+      return;
+    }
+
+    if (nextStatus === 'failed') {
+      if (!this.isReceiver(call, actor)) {
+        throw new ForbiddenError('Only the receiver can reject the call');
+      }
+      if (call.status !== 'initiated' && call.status !== 'ringing') {
+        throw new BadRequestError('Only a pending call can be rejected');
+      }
+      if (endedReason && endedReason !== 'rejected' && endedReason !== 'busy') {
+        throw new BadRequestError(
+          'Invalid failure reason for receiver rejection'
+        );
+      }
+      return;
+    }
+
+    if (nextStatus === 'ended') {
+      if (!this.isCaller(call, actor) && !this.isReceiver(call, actor)) {
+        throw new ForbiddenError('Only participants can end the call');
+      }
+      return;
+    }
+  }
+
+  private async transitionCall(
+    call: CallSession,
+    actor: CallActor,
+    nextStatus: Exclude<CallStatus, 'initiated'>,
+    endedReason?: CallEndReason
+  ): Promise<CallSession> {
+    this.canTransition(call, actor, nextStatus, endedReason);
+
+    const updateData: Partial<NewCallSession> = { status: nextStatus };
+
+    if (nextStatus === 'connected' && !call.startedAt) {
+      updateData.startedAt = new Date();
+    }
+
+    if (nextStatus === 'ended' || nextStatus === 'failed') {
+      updateData.endedAt = new Date();
+      updateData.endedReason =
+        endedReason || (nextStatus === 'failed' ? 'error' : null);
+    }
+
+    const [updatedCall] = await db
+      .update(callSessions)
+      .set(updateData)
+      .where(eq(callSessions.id, call.id))
+      .returning();
+
+    logger.info(`Call session ${call.id} updated to status: ${nextStatus}`);
+    return updatedCall;
   }
 }
 

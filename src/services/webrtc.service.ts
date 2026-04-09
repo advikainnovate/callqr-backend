@@ -30,6 +30,16 @@ interface ICEConfiguration {
   iceServers: RTCIceServer[];
 }
 
+interface SocketAuthPayload {
+  token?: string;
+  guestId?: string;
+}
+
+interface ResolvedSocketIdentity {
+  userId: string;
+  email: string;
+}
+
 // Singleton instance — set by server.ts after initialization
 let _instance: WebRTCService | null = null;
 export const getWebRTCService = (): WebRTCService | null => _instance;
@@ -132,56 +142,64 @@ export class WebRTCService {
     // Authenticate socket connections
     this.io.use(async (socket: AuthenticatedSocket, next) => {
       try {
-        const { token, guestId } = socket.handshake.auth;
-
-        if (token) {
-          const decoded = jwt.verify(token, appConfig.jwt.secret) as any;
-
-          // Case 1: Guest Token (type 'guest')
-          if (decoded.type === 'guest' && decoded.guestId) {
-            socket.userId = `guest:${decoded.guestId}`;
-            socket.email = 'Anonymous Caller';
-            logger.info(
-              `Guest socket authenticated via token: ${socket.userId}`
-            );
-            return next();
-          }
-
-          // Case 2: User Token (type 'user')
-          if (decoded.type === 'user' && decoded.userId) {
-            const user = await userService.getUserById(decoded.userId);
-
-            if (!user || user.status !== 'active') {
-              return next(new Error('Invalid or inactive user'));
-            }
-
-            socket.userId = user.id;
-            socket.email = user.username;
-            logger.info(
-              `User socket authenticated via token: ${socket.userId}`
-            );
-            return next();
-          }
-
-          return next(new Error('Invalid token payload or type'));
-        }
-
-        // Case 3: Direct Guest ID (Backward Compatibility)
-        if (guestId) {
-          socket.userId = `guest:${guestId}`;
-          socket.email = 'Anonymous Caller';
-          logger.info(
-            `Guest socket authenticated via guestId: ${socket.userId}`
-          );
-          return next();
-        }
-
-        return next(new Error('Authentication token or guest ID required'));
+        const identity = await this.resolveSocketIdentity(
+          socket.handshake.auth
+        );
+        socket.userId = identity.userId;
+        socket.email = identity.email;
+        return next();
       } catch (error) {
         logger.warn('Socket authentication failed:', error);
-        next(new Error('Authentication failed'));
+        next(
+          error instanceof Error ? error : new Error('Authentication failed')
+        );
       }
     });
+  }
+
+  private async resolveSocketIdentity(
+    auth: SocketAuthPayload
+  ): Promise<ResolvedSocketIdentity> {
+    const { token, guestId } = auth;
+
+    if (token) {
+      const decoded = jwt.verify(token, appConfig.jwt.secret) as any;
+
+      if (decoded.type === 'guest' && decoded.guestId) {
+        return {
+          userId: `guest:${decoded.guestId}`,
+          email: 'Anonymous Caller',
+        };
+      }
+
+      if (decoded.type === 'user' && decoded.userId) {
+        const user = await userService.getUserById(decoded.userId);
+
+        if (!user || user.status !== 'active') {
+          throw new Error('Invalid user');
+        }
+
+        if (await userService.isGloballyBlocked(user.id)) {
+          throw new Error('Account is globally blocked.');
+        }
+
+        return {
+          userId: user.id,
+          email: user.username,
+        };
+      }
+
+      throw new Error('Invalid token payload');
+    }
+
+    if (guestId) {
+      return {
+        userId: `guest:${guestId}`,
+        email: 'Anonymous Caller',
+      };
+    }
+
+    throw new Error('Authentication token or guest ID required');
   }
 
   private setupEventHandlers() {
@@ -352,18 +370,10 @@ export class WebRTCService {
     if (!socketUserId) return null;
 
     try {
-      const call = await callSessionService.getCallSessionById(callId);
-      if (!call) return null;
-
-      const identity = normalizeUserId(socketUserId);
-      if (!identity) return null;
-
-      const isAuthorized =
-        call.callerId === identity.id ||
-        call.receiverId === identity.id ||
-        call.guestId === identity.id;
-
-      return isAuthorized ? call : null;
+      return await callSessionService.getCallSessionForActor(
+        callId,
+        socketUserId
+      );
     } catch (error) {
       logger.error(`Auth check failed for call ${callId}:`, error);
       return null;
@@ -509,8 +519,8 @@ export class WebRTCService {
         // Current user is caller, target is receiver
         return call.receiverId;
       } else {
-        // Current user is receiver, target is guest caller
-        return `guest:${call.guestId}`;
+        // Current user is receiver, target is whoever initiated the call
+        return call.callerId || (call.guestId ? `guest:${call.guestId}` : '');
       }
     }
   }
@@ -700,11 +710,7 @@ export class WebRTCService {
       this.flushSignalQueue(callId);
 
       // Update call status
-      await callSessionService.updateCallStatus(
-        callId,
-        socket.userId!,
-        'connected'
-      );
+      await callSessionService.acceptCall(callId, socket.userId!);
 
       // Notify caller via call room AND personal room (double delivery)
       socketEmitter.emitToCallRoom(callId, 'call-accepted', {
@@ -740,9 +746,8 @@ export class WebRTCService {
     try {
       const { callId } = data;
 
-      // Verify call and get details
-      const call = await callSessionService.getCallSessionById(callId);
-      if (!call || call.receiverId !== socket.userId) {
+      const call = await this.getAuthorizedCallSession(callId, socket.userId);
+      if (!call || call.receiverId !== normalizeUserId(socket.userId!)?.id) {
         socket.emit('error', { message: 'Unauthorized to reject this call' });
         return;
       }
@@ -779,7 +784,7 @@ export class WebRTCService {
       const updatedCall = await callSessionService.endCall(
         callId,
         socket.userId!,
-        'rejected' // Default reason for explicit hangup is success/rejected depending on state
+        undefined
       );
       if (!updatedCall) {
         socket.emit('error', { message: 'Failed to end call' });
@@ -906,6 +911,16 @@ export class WebRTCService {
   ) {
     try {
       const { chatSessionId } = data;
+      const { chatSessionService } = await import('./chatSession.service');
+      const isParticipant = await chatSessionService.verifyParticipant(
+        chatSessionId,
+        socket.userId!
+      );
+
+      if (!isParticipant) {
+        socket.emit('error', { message: 'Not a participant in this chat' });
+        return;
+      }
 
       // Throttle typing indicators (500ms per user)
       const now = Date.now();
@@ -927,6 +942,16 @@ export class WebRTCService {
   ) {
     try {
       const { chatSessionId } = data;
+      const { chatSessionService } = await import('./chatSession.service');
+      const isParticipant = await chatSessionService.verifyParticipant(
+        chatSessionId,
+        socket.userId!
+      );
+
+      if (!isParticipant) {
+        socket.emit('error', { message: 'Not a participant in this chat' });
+        return;
+      }
 
       // Broadcast typing stop to chat room (except sender)
       socketEmitter.emitUserStoppedTyping(chatSessionId, socket.userId!);
@@ -940,16 +965,19 @@ export class WebRTCService {
     data: { chatSessionId: string; messageId: string }
   ) {
     try {
-      const { chatSessionId, messageId } = data;
-
-      // Cancel delivery timeout if any (Read implies Delivered)
-      this.cancelDeliveryTimeout(messageId);
-
-      // Broadcast read receipt to chat room
-      socketEmitter.emitMessageRead(chatSessionId, {
+      const { messageId } = data;
+      const { messageService } = await import('./message.service');
+      const message = await messageService.markAsRead(
         messageId,
-        chatSessionId,
+        socket.userId!
+      );
+
+      // Persist read state first, then broadcast read receipt.
+      socketEmitter.emitMessageRead(message.chatSessionId, {
+        messageId,
+        chatSessionId: message.chatSessionId,
         readBy: socket.userId!,
+        readAt: message.readAt?.toISOString(),
       });
 
       logger.info(`Message ${messageId} read by ${socket.userId}`);

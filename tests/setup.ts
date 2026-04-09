@@ -22,11 +22,19 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  // Close database connection
-  await client.end();
-
   if (server) {
-    server.close();
+    await new Promise<void>((resolve, reject) => {
+      server!.close(error => {
+        if (error) {
+          reject(error);
+          return;
+        }
+        resolve();
+      });
+    });
+    server = null;
   }
-});
 
+  // Close database connection after the server is shut down.
+  await client.end({ timeout: 5 });
+});

@@ -1,20 +1,28 @@
 import { z } from 'zod';
 
 export const sendMessageSchema = z.object({
-  body: z.object({
-    chatSessionId: z.string().uuid(),
-    content: z.string().max(5000).optional(), // Optional for image messages
-    messageType: z.enum(['text', 'image', 'file', 'system']).default('text'),
-  }).refine((data) => {
-    // For text messages, content is required
-    if (data.messageType === 'text' && (!data.content || data.content.trim().length === 0)) {
-      return false;
-    }
-    return true;
-  }, {
-    message: 'Content is required for text messages',
-    path: ['content'],
-  }),
+  body: z
+    .object({
+      chatSessionId: z.string().uuid(),
+      content: z.string().max(5000).optional(), // Optional for image messages
+      messageType: z.enum(['text', 'image']).default('text'),
+    })
+    .refine(
+      data => {
+        // For text messages, content is required
+        if (
+          data.messageType === 'text' &&
+          (!data.content || data.content.trim().length === 0)
+        ) {
+          return false;
+        }
+        return true;
+      },
+      {
+        message: 'Content is required for text messages',
+        path: ['content'],
+      }
+    ),
 });
 
 export const getMessagesSchema = z.object({
@@ -22,8 +30,8 @@ export const getMessagesSchema = z.object({
     chatSessionId: z.string().uuid(),
   }),
   query: z.object({
-    limit: z.string().transform(Number).optional(),
-    offset: z.string().transform(Number).optional(),
+    limit: z.coerce.number().int().min(1).max(100).optional(),
+    offset: z.coerce.number().int().min(0).optional(),
   }),
 });
 

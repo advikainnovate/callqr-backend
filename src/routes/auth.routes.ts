@@ -15,7 +15,8 @@ const registerSchema = z.object({
   body: z.object({
     username: z.string().min(3).max(50),
     password: z.string().min(6).max(100),
-    phone: z.string().optional(),
+    phone: z.string().min(1, 'Phone number is required'),
+    emergencyContact: z.string().min(1, 'Emergency contact is required'),
     email: z.string().email().optional(),
   }),
 });
@@ -153,8 +154,8 @@ router.post(
  *                       properties:
  *                         plan:
  *                           type: string
- *                           enum: [FREE, PRO, ENTERPRISE]
- *                           example: "PRO"
+ *                           enum: [free, pro, enterprise]
+ *                           example: "pro"
  *                         status:
  *                           type: string
  *                           example: "active"
