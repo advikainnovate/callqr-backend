@@ -2,10 +2,14 @@ const mockReturning = jest.fn();
 const mockWhere = jest.fn(() => ({ returning: mockReturning }));
 const mockSet = jest.fn(() => ({ where: mockWhere }));
 const mockUpdate = jest.fn(() => ({ set: mockSet }));
+const mockInsertReturning = jest.fn();
+const mockInsertValues = jest.fn(() => ({ returning: mockInsertReturning }));
+const mockInsert = jest.fn(() => ({ values: mockInsertValues }));
 
 jest.mock('../../db', () => ({
   db: {
     update: mockUpdate,
+    insert: mockInsert,
   },
 }));
 
@@ -164,5 +168,49 @@ describe('CallSessionService', () => {
 
     expect(ended.status).toBe('ended');
     expect(ended.endedReason).toBe('completed');
+  });
+
+  it('allows a registered user to initiate a call from an active chat session', async () => {
+    const { callSessionService } = await import('../callSession.service');
+    const { chatSessionService } = await import('../chatSession.service');
+    const { userService } = await import('../user.service');
+    const { subscriptionService } = await import('../subscription.service');
+
+    jest.spyOn(chatSessionService, 'getChatSessionForUser').mockResolvedValue({
+      id: 'chat-1',
+      participant1Id: 'caller-1',
+      participant2Id: 'receiver-1',
+      qrId: 'qr-1',
+      status: 'active',
+    } as any);
+    jest.spyOn(userService, 'getUserById').mockResolvedValue({
+      id: 'receiver-1',
+      status: 'active',
+    } as any);
+    jest.spyOn(userService, 'isUserBlocked').mockResolvedValue(false);
+    jest
+      .spyOn(subscriptionService, 'checkDailyCallLimit')
+      .mockResolvedValue(undefined);
+
+    mockInsertReturning.mockResolvedValueOnce([
+      makeCall({
+        status: 'initiated',
+        callerId: 'caller-1',
+        receiverId: 'receiver-1',
+        qrId: 'qr-1',
+      }),
+    ]);
+
+    const call = await callSessionService.initiateCallFromChat(
+      'caller-1',
+      'chat-1'
+    );
+
+    expect(call.status).toBe('initiated');
+    expect(chatSessionService.getChatSessionForUser).toHaveBeenCalledWith(
+      'chat-1',
+      'caller-1'
+    );
+    expect(mockInsert).toHaveBeenCalled();
   });
 });

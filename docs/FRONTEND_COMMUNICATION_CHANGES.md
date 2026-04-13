@@ -54,6 +54,10 @@ Use these routes according to intent:
 - `POST /api/calls/initiate`
   - creates the call record
   - returns names and timestamps
+- `POST /api/calls/from-chat`
+  - registered-user only
+  - starts a normal user-to-user call from an existing chat relationship
+  - no fresh QR scan is required
 - `GET /api/calls/:callId`
   - participant-only
   - safe source of truth for call details
@@ -182,6 +186,7 @@ Frontend should treat socket events as reflections of persisted state, not as a 
 
 - Use backend `callerName` and `receiverName` for call UI.
 - Treat guest callers as display-only `Anonymous Caller` unless product wants a different label later.
+- Use `POST /api/calls/from-chat` when a logged-in user starts a call from an existing chat screen.
 - Use `initiatedAt` for call list ordering and attempt time display.
 - Use `startedAt` only for connected-call timing or duration UI.
 - Use `accept` / `reject` routes for receiver decisions instead of generic status mutation where possible.

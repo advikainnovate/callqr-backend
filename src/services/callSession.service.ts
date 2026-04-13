@@ -17,6 +17,7 @@ import { qrCodeService } from './qrCode.service';
 import { userService } from './user.service';
 import { subscriptionService } from './subscription.service';
 import { parseIdentity } from '../utils/identityUtils';
+import { chatSessionService } from './chatSession.service';
 
 type CallActor =
   | { kind: 'user'; id: string; rawId: string }
@@ -27,6 +28,62 @@ type CallStatus = 'initiated' | 'ringing' | 'connected' | 'ended' | 'failed';
 type CallEndReason = 'busy' | 'rejected' | 'timeout' | 'error' | 'completed';
 
 export class CallSessionService {
+  async initiateCallFromChat(
+    callerId: string,
+    chatSessionId: string
+  ): Promise<CallSession> {
+    const chatSession = await chatSessionService.getChatSessionForUser(
+      chatSessionId,
+      callerId
+    );
+
+    if (chatSession.status !== 'active') {
+      throw new BadRequestError(
+        `Cannot start a call from a ${chatSession.status} chat`
+      );
+    }
+
+    const receiverId =
+      chatSession.participant1Id === callerId
+        ? chatSession.participant2Id
+        : chatSession.participant1Id;
+
+    if (!chatSession.qrId) {
+      throw new BadRequestError('Chat session is missing its source QR');
+    }
+
+    const receiver = await userService.getUserById(receiverId);
+    if (receiver.status !== 'active') {
+      throw new BadRequestError('Receiver is not active');
+    }
+
+    const isBlocked = await userService.isUserBlocked(receiverId, callerId);
+    if (isBlocked) {
+      throw new ForbiddenError('Unable to initiate call');
+    }
+
+    await subscriptionService.checkDailyCallLimit(receiverId);
+
+    const [callSession] = await db
+      .insert(callSessions)
+      .values({
+        id: uuidv4(),
+        callerId,
+        guestId: null,
+        guestIp: null,
+        callerType: 'registered',
+        receiverId,
+        qrId: chatSession.qrId,
+        status: 'initiated',
+      })
+      .returning();
+
+    logger.info(
+      `Call session initiated from chat ${chatSessionId}: ${callSession.id} from ${callerId} to ${receiverId}`
+    );
+    return callSession;
+  }
+
   async initiateCall(
     qrToken: string,
     callerId?: string,
