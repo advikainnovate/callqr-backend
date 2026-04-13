@@ -178,6 +178,7 @@ The communication backend is now much closer to the intended product model:
 
 - guest calls are supported cleanly
 - guest messaging is blocked cleanly
+- registered users can also initiate calls from an existing chat relationship without rescanning a QR
 - call transitions are safer
 - call and message payloads are more frontend-friendly
 - unread counts and realtime read flows are more trustworthy
