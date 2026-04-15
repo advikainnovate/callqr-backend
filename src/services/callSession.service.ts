@@ -28,6 +28,81 @@ type CallStatus = 'initiated' | 'ringing' | 'connected' | 'ended' | 'failed';
 type CallEndReason = 'busy' | 'rejected' | 'timeout' | 'error' | 'completed';
 
 export class CallSessionService {
+  async initiateCallbackCall(
+    callerId: string,
+    sourceCallId: string
+  ): Promise<CallSession> {
+    const sourceCall = await this.getCallSessionById(sourceCallId);
+    const actor = this.parseActor(callerId);
+
+    if (actor.kind !== 'user') {
+      throw new ForbiddenError(
+        'Only registered users can callback from history'
+      );
+    }
+
+    this.assertActorCanView(sourceCall, actor, sourceCallId);
+
+    if (!sourceCall.initiatedAt) {
+      throw new BadRequestError(
+        'Historical call is missing its initiation time'
+      );
+    }
+
+    const callbackWindowStart = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    if (sourceCall.initiatedAt < callbackWindowStart) {
+      throw new BadRequestError(
+        'Callback window has expired. Please scan the QR code again'
+      );
+    }
+
+    const receiverId =
+      sourceCall.receiverId === callerId
+        ? sourceCall.callerId
+        : sourceCall.receiverId;
+
+    if (!receiverId) {
+      throw new BadRequestError(
+        'Anonymous callers cannot be called back from history'
+      );
+    }
+
+    if (!sourceCall.qrId) {
+      throw new BadRequestError('Historical call is missing its source QR');
+    }
+
+    const receiver = await userService.getUserById(receiverId);
+    if (receiver.status !== 'active') {
+      throw new BadRequestError('Receiver is not active');
+    }
+
+    const isBlocked = await userService.isUserBlocked(receiverId, callerId);
+    if (isBlocked) {
+      throw new ForbiddenError('Unable to initiate call');
+    }
+
+    await subscriptionService.checkDailyCallLimit(receiverId);
+
+    const [callSession] = await db
+      .insert(callSessions)
+      .values({
+        id: uuidv4(),
+        callerId,
+        guestId: null,
+        guestIp: null,
+        callerType: 'registered',
+        receiverId,
+        qrId: sourceCall.qrId,
+        status: 'initiated',
+      })
+      .returning();
+
+    logger.info(
+      `Callback initiated from history ${sourceCallId}: ${callSession.id} from ${callerId} to ${receiverId}`
+    );
+    return callSession;
+  }
+
   async initiateCallFromChat(
     callerId: string,
     chatSessionId: string

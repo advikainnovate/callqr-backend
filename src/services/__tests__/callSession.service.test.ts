@@ -213,4 +213,80 @@ describe('CallSessionService', () => {
     );
     expect(mockInsert).toHaveBeenCalled();
   });
+
+  it('allows a registered user to callback a registered participant within 24 hours', async () => {
+    const { callSessionService } = await import('../callSession.service');
+    const { userService } = await import('../user.service');
+    const { subscriptionService } = await import('../subscription.service');
+
+    jest.spyOn(callSessionService, 'getCallSessionById').mockResolvedValue(
+      makeCall({
+        callerId: 'other-user',
+        receiverId: 'caller-1',
+        qrId: 'qr-7',
+        initiatedAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
+      }) as any
+    );
+    jest.spyOn(userService, 'getUserById').mockResolvedValue({
+      id: 'other-user',
+      status: 'active',
+    } as any);
+    jest.spyOn(userService, 'isUserBlocked').mockResolvedValue(false);
+    jest
+      .spyOn(subscriptionService, 'checkDailyCallLimit')
+      .mockResolvedValue(undefined);
+
+    mockInsertReturning.mockResolvedValueOnce([
+      makeCall({
+        callerId: 'caller-1',
+        receiverId: 'other-user',
+        qrId: 'qr-7',
+        status: 'initiated',
+      }),
+    ]);
+
+    const call = await callSessionService.initiateCallbackCall(
+      'caller-1',
+      'call-1'
+    );
+
+    expect(call.status).toBe('initiated');
+    expect(mockInsert).toHaveBeenCalled();
+  });
+
+  it('rejects history callbacks after 24 hours', async () => {
+    const { callSessionService } = await import('../callSession.service');
+
+    jest.spyOn(callSessionService, 'getCallSessionById').mockResolvedValue(
+      makeCall({
+        initiatedAt: new Date(Date.now() - 25 * 60 * 60 * 1000),
+      }) as any
+    );
+
+    await expect(
+      callSessionService.initiateCallbackCall('caller-1', 'call-1')
+    ).rejects.toMatchObject({
+      message: 'Callback window has expired. Please scan the QR code again',
+    });
+  });
+
+  it('rejects callbacks to anonymous callers from history', async () => {
+    const { callSessionService } = await import('../callSession.service');
+
+    jest.spyOn(callSessionService, 'getCallSessionById').mockResolvedValue(
+      makeCall({
+        callerId: null,
+        guestId: 'guest-1',
+        callerType: 'anonymous',
+        receiverId: 'caller-1',
+        initiatedAt: new Date(Date.now() - 60 * 60 * 1000),
+      }) as any
+    );
+
+    await expect(
+      callSessionService.initiateCallbackCall('caller-1', 'call-1')
+    ).rejects.toMatchObject({
+      message: 'Anonymous callers cannot be called back from history',
+    });
+  });
 });

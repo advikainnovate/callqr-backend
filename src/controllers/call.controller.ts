@@ -84,6 +84,37 @@ export class CallController {
     }
   );
 
+  initiateCallbackCall = asyncHandler(
+    async (req: AuthenticatedRequest, res: Response) => {
+      const identity = req.identity;
+      if (identity?.type !== 'user') {
+        throw new UnauthorizedError('User authentication required');
+      }
+
+      const { callId } = req.params;
+
+      const callSession = await callSessionService.initiateCallbackCall(
+        identity.userId,
+        callId
+      );
+      const hydratedCall = await callSessionService.getCallSessionById(
+        callSession.id
+      );
+
+      sendSuccessResponse(res, 201, 'Callback initiated successfully', {
+        callId: hydratedCall.id,
+        callerId: hydratedCall.callerId,
+        guestId: hydratedCall.guestId,
+        receiverId: hydratedCall.receiverId,
+        callerName: this.getCallerName(hydratedCall),
+        receiverName: hydratedCall.receiverName,
+        status: hydratedCall.status,
+        initiatedAt: hydratedCall.initiatedAt,
+        startedAt: hydratedCall.startedAt,
+      });
+    }
+  );
+
   getCallSession = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
       const { callId } = req.params;

@@ -8,6 +8,7 @@ import { validate } from '../middlewares/validate';
 import {
   initiateCallSchema,
   initiateCallFromChatSchema,
+  initiateCallbackCallSchema,
   updateCallStatusSchema,
   getCallSessionSchema,
   endCallSchema,
@@ -31,6 +32,13 @@ router.post(
   authenticateToken,
   validate(initiateCallFromChatSchema),
   callController.initiateCallFromChat
+);
+
+router.post(
+  '/:callId/callback',
+  authenticateToken,
+  validate(initiateCallbackCallSchema),
+  callController.initiateCallbackCall
 );
 
 // Get call session details (allow guests)

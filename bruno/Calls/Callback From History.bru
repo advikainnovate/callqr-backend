@@ -1,0 +1,45 @@
+meta {
+  name: Callback From History
+  type: http
+  seq: 8
+}
+
+post {
+  url: {{baseUrl}}/api/calls/{{callId}}/callback
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+docs {
+  # Callback From History
+  
+  Starts a new registered-user call from a historical call record.
+  
+  ## Rules
+  - Only works for registered users
+  - Only works within 24 hours of the original call's `initiatedAt`
+  - Anonymous guest callers cannot be called back from history
+  
+  ## Suggested Flow
+  1. Run `History`
+  2. Copy a valid historical `callId`
+  3. Set `callId` in the environment
+  4. Run this request
+}
+
+tests {
+  test("Should initiate callback successfully when history entry is eligible", function() {
+    expect(res.status).to.equal(201);
+    expect(res.body.success).to.be.true;
+    expect(res.body.data.callId).to.be.a('string');
+    expect(res.body.data.callerId).to.be.a('string');
+    expect(res.body.data.receiverId).to.be.a('string');
+    expect(res.body.data.status).to.equal('initiated');
+
+    bru.setEnvVar("callId", res.body.data.callId);
+  });
+}

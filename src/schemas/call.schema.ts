@@ -12,6 +12,12 @@ export const initiateCallFromChatSchema = z.object({
   }),
 });
 
+export const initiateCallbackCallSchema = z.object({
+  params: z.object({
+    callId: z.string().uuid(),
+  }),
+});
+
 export const updateCallStatusSchema = z.object({
   body: z.object({
     status: z.enum(['ringing', 'connected']),

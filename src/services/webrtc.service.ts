@@ -407,6 +407,10 @@ export class WebRTCService {
         offer,
       };
 
+      logger.info(
+        `[CALL_TIMING] offer received for ${callId} from ${socket.userId} to ${targetSocketId} at ${new Date().toISOString()}`
+      );
+
       // Forward granular offer event
       this.forwardWebRTCSignal(
         callId,
@@ -448,6 +452,10 @@ export class WebRTCService {
         answer,
       };
 
+      logger.info(
+        `[CALL_TIMING] answer received for ${callId} from ${socket.userId} to ${targetSocketId} at ${new Date().toISOString()}`
+      );
+
       // Forward granular answer event
       this.forwardWebRTCSignal(
         callId,
@@ -488,6 +496,10 @@ export class WebRTCService {
         fromUserId: socket.userId,
         candidate,
       };
+
+      logger.info(
+        `[CALL_TIMING] ice candidate received for ${callId} from ${socket.userId} to ${targetSocketId} at ${new Date().toISOString()}`
+      );
 
       // Forward granular ICE event
       this.forwardWebRTCSignal(
@@ -542,6 +554,9 @@ export class WebRTCService {
 
     // 1. If both peers present → send normally
     if (roomSize >= 2) {
+      logger.info(
+        `[CALL_TIMING] forwarding ${event} for ${callId} immediately (roomSize=${roomSize}) at ${new Date().toISOString()}`
+      );
       socket.to(roomName).emit(event, payload);
       return;
     }
@@ -558,7 +573,7 @@ export class WebRTCService {
     });
 
     logger.warn(
-      `[QUEUE] Signal ${event} queued for call ${callId} (roomSize=${roomSize})`
+      `[QUEUE] Signal ${event} queued for call ${callId} (roomSize=${roomSize}) at ${new Date().toISOString()}`
     );
   }
 
@@ -568,6 +583,7 @@ export class WebRTCService {
   ) {
     try {
       const { callId } = data;
+      const initiationStartedAt = Date.now();
 
       // Centralized authorization
       const call = await this.getAuthorizedCallSession(callId, socket.userId);
@@ -582,6 +598,9 @@ export class WebRTCService {
       // Join the call room immediately (Crucial for signaling reliability)
       socket.join(`call:${callId}`);
       logger.info(`[Room] ${socket.userId} joined call:${callId} (Initiator)`);
+      logger.info(
+        `[CALL_TIMING] initiator ${socket.userId} joined room for ${callId} in ${Date.now() - initiationStartedAt}ms`
+      );
 
       // Flush any queued signals for this call immediately (Handles Reconnection)
       this.flushSignalQueue(callId);
@@ -614,6 +633,9 @@ export class WebRTCService {
           callerUsername: callerUsername,
           iceServers: this.iceConfig.iceServers,
         });
+        logger.info(
+          `[CALL_TIMING] incoming-call emitted for ${callId} to receiver ${call.receiverId} after ${Date.now() - initiationStartedAt}ms`
+        );
       } else {
         // Receiver is offline — wake them via push notification
         logger.info(
@@ -636,6 +658,9 @@ export class WebRTCService {
         socket.userId!,
         'ringing'
       );
+      logger.info(
+        `[CALL_TIMING] call ${callId} marked ringing after ${Date.now() - initiationStartedAt}ms`
+      );
 
       // 🔴 IMPORTANT: Notify the caller that signaling can now start
       socket.emit('call-initiated', {
@@ -643,6 +668,9 @@ export class WebRTCService {
         receiverId: call.receiverId,
         iceServers: this.iceConfig.iceServers,
       });
+      logger.info(
+        `[CALL_TIMING] call-initiated emitted to ${socket.userId} for ${callId} after ${Date.now() - initiationStartedAt}ms`
+      );
 
       // Broadcast status update for UI sync
       socketEmitter.emitCallStatus(callId, 'ringing', {
@@ -691,6 +719,10 @@ export class WebRTCService {
   ) {
     try {
       const { callId } = data;
+      const acceptanceStartedAt = Date.now();
+      logger.info(
+        `[CALL_TIMING] accept-call received for ${callId} from ${socket.userId} at ${new Date().toISOString()}`
+      );
 
       // Centralized authorization
       const call = await this.getAuthorizedCallSession(callId, socket.userId);
@@ -705,12 +737,21 @@ export class WebRTCService {
       // CRITICAL FIX: Join the call room BEFORE updating status
       socket.join(`call:${callId}`);
       logger.info(`[Room] ${socket.userId} joined call:${callId} (Receiver)`);
+      logger.info(
+        `[CALL_TIMING] receiver ${socket.userId} joined room for ${callId} after ${Date.now() - acceptanceStartedAt}ms`
+      );
 
       // Flush any queued signals for this call immediately after joining
       this.flushSignalQueue(callId);
+      logger.info(
+        `[CALL_TIMING] queue flush completed for ${callId} after ${Date.now() - acceptanceStartedAt}ms`
+      );
 
       // Update call status
       await callSessionService.acceptCall(callId, socket.userId!);
+      logger.info(
+        `[CALL_TIMING] call ${callId} accepted in DB after ${Date.now() - acceptanceStartedAt}ms`
+      );
 
       // Notify caller via call room AND personal room (double delivery)
       socketEmitter.emitToCallRoom(callId, 'call-accepted', {
@@ -724,15 +765,24 @@ export class WebRTCService {
         receiverId: call.receiverId,
         iceServers: this.iceConfig.iceServers,
       });
+      logger.info(
+        `[CALL_TIMING] call-accepted emitted for ${callId} after ${Date.now() - acceptanceStartedAt}ms`
+      );
 
       // Notify receiver that call is connected
       socket.emit('call-connected', {
         callId: call.id,
         iceServers: this.iceConfig.iceServers,
       });
+      logger.info(
+        `[CALL_TIMING] call-connected emitted to ${socket.userId} for ${callId} after ${Date.now() - acceptanceStartedAt}ms`
+      );
 
       // Broadcast status update for UI sync
       socketEmitter.emitCallStatus(callId, 'connected');
+      logger.info(
+        `[CALL_TIMING] connected status broadcast for ${callId} after ${Date.now() - acceptanceStartedAt}ms`
+      );
     } catch (error) {
       logger.error('Error handling call acceptance:', error);
       socket.emit('error', { message: 'Failed to accept call' });
@@ -1070,13 +1120,16 @@ export class WebRTCService {
       queuedSignals.sort((a, b) => a.timestamp - b.timestamp);
 
       logger.info(
-        `[FLUSH] Replaying ${queuedSignals.length} signals for call ${callId}`
+        `[FLUSH] Replaying ${queuedSignals.length} signals for call ${callId} at ${new Date().toISOString()}`
       );
 
       // 2. Broadcast to the entire room (io.to includes sender)
       // This ensures both peers see all missing context
       const roomName = `call:${callId}`;
       for (const signal of queuedSignals) {
+        logger.info(
+          `[CALL_TIMING] replaying queued ${signal.event} for ${callId}; queuedFor=${Date.now() - signal.timestamp}ms`
+        );
         this.io.to(roomName).emit(signal.event, signal.payload);
       }
 
