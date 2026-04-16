@@ -1,4 +1,4 @@
-import { eq, and, desc, sql, gte, or, lt } from 'drizzle-orm';
+import { eq, and, desc, sql, gte, or, lt, isNotNull } from 'drizzle-orm';
 import { db } from '../db';
 import {
   users,
@@ -515,7 +515,8 @@ export class CallSessionService {
       .where(
         and(
           eq(callSessions.receiverId, userId),
-          gte(callSessions.initiatedAt, startOfDay)
+          isNotNull(callSessions.startedAt),
+          gte(callSessions.startedAt, startOfDay)
         )
       );
 

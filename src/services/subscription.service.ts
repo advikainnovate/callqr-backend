@@ -1,4 +1,4 @@
-import { eq, and, desc, gte } from 'drizzle-orm';
+import { eq, and, desc, gte, isNotNull } from 'drizzle-orm';
 import { db } from '../db';
 import {
   subscriptions,
@@ -332,7 +332,8 @@ export class SubscriptionService {
       .where(
         and(
           eq(callSessions.receiverId, userId),
-          gte(callSessions.initiatedAt, startOfDay)
+          isNotNull(callSessions.startedAt),
+          gte(callSessions.startedAt, startOfDay)
         )
       );
 
@@ -366,7 +367,8 @@ export class SubscriptionService {
       .where(
         and(
           eq(callSessions.receiverId, userId),
-          gte(callSessions.initiatedAt, startOfDay)
+          isNotNull(callSessions.startedAt),
+          gte(callSessions.startedAt, startOfDay)
         )
       );
 
