@@ -1,6 +1,13 @@
 import cors from 'cors';
 import { appConfig } from '../config';
 
+const allowedHeaders = [
+  'Content-Type',
+  'Authorization',
+  'X-Requested-With',
+  'X-Guest-Id',
+];
+
 const corsOptions = {
   origin: (
     origin: string | undefined,
@@ -11,7 +18,7 @@ const corsOptions = {
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  allowedHeaders,
 };
 
 export const corsMiddleware = cors(corsOptions);
