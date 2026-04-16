@@ -433,15 +433,17 @@ export class CallSessionService {
   ): Promise<CallSession[]> {
     const activeCalls = await this.getActiveCalls(userId);
     const ended: CallSession[] = [];
+    const systemActor = this.parseActor('system');
 
     for (const call of activeCalls) {
       try {
-        const updated = await db
-          .update(callSessions)
-          .set({ status: 'ended', endedReason: reason, endedAt: new Date() })
-          .where(eq(callSessions.id, call.id))
-          .returning();
-        if (updated[0]) ended.push(updated[0]);
+        const updated = await this.transitionCall(
+          call,
+          systemActor,
+          'ended',
+          reason
+        );
+        ended.push(updated);
       } catch (err) {
         logger.error(`Failed to end call ${call.id} on disconnect:`, err);
       }
@@ -456,6 +458,7 @@ export class CallSessionService {
    */
   async timeoutStaleCalls(maxAgeSeconds: number = 60): Promise<CallSession[]> {
     const cutoff = new Date(Date.now() - maxAgeSeconds * 1000);
+    const systemActor = this.parseActor('system');
 
     const stale = await db
       .select()
@@ -473,12 +476,13 @@ export class CallSessionService {
     const timedOut: CallSession[] = [];
     for (const call of stale) {
       try {
-        const [updated] = await db
-          .update(callSessions)
-          .set({ status: 'ended', endedReason: 'timeout', endedAt: new Date() })
-          .where(eq(callSessions.id, call.id))
-          .returning();
-        if (updated) timedOut.push(updated);
+        const updated = await this.transitionCall(
+          call,
+          systemActor,
+          'ended',
+          'timeout'
+        );
+        timedOut.push(updated);
       } catch (err) {
         logger.error(`Failed to timeout call ${call.id}:`, err);
       }
@@ -655,7 +659,7 @@ export class CallSessionService {
     if (nextStatus === 'ended' || nextStatus === 'failed') {
       updateData.endedAt = new Date();
       updateData.endedReason =
-        endedReason || (nextStatus === 'failed' ? 'error' : null);
+        endedReason || (nextStatus === 'failed' ? 'error' : 'completed');
     }
 
     const [updatedCall] = await db

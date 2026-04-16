@@ -40,15 +40,26 @@ export class UserService {
   }
 
   private decryptData(encryptedData: string): string {
-    const algorithm = 'aes-256-cbc';
-    const key = Buffer.from(appConfig.encryptionKey, 'hex');
-    const parts = encryptedData.split(':');
-    const iv = Buffer.from(parts[0], 'hex');
-    const encrypted = parts[1];
-    const decipher = crypto.createDecipheriv(algorithm, key, iv);
-    let decrypted = decipher.update(encrypted, 'hex', 'utf8');
-    decrypted += decipher.final('utf8');
-    return decrypted;
+    try {
+      const algorithm = 'aes-256-cbc';
+      const key = Buffer.from(appConfig.encryptionKey, 'hex');
+      const parts = encryptedData.split(':');
+
+      if (parts.length !== 2) {
+        logger.warn('Invalid encrypted data format');
+        return '[INVALID_DATA]';
+      }
+
+      const iv = Buffer.from(parts[0], 'hex');
+      const encrypted = parts[1];
+      const decipher = crypto.createDecipheriv(algorithm, key, iv);
+      let decrypted = decipher.update(encrypted, 'hex', 'utf8');
+      decrypted += decipher.final('utf8');
+      return decrypted;
+    } catch (error) {
+      logger.error('Decryption failed:', error);
+      return '[DECRYPTION_ERROR]';
+    }
   }
 
   private async hashPassword(password: string): Promise<string> {

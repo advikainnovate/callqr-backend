@@ -102,6 +102,7 @@ export class WebRTCService {
       try {
         const timedOut = await callSessionService.timeoutStaleCalls(60);
         for (const call of timedOut) {
+          this.signalQueue.delete(call.id);
           const callerId =
             call.callerId || (call.guestId ? `guest:${call.guestId}` : null);
           if (callerId) {
@@ -332,6 +333,7 @@ export class WebRTCService {
               'error'
             );
             for (const call of endedCalls) {
+              this.signalQueue.delete(call.id);
               const callerId = call.callerId || `guest:${call.guestId}`;
               const otherUserId =
                 callerId === userId ? call.receiverId : callerId;
@@ -839,29 +841,23 @@ export class WebRTCService {
         socket.userId!,
         undefined
       );
-      if (!updatedCall) {
-        socket.emit('error', { message: 'Failed to end call' });
-        return;
-      }
+      const targetSocketId = this.resolveTargetIdentity(
+        updatedCall,
+        socket.userId!
+      );
 
-      // Get call details to notify other participant
-      const call = await callSessionService.getCallSessionById(callId);
-      if (call) {
-        const targetSocketId = this.resolveTargetIdentity(call, socket.userId!);
+      // Notify the room so the other party gets the message
+      socketEmitter.emitToCallRoom(callId, 'call-ended', {
+        callId: updatedCall.id,
+        endedBy: socket.userId,
+      });
 
-        // Notify the room so the other party gets the message
-        socketEmitter.emitToCallRoom(callId, 'call-ended', {
-          callId: call.id,
+      // Fallback: Notify via personal room as well
+      if (targetSocketId) {
+        socketEmitter.emitToUser(targetSocketId, 'call-ended', {
+          callId: updatedCall.id,
           endedBy: socket.userId,
         });
-
-        // Fallback: Notify via personal room as well
-        if (targetSocketId) {
-          socketEmitter.emitToUser(targetSocketId, 'call-ended', {
-            callId: call.id,
-            endedBy: socket.userId,
-          });
-        }
       }
 
       // Clean up signaling queue for this call

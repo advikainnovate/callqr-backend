@@ -381,6 +381,8 @@ export class MessageService {
       throw new BadRequestError('Search query cannot be empty');
     }
 
+    const escapedQuery = this.escapeLikePattern(query.trim());
+
     const results = await db
       .select({
         msg: messages,
@@ -392,7 +394,7 @@ export class MessageService {
         and(
           eq(messages.chatSessionId, chatSessionId),
           eq(messages.isDeleted, false),
-          ilike(messages.content, `%${query.trim()}%`)
+          sql`${messages.content} ILIKE ${`%${escapedQuery}%`} ESCAPE '\\'`
         )
       )
       .orderBy(desc(messages.sentAt))
@@ -432,6 +434,10 @@ export class MessageService {
         `Daily message limit reached for ${plan} plan (${messageCount}/${limit})`
       );
     }
+  }
+
+  private escapeLikePattern(value: string): string {
+    return value.replace(/[\\%_]/g, '\\$&');
   }
 
   /** Lightweight fetch by primary key — for internal use only (no participant check). */

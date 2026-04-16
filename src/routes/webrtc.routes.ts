@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { authenticateTokenOrGuest } from '../middlewares/auth.middleware';
 import { asyncHandler } from '../utils';
 
 const router = Router();
@@ -6,6 +7,7 @@ const router = Router();
 // Get WebRTC configuration (ICE servers)
 router.get(
   '/config',
+  authenticateTokenOrGuest,
   asyncHandler(async (req, res) => {
     // Note: In a real app, you'd get the service instance
     // For now, return the configuration directly

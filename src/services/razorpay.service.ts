@@ -5,11 +5,11 @@ import { payments, type NewPayment, type Payment } from '../models';
 import { eq } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import { logger, BadRequestError, NotFoundError } from '../utils';
-import { 
-  SUBSCRIPTION_PLANS, 
-  SUBSCRIPTION_PRICES, 
+import {
+  SUBSCRIPTION_PLANS,
+  SUBSCRIPTION_PRICES,
   SUBSCRIPTION_DURATION_DAYS,
-  type SubscriptionPlan 
+  type SubscriptionPlan,
 } from '../constants/subscriptions';
 import { subscriptionService } from './subscription.service';
 
@@ -21,7 +21,9 @@ export class RazorpayService {
     const keySecret = process.env.RAZORPAY_KEY_SECRET;
 
     if (!keyId || !keySecret) {
-      logger.warn('Razorpay credentials not configured. Payment features will be disabled.');
+      logger.warn(
+        'Razorpay credentials not configured. Payment features will be disabled.'
+      );
       // Create a dummy instance to prevent errors
       this.razorpay = null as any;
     } else {
@@ -91,7 +93,9 @@ export class RazorpayService {
         })
         .returning();
 
-      logger.info(`Razorpay order created: ${order.id} for user ${userId}, plan ${plan}`);
+      logger.info(
+        `Razorpay order created: ${order.id} for user ${userId}, plan ${plan}`
+      );
 
       return {
         orderId: order.id,
@@ -120,13 +124,13 @@ export class RazorpayService {
 
     const keySecret = process.env.RAZORPAY_KEY_SECRET!;
     const body = orderId + '|' + paymentId;
-    
+
     const expectedSignature = crypto
       .createHmac('sha256', keySecret)
       .update(body)
       .digest('hex');
 
-    return expectedSignature === signature;
+    return this.timingSafeHexEqual(expectedSignature, signature);
   }
 
   /**
@@ -139,7 +143,7 @@ export class RazorpayService {
   ): Promise<Payment> {
     // Verify signature
     const isValid = this.verifyPaymentSignature(orderId, paymentId, signature);
-    
+
     if (!isValid) {
       logger.error(`Invalid payment signature for order ${orderId}`);
       throw new BadRequestError('Invalid payment signature');
@@ -204,13 +208,14 @@ export class RazorpayService {
       return updatedPayment;
     } catch (error) {
       logger.error('Error processing payment success:', error);
-      
+
       // Mark payment as failed
       await db
         .update(payments)
         .set({
           status: 'failed',
-          errorDescription: error instanceof Error ? error.message : 'Unknown error',
+          errorDescription:
+            error instanceof Error ? error.message : 'Unknown error',
           updatedAt: new Date(),
         })
         .where(eq(payments.id, payment.id));
@@ -309,7 +314,32 @@ export class RazorpayService {
       .update(body)
       .digest('hex');
 
-    return expectedSignature === signature;
+    return this.timingSafeHexEqual(expectedSignature, signature);
+  }
+
+  private timingSafeHexEqual(
+    expectedHex: string,
+    providedHex: string | undefined
+  ): boolean {
+    if (!providedHex) {
+      return false;
+    }
+
+    if (
+      !/^[0-9a-fA-F]+$/.test(expectedHex) ||
+      !/^[0-9a-fA-F]+$/.test(providedHex)
+    ) {
+      return false;
+    }
+
+    if (expectedHex.length !== providedHex.length) {
+      return false;
+    }
+
+    return crypto.timingSafeEqual(
+      Buffer.from(expectedHex, 'hex'),
+      Buffer.from(providedHex, 'hex')
+    );
   }
 }
 
