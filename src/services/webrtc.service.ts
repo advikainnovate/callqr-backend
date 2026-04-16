@@ -320,7 +320,10 @@ export class WebRTCService {
           logger.info(
             `Cleaning up calls for user ${userId} after grace period.`
           );
-          this.connectedUsers.delete(userId);
+          const currentSocketId = this.connectedUsers.get(userId);
+          if (currentSocketId === socket.id) {
+            this.connectedUsers.delete(userId);
+          }
           this.lastTypingEmitted.delete(userId);
 
           try {
@@ -602,7 +605,7 @@ export class WebRTCService {
         `[CALL_TIMING] initiator ${socket.userId} joined room for ${callId} in ${Date.now() - initiationStartedAt}ms`
       );
 
-      // Flush any queued signals for this call immediately (Handles Reconnection)
+      // Flush any queued signals for this call immediately (best-effort replay)
       this.flushSignalQueue(callId);
 
       // Get caller's username
@@ -618,14 +621,14 @@ export class WebRTCService {
 
       // Notify receiver
       const isReceiverOnline = this.isUserOnline(call.receiverId);
-      console.log(
-        `[DEBUG] WebRTC: Notifying receiver ${call.receiverId}. Online status: ${isReceiverOnline}`
+      logger.debug(
+        `[WebRTC] Notifying receiver ${call.receiverId}. Online status: ${isReceiverOnline}`
       );
 
       if (isReceiverOnline) {
         // Receiver is online — deliver via their personal room
-        console.log(
-          `[DEBUG] WebRTC: Emitting incoming-call to user room ${call.receiverId}`
+        logger.debug(
+          `[WebRTC] Emitting incoming-call to user room ${call.receiverId}`
         );
         socketEmitter.emitToUser(call.receiverId, 'incoming-call', {
           callId: call.id,
@@ -1109,8 +1112,8 @@ export class WebRTCService {
   }
 
   /**
-   * Replays all queued signals in chronological order to the entire call room.
-   * Both receiver and caller receive the signals (frontend fromUserId check handles filtering).
+   * Replays all queued signals in chronological order to the current call room.
+   * This is a best-effort replay for reconnect/join timing gaps.
    */
   private flushSignalQueue(callId: string) {
     const queuedSignals = this.signalQueue.get(callId);

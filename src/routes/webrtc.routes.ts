@@ -1,5 +1,4 @@
 import { Router } from 'express';
-import { WebRTCService } from '../services/webrtc.service';
 import { asyncHandler } from '../utils';
 
 const router = Router();
