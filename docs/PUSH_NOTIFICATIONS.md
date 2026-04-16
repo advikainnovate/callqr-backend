@@ -9,7 +9,7 @@
 ```
 Mobile App                  Backend (Express)              Firebase (FCM)
     │                             │                               │
-    │  POST /users/device-tokens  │                               │
+    │  POST /users/push-token     │                               │
     │────────────────────────────▶│  saves to device_tokens table │
     │                             │                               │
     │  WebSocket connected        │                               │
@@ -83,7 +83,7 @@ Sent when recipient is not connected to the socket room.
 ### Register a token (call after login)
 
 ```
-POST /api/users/device-tokens
+POST /api/users/push-token
 Authorization: Bearer <token>
 
 Body:
@@ -96,7 +96,7 @@ Body:
 Response 200:
 {
   "success": true,
-  "message": "Device token registered successfully"
+  "message": "Push token registered successfully"
 }
 ```
 
@@ -104,13 +104,17 @@ Response 200:
 
 ### Remove a token (call on logout)
 
-```
-DELETE /api/users/device-tokens/:token
+````
+DELETE /api/users/push-token
 Authorization: Bearer <token>
 
+Body:
+{
+  "token": "FCM_TOKEN_HERE"
+}
+
 Response 200:
-{ "message": "Device token removed successfully" }
-```
+{ "message": "Push token removed successfully" }
 
 ---
 
@@ -136,7 +140,7 @@ One user can have **many rows** (multiple devices). All tokens receive the push 
 
 ```bash
 npm install @react-native-firebase/app @react-native-firebase/messaging
-```
+````
 
 ### Step 2 — Add config files
 
@@ -160,7 +164,7 @@ export async function registerDeviceToken(apiClient: any) {
   const token = await messaging().getToken();
   if (!token) return;
 
-  await apiClient.post('/users/device-tokens', {
+  await apiClient.post('/users/push-token', {
     token,
     platform: Platform.OS,
     deviceId: await DeviceInfo.getUniqueId(), // react-native-device-info
@@ -168,7 +172,7 @@ export async function registerDeviceToken(apiClient: any) {
 
   // Re-register whenever FCM rotates the token
   messaging().onTokenRefresh(async newToken => {
-    await apiClient.post('/users/device-tokens', {
+    await apiClient.post('/users/push-token', {
       token: newToken,
       platform: Platform.OS,
     });
@@ -182,7 +186,9 @@ export async function registerDeviceToken(apiClient: any) {
 export async function unregisterDeviceToken(apiClient: any) {
   const token = await messaging().getToken();
   if (!token) return;
-  await apiClient.delete(`/users/device-tokens/${encodeURIComponent(token)}`);
+  await apiClient.delete('/users/push-token', {
+    data: { token },
+  });
   await messaging().deleteToken();
 }
 ```

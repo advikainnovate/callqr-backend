@@ -190,9 +190,9 @@ export class UserController {
     }
   );
 
-  // ==================== DEVICE TOKEN ENDPOINTS ====================
+  // ==================== PUSH TOKEN ENDPOINTS ====================
 
-  upsertDeviceToken = asyncHandler(
+  upsertPushToken = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
       const identity = req.identity;
       if (identity?.type !== 'user') {
@@ -203,25 +203,25 @@ export class UserController {
 
       await userService.upsertDeviceToken(userId, token, platform, deviceId);
 
-      sendSuccessResponse(res, 200, 'Device token registered successfully', {
+      sendSuccessResponse(res, 200, 'Push token registered successfully', {
         token,
         platform,
       });
     }
   );
 
-  removeDeviceToken = asyncHandler(
+  removePushToken = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
       const identity = req.identity;
       if (identity?.type !== 'user') {
         throw new UnauthorizedError('User authentication required');
       }
       const userId = identity.userId;
-      const { token } = req.params;
+      const { token } = req.body;
 
       await userService.removeDeviceToken(userId, token);
 
-      sendSuccessResponse(res, 200, 'Device token removed successfully');
+      sendSuccessResponse(res, 200, 'Push token removed successfully');
     }
   );
 }

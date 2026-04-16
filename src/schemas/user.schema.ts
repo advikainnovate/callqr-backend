@@ -53,3 +53,9 @@ export const removeDeviceTokenSchema = z.object({
     token: z.string(),
   }),
 });
+
+export const removePushTokenSchema = z.object({
+  body: z.object({
+    token: z.string().min(1, 'Token is required'),
+  }),
+});

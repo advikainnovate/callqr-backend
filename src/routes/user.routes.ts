@@ -10,7 +10,7 @@ import {
   verifyPhoneSchema,
   verifyEmailSchema,
   upsertDeviceTokenSchema,
-  removeDeviceTokenSchema,
+  removePushTokenSchema,
 } from '../schemas/user.schema';
 import {
   blockUserSchema,
@@ -103,22 +103,20 @@ router.get(
   userController.getBlockedUsers
 );
 
-// ==================== DEVICE TOKEN ROUTES ====================
+// ==================== PUSH TOKEN ROUTES ====================
 
-// Register or update a device token
 router.post(
-  '/device-tokens',
+  '/push-token',
   authenticateToken,
   validate(upsertDeviceTokenSchema),
-  userController.upsertDeviceToken
+  userController.upsertPushToken
 );
 
-// Remove a device token
 router.delete(
-  '/device-tokens/:token',
+  '/push-token',
   authenticateToken,
-  validate(removeDeviceTokenSchema),
-  userController.removeDeviceToken
+  validate(removePushTokenSchema),
+  userController.removePushToken
 );
 
 export default router;
