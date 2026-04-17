@@ -44,7 +44,8 @@ POST /api/auth/register
   "username": "string (required)",
   "password": "string (required, min 6 chars)",
   "phone": "string (required, E.164 format)",
-  "email": "string (optional)"
+  "email": "string (optional)",
+  "emergencyContact": "string (optional)"
 }
 ```
 
@@ -71,8 +72,8 @@ POST /api/auth/register
 **Note:**
 
 - Phone number is now REQUIRED for registration
+- Emergency contact is optional
 - OTP is sent immediately after registration
-- User must verify phone before they can login
 - Account status is `pending_verification` until phone is verified
 
 ### Login
@@ -90,46 +91,49 @@ POST /api/auth/login
 }
 ```
 
-**Response:** JWT token + user data
-
-**Note:**
-
-- Login is blocked if phone is not verified
-- Users with `pending_verification` status cannot login
-- Error response if unverified:
+**Response:**
 
 ```json
 {
-  "success": false,
-  "message": "Please verify your phone number before logging in",
+  "success": true,
+  "message": "Login successful",
   "data": {
-    "userId": "user_id",
-    "isPhoneVerified": false,
-    "hint": "Use POST /api/auth/resend-phone-verification to get a new OTP"
+    "token": "jwt_token",
+    "user": {
+      "id": "user_id",
+      "username": "username",
+      "status": "pending_verification",
+      "isPhoneVerified": false,
+      "createdAt": "timestamp"
+    },
+    "verification": {
+      "required": true,
+      "hint": "Use POST /api/auth/resend-phone-verification to get a new OTP"
+    }
   }
 }
 ```
 
-{
-"username": "string (required)",
-"password": "string (required)"
-}
+**Note:**
 
-```
-**Response:** JWT token + user data
+- Unverified users can log in and should be redirected to OTP verification in the client
+- Accounts left unverified for more than 7 days are soft-deleted on login attempt
 
 ### Forgot Password (Request OTP)
+
 ```
 
 POST /api/auth/forgot-password
 
-````
+```
+
 **Body:**
+
 ```json
 {
   "username": "string (required)"
 }
-````
+```
 
 **Response:**
 
@@ -293,7 +297,20 @@ GET /api/auth/profile
     "email": "string | null (decrypted)",
     "status": "string (active|blocked|deleted)",
     "createdAt": "ISO date",
-    "updatedAt": "ISO date"
+    "updatedAt": "ISO date",
+    "qrCodes": {
+      "total": 1,
+      "active": 1,
+      "codes": [
+        {
+          "id": "uuid",
+          "token": "string",
+          "imageUrl": "http://localhost:4000/api/qr-codes/image/<token>",
+          "status": "active",
+          "assignedAt": "ISO date"
+        }
+      ]
+    }
   }
 }
 ```
@@ -580,6 +597,7 @@ GET /api/qr-codes/my-codes
         "id": "uuid",
         "token": "string (64-char hex)",
         "humanToken": "string (e.g., QR-K9F7-M2QX)",
+        "imageUrl": "http://localhost:4000/api/qr-codes/image/<token>",
         "status": "string (active|disabled|revoked)",
         "assignedAt": "ISO date",
         "createdAt": "ISO date"
@@ -1847,7 +1865,7 @@ GET /api/admin/reports/user-growth
 GET /api/webrtc/config
 ```
 
-**Auth:** Required  
+**Auth:** Required (user JWT or guest-authenticated request)  
 **Response:** STUN/TURN server configuration
 
 ---

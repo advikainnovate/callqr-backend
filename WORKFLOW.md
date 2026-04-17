@@ -19,6 +19,8 @@ This guide covers all workflows for both admin and regular users.
 - Auto-creates FREE subscription
 - Returns temp JWT token (for verification)
 - Account status: `pending_verification`
+- Unverified users can still log in and should be redirected to OTP verification by the client
+- Accounts left unverified for more than 7 days are soft-deleted on login attempt
 
 #### Login
 
@@ -31,6 +33,7 @@ POST /api/auth/login
 ```
 
 - Returns JWT token
+- Also returns verification metadata so the client can redirect unverified users to OTP verification
 - Use token in all subsequent requests: `Authorization: Bearer <token>`
 
 #### Get Profile
@@ -168,17 +171,23 @@ Headers: Authorization: Bearer <token>
 #### Step 4: WebRTC Signaling (Socket.IO)
 
 ```javascript
-// Send offer/answer/ice-candidate
-socket.emit('webrtc-signal', {
-  type: 'offer', // or 'answer', 'ice-candidate'
+// Send granular signaling events
+socket.emit('webrtc-offer', { callId: 'CALL_ID', offer: rtcOffer });
+socket.emit('webrtc-answer', { callId: 'CALL_ID', answer: rtcAnswer });
+socket.emit('webrtc-ice-candidate', {
   callId: 'CALL_ID',
-  targetUserId: 'RECEIVER_ID',
-  data: rtcOffer,
+  candidate: rtcCandidate,
 });
 
 // Listen for signals
-socket.on('webrtc-signal', data => {
-  // Handle offer, answer, ice-candidate
+socket.on('webrtc-offer', data => {
+  // Handle offer
+});
+socket.on('webrtc-answer', data => {
+  // Handle answer
+});
+socket.on('webrtc-ice-candidate', data => {
+  // Handle ICE candidate
 });
 
 // Listen for incoming calls
@@ -882,7 +891,9 @@ Headers: Authorization: Bearer <admin-token>
 - `accept-call` - Accept incoming call
 - `reject-call` - Reject incoming call
 - `end-call` - End active call
-- `webrtc-signal` - Send WebRTC offer/answer/ice-candidate
+- `webrtc-offer` - Send WebRTC offer
+- `webrtc-answer` - Send WebRTC answer
+- `webrtc-ice-candidate` - Send ICE candidate
 
 **Server → Client:**
 
@@ -897,7 +908,9 @@ Headers: Authorization: Bearer <admin-token>
 - `call-accepted` - Call was accepted
 - `call-rejected` - Call was rejected
 - `call-ended` - Call ended
-- `webrtc-signal` - Receive WebRTC signals
+- `webrtc-offer` - Receive WebRTC offer
+- `webrtc-answer` - Receive WebRTC answer
+- `webrtc-ice-candidate` - Receive ICE candidate
 
 ### Chat Events
 

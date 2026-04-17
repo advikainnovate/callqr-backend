@@ -92,33 +92,6 @@ export class AuthController {
       .filter(Boolean);
     const isAdmin = ADMIN_USER_IDS.includes(user.id);
 
-    // Check if phone is verified (skip for admins)
-    if (!isAdmin && user.isPhoneVerified !== 'true') {
-      res.status(403).json({
-        success: false,
-        message: 'Please verify your phone number before logging in',
-        data: {
-          userId: user.id,
-          isPhoneVerified: false,
-          hint: 'Use POST /api/auth/resend-phone-verification to get a new OTP',
-        },
-      });
-      return;
-    }
-
-    // Check if account is pending verification (skip for admins)
-    if (!isAdmin && user.status === 'pending_verification') {
-      res.status(403).json({
-        success: false,
-        message: 'Your account is pending phone verification',
-        data: {
-          userId: user.id,
-          isPhoneVerified: false,
-        },
-      });
-      return;
-    }
-
     // Generate JWT token
     const token = generateAccessToken({
       type: 'user',
@@ -132,7 +105,15 @@ export class AuthController {
         id: user.id,
         username: user.username,
         status: user.status,
+        isPhoneVerified: isAdmin ? true : user.isPhoneVerified === 'true',
         createdAt: user.createdAt,
+      },
+      verification: {
+        required: !isAdmin && user.isPhoneVerified !== 'true',
+        hint:
+          !isAdmin && user.isPhoneVerified !== 'true'
+            ? 'Use POST /api/auth/resend-phone-verification to get a new OTP'
+            : null,
       },
     });
   });

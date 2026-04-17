@@ -1,267 +1,190 @@
-# 🔐 Authentication
+# Authentication
 
-> Covers registration, phone verification, login, password reset, and token management.
-
----
-
-## How It Works
-
-```
-Register (phone required)
-        │
-        ▼
-OTP sent via SMS → verify-phone
-        │
-        ▼
-Account activated (status: active)
-        │
-        ▼
-Login → accessToken + refreshToken
-```
-
-All protected routes require:
-
-```
-Authorization: Bearer <accessToken>
-```
-
-Tokens: `accessToken` expires in ~59 min · `refreshToken` in 7 days.
-
----
+> Covers registration, phone verification, login, password reset, and profile access.
 
 ## Registration Flow
 
-### Step 1 — Register
+1. `POST /api/auth/register`
+2. Backend creates the user with `status: pending_verification`
+3. OTP is sent via SMS
+4. User can log in immediately
+5. Client should redirect unverified users to OTP verification
+6. `POST /api/auth/verify-phone` activates the account
 
-```
+### Register
+
+```http
 POST /api/auth/register
+```
 
-Body:
+```json
 {
-  "username": "john_doe",      // 3–50 chars, required
-  "password": "secret123",     // 6–100 chars, required
-  "phone": "+919876543210",    // E.164 format, REQUIRED
-  "email": "j@example.com"    // optional
+  "username": "john_doe",
+  "password": "secret123",
+  "phone": "+919876543210",
+  "email": "j@example.com",
+  "emergencyContact": "Jane Doe"
 }
+```
 
-Response 201:
+Notes:
+
+- `phone` is required
+- `email` is optional
+- `emergencyContact` is currently optional
+- Newly registered users start as `pending_verification`
+
+Example response:
+
+```json
 {
+  "success": true,
+  "message": "Registration successful. Please verify your phone number.",
   "data": {
-    "token": "eyJ...",                        // temp token for verify-phone
-    "user": { "id": "uuid", "status": "pending_verification" },
-    "message": "OTP sent to your phone. Verify to activate your account."
+    "token": "eyJ...",
+    "user": {
+      "id": "uuid",
+      "username": "john_doe",
+      "status": "pending_verification",
+      "isPhoneVerified": false
+    },
+    "message": "An OTP has been sent to your phone number. Please verify to activate your account."
   }
 }
 ```
 
-> Account is `pending_verification` until phone is confirmed. Login will be blocked.
+## Login
 
----
-
-### Step 2 — Verify Phone
-
+```http
+POST /api/auth/login
 ```
+
+```json
+{
+  "username": "john_doe",
+  "password": "secret123"
+}
+```
+
+Current behavior:
+
+- Unverified users can log in
+- Login response includes verification metadata for the client
+- The client should route unverified users to OTP verification immediately
+- Accounts left unverified for more than 7 days are soft-deleted on login attempt
+
+Example response:
+
+```json
+{
+  "success": true,
+  "message": "Login successful",
+  "data": {
+    "token": "eyJ...",
+    "user": {
+      "id": "uuid",
+      "username": "john_doe",
+      "status": "pending_verification",
+      "isPhoneVerified": false,
+      "createdAt": "2026-04-17T10:00:00.000Z"
+    },
+    "verification": {
+      "required": true,
+      "hint": "Use POST /api/auth/resend-phone-verification to get a new OTP"
+    }
+  }
+}
+```
+
+Login fails if:
+
+- account is globally blocked
+- account is `deleted`
+- verification window has expired and the backend soft-deletes the pending account
+
+## Phone Verification
+
+### Verify Phone
+
+```http
 POST /api/auth/verify-phone
-Authorization: Bearer <token from registration>
-
-Body: { "otp": "123456" }
-
-Response 200:
-{ "message": "Phone number verified successfully" }
+Authorization: Bearer <token>
 ```
 
-> OTP expires in **10 minutes**. Stored as SHA-256 hash — never plain text.
+```json
+{
+  "otp": "123456"
+}
+```
+
+Successful verification sets:
+
+- `isPhoneVerified = true`
+- `status = active` if the user was `pending_verification`
 
 ### Resend OTP
 
-```
+```http
 POST /api/auth/resend-phone-verification
 Authorization: Bearer <token>
 ```
 
-### Check Verification Status
+### Send Phone Verification OTP For Existing User
 
-```
-GET /api/auth/phone-verification-status
-Authorization: Bearer <token>
-
-Response: { "hasPhone": true, "isPhoneVerified": true, "phone": "+91****3210" }
-```
-
----
-
-## Login
-
-```
-POST /api/auth/login
-
-Body: { "username": "john_doe", "password": "secret123" }
-
-Response 200:
-{
-  "data": {
-    "accessToken": "eyJ...",
-    "refreshToken": "eyJ..."
-  }
-}
-```
-
-**Login will fail if:**
-
-- Phone is not verified (`pending_verification`)
-- Account is globally blocked
-- Account is `deleted`
-
----
-
-## Password Reset (OTP-based)
-
-```mermaid
-sequenceDiagram
-    participant App
-    participant BE as Backend
-    participant SMS as Twilio SMS
-
-    App->>BE: POST /auth/forgot-password { username }
-    BE->>BE: Find user, verify phone exists
-    BE->>SMS: Send 6-digit OTP
-    BE->>App: { userId, message: "OTP sent" }
-
-    App->>BE: POST /auth/reset-password { userId, otp, newPassword }
-    BE->>BE: Verify OTP (not expired, hash matches)
-    BE->>BE: Update password, clear OTP
-    BE->>App: { message: "Password reset successful" }
-
-    App->>BE: POST /auth/login { username, newPassword }
-    BE->>App: { accessToken, refreshToken }
-```
-
-### Step 1 — Request OTP
-
-```
-POST /api/auth/forgot-password
-
-Body: { "username": "john_doe" }
-
-Response 200:
-{
-  "data": {
-    "userId": "abc-123-def",
-    "message": "OTP sent to your registered phone number."
-  }
-}
-```
-
-> Always returns success even if the username doesn't exist (prevents user enumeration).
-
-### Step 2 — Reset Password
-
-```
-POST /api/auth/reset-password
-
-Body:
-{
-  "userId": "abc-123-def",
-  "otp": "123456",
-  "newPassword": "newpass123"
-}
-
-Response 200:
-{ "message": "Password reset successful. You can now login." }
-```
-
-**Error cases:**
-
-| Error                 | Response                             |
-| --------------------- | ------------------------------------ |
-| No verified phone     | 400 `No verified phone number found` |
-| Invalid OTP           | 400 `Invalid verification code`      |
-| Expired OTP           | 400 `Verification code has expired`  |
-| Globally blocked user | 403 `Account globally blocked`       |
-
----
-
-## Profile & Password Change
-
-```
-GET  /api/auth/profile          → full user profile + usage stats + QR codes
-POST /api/auth/change-password  Body: { "oldPassword", "newPassword" }
-```
-
----
-
-## Phone Verification (standalone)
-
-For users who want to add/change their phone after registration:
-
-```
+```http
 POST /api/auth/send-phone-verification
 Authorization: Bearer <token>
-Body: { "phone": "+919876543210" }
 ```
 
----
-
-## User Account Statuses
-
-| Status                 | Can Login | Description                         |
-| ---------------------- | --------- | ----------------------------------- |
-| `pending_verification` | ❌        | Just registered, phone not verified |
-| `active`               | ✅        | Phone verified, account active      |
-| `blocked`              | ❌        | Blocked by admin                    |
-| `deleted`              | ❌        | Account removed                     |
-
----
-
-## Security Details
-
-| Feature               | Implementation              |
-| --------------------- | --------------------------- |
-| Password hashing      | bcrypt                      |
-| Phone / email storage | AES-256 encrypted           |
-| OTP storage           | SHA-256 hashed              |
-| OTP expiry            | 10 minutes                  |
-| JWT signing           | HS256, secret from env      |
-| Global block check    | Every authenticated request |
-
----
-
-## Development Testing
-
-In dev mode (no Twilio configured), OTPs are printed to server console:
-
-```
-📱 SMS OTP for +919876543210: 123456
+```json
+{
+  "phone": "+919876543210"
+}
 ```
 
-```bash
-# Register
-curl -X POST http://localhost:9001/api/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{"username":"testuser","password":"pass123","phone":"+919876543210"}'
+### Check Verification Status
 
-# Verify phone (check console for OTP)
-curl -X POST http://localhost:9001/api/auth/verify-phone \
-  -H "Authorization: Bearer TOKEN_FROM_REGISTER" \
-  -H "Content-Type: application/json" \
-  -d '{"otp":"123456"}'
-
-# Login
-curl -X POST http://localhost:9001/api/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"username":"testuser","password":"pass123"}'
+```http
+GET /api/auth/phone-verification-status
+Authorization: Bearer <token>
 ```
 
----
+## Password Reset
 
-## Environment Variables
+### Request OTP
 
-```env
-JWT_SECRET=your_jwt_secret_here
-ENCRYPTION_KEY=your_32_byte_hex_key
-
-# Twilio (required for SMS in production)
-TWILIO_ACCOUNT_SID=ACxxxxxxxxxxx
-TWILIO_AUTH_TOKEN=your_auth_token
-TWILIO_PHONE_NUMBER=+1234567890
+```http
+POST /api/auth/forgot-password
 ```
+
+### Reset Password
+
+```http
+POST /api/auth/reset-password
+```
+
+## Profile
+
+```http
+GET /api/auth/profile
+Authorization: Bearer <token>
+```
+
+Profile now includes QR image URLs in the `qrCodes.codes[]` payload so the frontend can render the backend-generated QR image directly.
+
+## User Statuses
+
+| Status                 | Can Login | Description                           |
+| ---------------------- | --------- | ------------------------------------- |
+| `pending_verification` | Yes       | Registered but phone not verified yet |
+| `active`               | Yes       | Verified and active                   |
+| `blocked`              | No        | Blocked by admin                      |
+| `deleted`              | No        | Soft-deleted account                  |
+
+## Security Notes
+
+- Passwords use `bcrypt`
+- Phone and email fields are encrypted at rest
+- OTPs are stored hashed
+- OTP expiry is 10 minutes
+- JWT uses the configured server secret

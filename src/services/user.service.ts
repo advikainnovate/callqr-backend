@@ -25,6 +25,8 @@ import bcrypt from 'bcrypt';
 import { appConfig } from '../config';
 
 export class UserService {
+  private static readonly PENDING_VERIFICATION_EXPIRY_DAYS = 7;
+
   private hashData(data: string): string {
     return crypto.createHash('sha256').update(data).digest('hex');
   }
@@ -192,6 +194,16 @@ export class UserService {
       );
     }
 
+    if (this.isPendingVerificationExpired(user)) {
+      await this.updateUser(user.id, { status: 'deleted' });
+      logger.warn(
+        `Expired pending verification account soft-deleted during login: ${user.id}`
+      );
+      throw new UnauthorizedError(
+        'Account verification window expired. Please register again.'
+      );
+    }
+
     // Check if user is active
     if (user.status !== 'active' && user.status !== 'pending_verification') {
       throw new UnauthorizedError('Account is not active');
@@ -212,6 +224,23 @@ export class UserService {
 
     logger.info(`User authenticated successfully: ${user.id}`);
     return user;
+  }
+
+  private isPendingVerificationExpired(user: User): boolean {
+    if (user.isPhoneVerified === 'true') {
+      return false;
+    }
+
+    if (user.status !== 'pending_verification' || !user.createdAt) {
+      return false;
+    }
+
+    const expiresAt = new Date(user.createdAt);
+    expiresAt.setDate(
+      expiresAt.getDate() + UserService.PENDING_VERIFICATION_EXPIRY_DAYS
+    );
+
+    return expiresAt <= new Date();
   }
 
   async changePassword(

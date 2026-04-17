@@ -1,280 +1,111 @@
-# 📞 Calls & WebRTC
+# Calls And WebRTC
 
-> Covers QR-based call initiation, WebRTC signaling, call lifecycle, and push notification fallback for offline receivers.
+> Covers QR-based call initiation, WebRTC signaling, timeout handling, and push fallback.
 
----
+## Core Flow
 
-## How It Works
+1. Caller scans QR and creates a call with `POST /api/calls/initiate`
+2. Caller emits `initiate-call` over Socket.IO
+3. Receiver gets `incoming-call` by socket or push
+4. Receiver accepts or rejects
+5. Offer / answer / ICE flow happens over granular socket events
+6. Either side ends the call, or the stale-call sweeper times it out
 
-```
-Caller scans QR → POST /calls/initiate → callId
-        │
-        └─ Socket: emit "initiate-call" { callId }
-                   │
-            ┌──────┴──────┐
-         Receiver       Receiver
-          online         offline
-            │               │
-       "incoming-call"  FCM high-priority push
-       via socket       → wakes device
-            │               │
-            └──────┬─────────┘
-                   │
-           emit "accept-call" / "reject-call"
-                   │
-           WebRTC negotiation (offer/answer/ICE)
-                   │
-           P2P media stream established 🎤📹
-```
+## ICE Config
 
----
-
-## Step-by-Step Integration
-
-### 1. Get ICE config (once on app startup)
-
-```
+```http
 GET /api/webrtc/config
-
-Response:
-{
-  "data": {
-    "iceServers": [
-      { "urls": "stun:stun.l.google.com:19302" },
-      { "urls": "turn:your-turn-server", "username": "...", "credential": "..." }
-    ]
-  }
-}
 ```
 
-Use this to initialize `RTCPeerConnection`.
+Notes:
 
-### 2. Connect the socket
+- Requires authentication
+- Works for authenticated users and guest-authenticated requests
+- Returns STUN/TURN config for `RTCPeerConnection`
 
-```javascript
-import { io } from 'socket.io-client';
+## Socket Setup
 
+```js
 const socket = io('wss://your-domain.com', {
   path: '/socket.io',
   transports: ['websocket'],
-  auth: { token: accessToken }, // Registered users only
+  auth: { token: accessToken },
 });
+```
 
-// OR for Guest/Anonymous:
+Guest example:
+
+```js
 const socket = io('wss://your-domain.com', {
   path: '/socket.io',
   transports: ['websocket'],
-  auth: { guestId: localStorage.getItem('guestId') }, // Required for guests
+  auth: { guestId: localStorage.getItem('guestId') },
 });
 ```
 
-### 3. Initiate a call (Caller)
+## Signaling Events
 
-```javascript
-// For registered users:
-const { data: call } = await api.post('/calls/initiate', { qrToken });
+Client to server:
 
-// For anonymous users:
-const { data: call } = await api.post(
-  '/calls/initiate',
-  { qrToken },
-  {
-    headers: { 'x-guest-id': guestId },
-  }
-);
+- `initiate-call`
+- `accept-call`
+- `reject-call`
+- `end-call`
+- `webrtc-offer`
+- `webrtc-answer`
+- `webrtc-ice-candidate`
 
-// Create the peer connection
-const pc = new RTCPeerConnection(iceConfig);
+Server to client:
 
-// Tell the server to ring the receiver
-socket.emit('initiate-call', { callId: call.data.id });
-```
+- `incoming-call`
+- `call-accepted`
+- `call-connected`
+- `call-rejected`
+- `call-ended`
+- `webrtc-offer`
+- `webrtc-answer`
+- `webrtc-ice-candidate`
 
-### 4. Handle incoming call (Receiver)
+## Queued Signaling Behavior
 
-```javascript
-socket.on('incoming-call', ({ callId, callerId, callerUsername }) => {
-  // Show ring UI, then when user taps Accept:
-  socket.emit('accept-call', { callId });
+If only one peer is in the call room:
 
-  // Or if user taps Reject:
-  socket.emit('reject-call', { callId });
-});
-```
+- Offer / answer / ICE are queued
+- When the missing peer joins, queued signals are replayed only to that joining socket
+- Old queued signals are not broadcast back to the sender anymore
 
-### 5. WebRTC negotiation (after acceptance)
+This means:
 
-```javascript
-// Caller: when call-accepted is received, create and send offer
-socket.on('call-accepted', async ({ callId }) => {
-  const offer = await pc.createOffer();
-  await pc.setLocalDescription(offer);
+- the caller can start signaling before the receiver fully joins
+- the receiver still gets the queued offer/ICE on join
+- clients should no longer rely on filtering their own replayed signals during queue flush
 
-  // NEW: Emit granular event instead of generic 'webrtc-signal'
-  socket.emit('webrtc-offer', {
-    callId,
-    offer,
-  });
-});
+## Timeout Behavior
 
-// Receiver: handle incoming signals
-// NOTE: These may be "replayed" by the server if you joined late.
-socket.on('webrtc-offer', async ({ offer, fromUserId, callId }) => {
-  // DEDUPLICATION: Always check if you are the one who sent this
-  if (fromUserId === myUserId) return;
-
-  await pc.setRemoteDescription(offer);
-  const answer = await pc.createAnswer();
-  await pc.setLocalDescription(answer);
-
-  socket.emit('webrtc-answer', {
-    callId,
-    answer,
-  });
-});
-
-socket.on('webrtc-answer', async ({ answer, fromUserId }) => {
-  if (fromUserId === myUserId) return;
-  await pc.setRemoteDescription(answer);
-});
-
-socket.on('webrtc-ice-candidate', async ({ candidate, fromUserId }) => {
-  if (fromUserId === myUserId) return;
-  await pc.addIceCandidate(candidate);
-});
-
-// Both sides: send ICE candidates as they are gathered
-pc.onicecandidate = ({ candidate }) => {
-  if (candidate)
-    socket.emit('webrtc-ice-candidate', {
-      callId,
-      candidate,
-    });
-};
-
-// Both sides: get remote media stream
-pc.ontrack = event => {
-  remoteMediaStream.addTrack(event.track);
-};
-```
-
-### 6. End the call
-
-```javascript
-socket.emit('end-call', { callId });
-pc.close();
-```
-
----
-
-## Full Call Sequence Diagram
-
-```mermaid
-sequenceDiagram
-    participant CA as Caller App
-    participant BE as Backend (Signal Queue)
-    participant RA as Receiver App
-
-    CA->>BE: POST /calls/initiate → callId
-    CA->>BE: Socket "initiate-call" { callId }
-
-    Note over CA, BE: Caller can send signaling immediately
-    CA->>BE: Socket "webrtc-offer"
-    BE->>BE: Queue offer (roomSize=1)
-
-    RA->>BE: Socket "accept-call" { callId }
-    BE->>BE: Replay Queue (Offer first)
-    BE->>RA: Socket "webrtc-offer" (Replayed)
-
-    RA->>BE: Socket "webrtc-answer"
-    BE->>CA: Socket "webrtc-answer" (Real-time)
-
-    CA->>RA: P2P media stream established 🎤
-```
-
----
-
-## Socket Events Reference
-
-### Emit (client → server)
-
-| Event                  | Payload                 | Description                             |
-| ---------------------- | ----------------------- | --------------------------------------- |
-| `initiate-call`        | `{ callId }`            | Start ringing and join call room.       |
-| `accept-call`          | `{ callId }`            | Join call room and trigger queue flush. |
-| `webrtc-offer`         | `{ callId, offer }`     | **NEW** Granular offer event.           |
-| `webrtc-answer`        | `{ callId, answer }`    | **NEW** Granular answer event.          |
-| `webrtc-ice-candidate` | `{ callId, candidate }` | **NEW** Granular ICE event.             |
-
-### Listen (server → client)
-
-| Event                  | Payload                             | Description                                       |
-| ---------------------- | ----------------------------------- | ------------------------------------------------- |
-| `webrtc-offer`         | `{ callId, offer, fromUserId }`     | Replayed OR real-time. **Deduplicate on client.** |
-| `webrtc-answer`        | `{ callId, answer, fromUserId }`    | Real-time. **Deduplicate on client.**             |
-| `webrtc-ice-candidate` | `{ callId, candidate, fromUserId }` | Replayed OR real-time. **Deduplicate on client.** |
-| `incoming-call`        | `{ callId, callerUsername }`        | Ring notification.                                |
-| `call-accepted`        | `{ callId, receiverId }`            | Sent to caller when receiver accepts.             |
-
-> [!IMPORTANT]
-> **Deduplication**: Because the server now uses `io.to(room).emit()` for stability, you will receive your own signaling events back. You **MUST** filter these out by checking if `fromUserId` matches your own ID.
->
-> **Queuing**: You no longer need to wait for `call-accepted` to start sending signaling. The server will safely queue your Offer and ICE candidates and replay them as soon as the receiver joins.
-
----
+- The per-call timeout path has been removed
+- Unanswered calls are timed out only by the global stale-call sweeper
+- Timed-out calls emit `call-ended` and are marked with `endedReason: timeout`
 
 ## REST Endpoints
 
-| Method  | Endpoint                    | Description                           |
-| ------- | --------------------------- | ------------------------------------- |
-| `POST`  | `/api/calls/initiate`       | Create call session (needs `qrToken`) |
-| `GET`   | `/api/calls/:callId`        | Get call details                      |
-| `PATCH` | `/api/calls/:callId/accept` | Accept (socket preferred)             |
-| `PATCH` | `/api/calls/:callId/reject` | Reject (socket preferred)             |
-| `PATCH` | `/api/calls/:callId/end`    | End (socket preferred)                |
-| `GET`   | `/api/calls/history/all`    | Call history (`?limit=50`)            |
-| `GET`   | `/api/calls/active/list`    | Active calls                          |
-| `GET`   | `/api/calls/usage/stats`    | Today's usage vs plan limit           |
-| `GET`   | `/api/webrtc/config`        | ICE server config                     |
+| Method  | Endpoint                    | Notes                 |
+| ------- | --------------------------- | --------------------- |
+| `POST`  | `/api/calls/initiate`       | Create a call session |
+| `GET`   | `/api/calls/:callId`        | Get call details      |
+| `PATCH` | `/api/calls/:callId/accept` | Socket is preferred   |
+| `PATCH` | `/api/calls/:callId/reject` | Socket is preferred   |
+| `PATCH` | `/api/calls/:callId/end`    | Socket is preferred   |
+| `GET`   | `/api/calls/history/all`    | Call history          |
+| `GET`   | `/api/calls/active/list`    | Active calls          |
+| `GET`   | `/api/calls/usage/stats`    | Usage stats           |
+| `GET`   | `/api/webrtc/config`        | ICE server config     |
 
-> The REST `accept/reject/end` endpoints are a fallback for when the socket drops. In normal operation, use socket events.
+## Call Status Notes
 
----
+- Normal hang-up now records `endedReason: completed`
+- Rejected calls record `endedReason: rejected`
+- Timeout cleanup clears queued signals for the call
 
-## Call Status Lifecycle
+## Push Fallback
 
-```
-initiated → ringing → connected → ended
-                              ↘ failed (reason: rejected | timeout | error | busy)
-```
-
-## Push Notification for Offline Receivers
-
-If the receiver has no active socket connection, the backend sends a **high-priority FCM data message** that wakes the device even when the app is killed.
-
-See [PUSH_NOTIFICATIONS.md](./PUSH_NOTIFICATIONS.md) for the full setup guide.
-
-**iOS note:** For a true fullscreen incoming call screen when killed, implement **CallKit + PushKit** on the mobile side. The backend already sends `apns-push-type: voip` in the FCM payload.
-
----
-
-## Call Rate Limits
-
-| Plan       | Daily calls (received) |
-| ---------- | ---------------------- |
-| FREE       | 50                     |
-| PRO        | 80                     |
-| ENTERPRISE | Unlimited              |
-
-Calls are counted per **receiver** per day. Only calls that are successfully **connected** (answered) count towards this limit.
-
----
-
-## Environment Variables
-
-```env
-STUN_SERVER=stun:stun.l.google.com:19302   # optional, default used if not set
-TURN_SERVER=turn:your-turn.example.com      # optional, for symmetric NAT
-TURN_USERNAME=your_turn_user
-TURN_PASSWORD=your_turn_password
-```
+If the receiver has no active socket, the backend sends a high-priority push notification so the device can reconnect and join the call flow.
