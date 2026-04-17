@@ -56,7 +56,12 @@ export class WebRTCService {
   private staleCallTimer: NodeJS.Timeout | null = null;
   private signalQueue: Map<
     string,
-    { event: string; payload: any; timestamp: number }[]
+    {
+      event: string;
+      payload: any;
+      timestamp: number;
+      targetUserId: string;
+    }[]
   > = new Map();
   private pendingDeliveries: Map<string, NodeJS.Timeout> = new Map(); // messageId -> timeout
   private lastTypingEmitted: Map<string, number> = new Map(); // userId -> lastTimestamp
@@ -575,6 +580,7 @@ export class WebRTCService {
       event,
       payload,
       timestamp: Date.now(),
+      targetUserId: targetSocketId,
     });
 
     logger.warn(
@@ -607,8 +613,8 @@ export class WebRTCService {
         `[CALL_TIMING] initiator ${socket.userId} joined room for ${callId} in ${Date.now() - initiationStartedAt}ms`
       );
 
-      // Flush any queued signals for this call immediately (best-effort replay)
-      this.flushSignalQueue(callId);
+      // Replay any queued signals that were specifically waiting for this socket.
+      this.flushSignalQueue(callId, socket);
 
       // Get caller's username
       let callerUsername = 'Anonymous Caller';
@@ -682,36 +688,6 @@ export class WebRTCService {
         callerId: call.callerId || `guest:${call.guestId}`,
         receiverId: call.receiverId,
       });
-
-      // Implement a 30s connection timeout
-      // If the call doesn't reach 'connected' state within 30s, end it automatically.
-      setTimeout(async () => {
-        try {
-          const currentCall =
-            await callSessionService.getCallSessionById(callId);
-          if (
-            currentCall.status === 'initiated' ||
-            currentCall.status === 'ringing'
-          ) {
-            logger.info(`Call ${callId} timed out before connection.`);
-            await callSessionService.endCall(callId, 'system', 'timeout');
-            socketEmitter.emitCallStatus(callId, 'ended', {
-              reason: 'timeout',
-            });
-            socketEmitter.emitToUser(call.receiverId, 'call-ended', {
-              callId,
-              reason: 'timeout',
-            });
-            const initiatorId = call.callerId || `guest:${call.guestId}`;
-            socketEmitter.emitToUser(initiatorId, 'call-ended', {
-              callId,
-              reason: 'timeout',
-            });
-          }
-        } catch (err) {
-          logger.error(`Error in call ${callId} connection timeout:`, err);
-        }
-      }, 30000);
     } catch (error) {
       logger.error('Error handling call initiation:', error);
       socket.emit('error', { message: 'Failed to initiate call' });
@@ -746,8 +722,8 @@ export class WebRTCService {
         `[CALL_TIMING] receiver ${socket.userId} joined room for ${callId} after ${Date.now() - acceptanceStartedAt}ms`
       );
 
-      // Flush any queued signals for this call immediately after joining
-      this.flushSignalQueue(callId);
+      // Replay any queued signals that were specifically waiting for this socket.
+      this.flushSignalQueue(callId, socket);
       logger.info(
         `[CALL_TIMING] queue flush completed for ${callId} after ${Date.now() - acceptanceStartedAt}ms`
       );
@@ -1108,33 +1084,46 @@ export class WebRTCService {
   }
 
   /**
-   * Replays all queued signals in chronological order to the current call room.
-   * This is a best-effort replay for reconnect/join timing gaps.
+   * Replays queued signals targeted to the socket that just joined the call room.
+   * This preserves signal order without broadcasting old signals back to the sender.
    */
-  private flushSignalQueue(callId: string) {
+  private flushSignalQueue(callId: string, targetSocket: AuthenticatedSocket) {
     const queuedSignals = this.signalQueue.get(callId);
 
-    if (queuedSignals && queuedSignals.length > 0) {
-      // 1. Sort by timestamp to ensure correct WebRTC state transitions
-      queuedSignals.sort((a, b) => a.timestamp - b.timestamp);
-
-      logger.info(
-        `[FLUSH] Replaying ${queuedSignals.length} signals for call ${callId} at ${new Date().toISOString()}`
-      );
-
-      // 2. Broadcast to the entire room (io.to includes sender)
-      // This ensures both peers see all missing context
-      const roomName = `call:${callId}`;
-      for (const signal of queuedSignals) {
-        logger.info(
-          `[CALL_TIMING] replaying queued ${signal.event} for ${callId}; queuedFor=${Date.now() - signal.timestamp}ms`
-        );
-        this.io.to(roomName).emit(signal.event, signal.payload);
-      }
-
-      // 3. IMPORTANT: Clear the queue once delivered
-      this.signalQueue.delete(callId);
+    if (!queuedSignals || queuedSignals.length === 0 || !targetSocket.userId) {
+      return;
     }
+
+    const targetUserId = targetSocket.userId;
+    const deliverableSignals = queuedSignals
+      .filter(signal => signal.targetUserId === targetUserId)
+      .sort((a, b) => a.timestamp - b.timestamp);
+
+    if (deliverableSignals.length === 0) {
+      return;
+    }
+
+    logger.info(
+      `[FLUSH] Replaying ${deliverableSignals.length} queued signals for call ${callId} to ${targetUserId} at ${new Date().toISOString()}`
+    );
+
+    for (const signal of deliverableSignals) {
+      logger.info(
+        `[CALL_TIMING] replaying queued ${signal.event} for ${callId} to ${targetUserId}; queuedFor=${Date.now() - signal.timestamp}ms`
+      );
+      targetSocket.emit(signal.event, signal.payload);
+    }
+
+    const remainingSignals = queuedSignals.filter(
+      signal => signal.targetUserId !== targetUserId
+    );
+
+    if (remainingSignals.length > 0) {
+      this.signalQueue.set(callId, remainingSignals);
+      return;
+    }
+
+    this.signalQueue.delete(callId);
   }
 
   /**
