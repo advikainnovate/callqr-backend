@@ -77,7 +77,7 @@ export class UserService {
   async createUser(userData: {
     username: string;
     password: string;
-    emergencyContact: string;
+    emergencyContact?: string;
     phone?: string;
     email?: string;
     status?: string;
@@ -118,7 +118,7 @@ export class UserService {
         email,
         phoneHash,
         emailHash,
-        emergencyContact: userData.emergencyContact,
+        emergencyContact: userData.emergencyContact || '',
         status: userData.status || 'active',
       })
       .returning();

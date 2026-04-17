@@ -21,15 +21,6 @@ export class AuthController {
       return;
     }
 
-    // Validate emergency contact
-    if (!emergencyContact) {
-      res.status(400).json({
-        success: false,
-        message: 'Emergency contact is required for registration',
-      });
-      return;
-    }
-
     // Create user with pending_verification status
     const user = await userService.createUser({
       username,

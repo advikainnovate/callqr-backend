@@ -5,7 +5,7 @@ export const createUserSchema = z.object({
     username: z.string().min(3).max(50),
     phone: z.string().optional(),
     email: z.string().email().optional(),
-    emergencyContact: z.string().min(1, 'Emergency contact is required'),
+    emergencyContact: z.string().optional(),
   }),
 });
 

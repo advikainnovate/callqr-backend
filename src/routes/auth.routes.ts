@@ -16,7 +16,7 @@ const registerSchema = z.object({
     username: z.string().min(3).max(50),
     password: z.string().min(6).max(100),
     phone: z.string().min(1, 'Phone number is required'),
-    emergencyContact: z.string().min(1, 'Emergency contact is required'),
+    emergencyContact: z.string().optional(),
     email: z.string().email().optional(),
   }),
 });
