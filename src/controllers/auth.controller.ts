@@ -6,6 +6,7 @@ import { sendSuccessResponse } from '../utils/responseHandler';
 import { generateAccessToken, generateGuestToken } from '../utils/jwt';
 import { SUBSCRIPTION_PLANS } from '../constants/subscriptions';
 import crypto from 'crypto';
+import { appConfig } from '../config';
 
 export class AuthController {
   register = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
@@ -222,6 +223,7 @@ export class AuthController {
           codes: qrCodes.map(qr => ({
             id: qr.id,
             token: qr.token,
+            imageUrl: `${appConfig.backendUrl}/api/qr-codes/image/${qr.token}`,
             status: qr.status,
             assignedAt: qr.assignedAt,
           })),

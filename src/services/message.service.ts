@@ -1,4 +1,4 @@
-import { eq, and, desc, sql, gte, ilike, or } from 'drizzle-orm';
+import { eq, and, desc, sql, gte, or } from 'drizzle-orm';
 import { db } from '../db';
 import {
   messages,
@@ -21,8 +21,12 @@ import { subscriptionService } from './subscription.service';
 import { mediaService } from './media.service';
 import { userService } from './user.service';
 import { DAILY_MESSAGE_LIMITS } from '../constants/subscriptions';
+import crypto from 'crypto';
+import { appConfig } from '../config';
 
 export class MessageService {
+  private readonly messageEncryptionPrefix = 'enc:';
+
   async sendMessage(
     chatSessionId: string,
     senderId: string,
@@ -133,7 +137,7 @@ export class MessageService {
         chatSessionId,
         senderId,
         messageType,
-        content: (content || '').trim(),
+        content: this.encryptMessageContent((content || '').trim()),
         mediaAttachments,
         isRead: false,
         isDeleted: false,
@@ -156,7 +160,7 @@ export class MessageService {
       .limit(1);
 
     return {
-      ...message,
+      ...this.hydrateMessageContent(message),
       senderName: sender?.username || null,
     };
   }
@@ -194,7 +198,7 @@ export class MessageService {
       .offset(offset);
 
     return results.reverse().map(result => ({
-      ...result.msg,
+      ...this.hydrateMessageContent(result.msg),
       senderName: result.sender?.username || null,
     }));
   }
@@ -221,12 +225,12 @@ export class MessageService {
 
     // Only mark as read if user is not the sender
     if (message.senderId === userId) {
-      return message;
+      return this.hydrateMessageContent(message);
     }
 
     // Only update if not already read
     if (message.isRead) {
-      return message;
+      return this.hydrateMessageContent(message);
     }
 
     const [updatedMessage] = await db
@@ -239,7 +243,7 @@ export class MessageService {
       .returning();
 
     logger.info(`Message marked as read: ${messageId} by user ${userId}`);
-    return updatedMessage;
+    return this.hydrateMessageContent(updatedMessage);
   }
 
   async markChatMessagesAsRead(
@@ -381,7 +385,7 @@ export class MessageService {
       throw new BadRequestError('Search query cannot be empty');
     }
 
-    const escapedQuery = this.escapeLikePattern(query.trim());
+    const normalizedQuery = query.trim().toLocaleLowerCase();
 
     const results = await db
       .select({
@@ -393,17 +397,23 @@ export class MessageService {
       .where(
         and(
           eq(messages.chatSessionId, chatSessionId),
-          eq(messages.isDeleted, false),
-          sql`${messages.content} ILIKE ${`%${escapedQuery}%`} ESCAPE '\\'`
+          eq(messages.isDeleted, false)
         )
       )
-      .orderBy(desc(messages.sentAt))
-      .limit(50);
+      .orderBy(desc(messages.sentAt));
 
-    return results.reverse().map(result => ({
-      ...result.msg,
-      senderName: result.sender?.username || null,
-    }));
+    const matchedMessages = results
+      .map(result => ({
+        ...this.hydrateMessageContent(result.msg),
+        senderName: result.sender?.username || null,
+      }))
+      .filter(result =>
+        result.content.toLocaleLowerCase().includes(normalizedQuery)
+      )
+      .slice(0, 50)
+      .reverse();
+
+    return matchedMessages;
   }
 
   async getDailyMessageCount(userId: string): Promise<number> {
@@ -436,10 +446,6 @@ export class MessageService {
     }
   }
 
-  private escapeLikePattern(value: string): string {
-    return value.replace(/[\\%_]/g, '\\$&');
-  }
-
   /** Lightweight fetch by primary key — for internal use only (no participant check). */
   async getMessageById(messageId: string): Promise<Message> {
     const [message] = await db
@@ -452,7 +458,7 @@ export class MessageService {
       throw new NotFoundError('Message not found');
     }
 
-    return message;
+    return this.hydrateMessageContent(message);
   }
 
   async getLastMessage(
@@ -476,7 +482,10 @@ export class MessageService {
 
     const result = results[0];
     return result
-      ? { ...result.msg, senderName: result.sender?.username || null }
+      ? {
+          ...this.hydrateMessageContent(result.msg),
+          senderName: result.sender?.username || null,
+        }
       : null;
   }
 
@@ -502,7 +511,7 @@ export class MessageService {
 
     // Only mark as delivered if user is not the sender and not already delivered
     if (message.senderId === userId || message.isDelivered) {
-      return message;
+      return this.hydrateMessageContent(message);
     }
 
     const [updatedMessage] = await db
@@ -515,7 +524,7 @@ export class MessageService {
       .returning();
 
     logger.info(`Message marked as delivered: ${messageId} by user ${userId}`);
-    return updatedMessage;
+    return this.hydrateMessageContent(updatedMessage);
   }
 
   async markChatMessagesAsDelivered(
@@ -590,6 +599,54 @@ export class MessageService {
       sentAt: message.sentAt,
       deliveredAt: message.deliveredAt,
       readAt: message.readAt,
+    };
+  }
+
+  private encryptMessageContent(content: string): string {
+    const algorithm = 'aes-256-cbc';
+    const key = Buffer.from(appConfig.encryptionKey, 'hex');
+    const iv = crypto.randomBytes(16);
+    const cipher = crypto.createCipheriv(algorithm, key, iv);
+    let encrypted = cipher.update(content, 'utf8', 'hex');
+    encrypted += cipher.final('hex');
+
+    return `${this.messageEncryptionPrefix}${iv.toString('hex')}:${encrypted}`;
+  }
+
+  private decryptMessageContent(storedContent: string): string {
+    if (!storedContent.startsWith(this.messageEncryptionPrefix)) {
+      return storedContent;
+    }
+
+    try {
+      const encryptedPayload = storedContent.slice(
+        this.messageEncryptionPrefix.length
+      );
+      const parts = encryptedPayload.split(':');
+
+      if (parts.length !== 2) {
+        logger.warn('Invalid encrypted message format');
+        return '[INVALID_MESSAGE]';
+      }
+
+      const algorithm = 'aes-256-cbc';
+      const key = Buffer.from(appConfig.encryptionKey, 'hex');
+      const iv = Buffer.from(parts[0], 'hex');
+      const encrypted = parts[1];
+      const decipher = crypto.createDecipheriv(algorithm, key, iv);
+      let decrypted = decipher.update(encrypted, 'hex', 'utf8');
+      decrypted += decipher.final('utf8');
+      return decrypted;
+    } catch (error) {
+      logger.error('Message decryption failed:', error);
+      return '[DECRYPTION_ERROR]';
+    }
+  }
+
+  private hydrateMessageContent<T extends { content: string }>(message: T): T {
+    return {
+      ...message,
+      content: this.decryptMessageContent(message.content),
     };
   }
 }
