@@ -221,8 +221,8 @@ export class QRCodeController {
       const qrCode = await qrCodeService.getQRCodeByToken(token);
       const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
 
-      // If the QR code is unassigned, redirect to the base frontend URL
-      if (qrCode.status === 'unassigned') {
+      // If the QR code is unassigned or scanned by a third-party app, redirect to the base frontend URL
+      if (qrCode.status === 'unassigned' || !isApp) {
         return res.redirect(302, baseUrl);
       }
 
