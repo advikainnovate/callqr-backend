@@ -221,14 +221,34 @@ export class QRCodeController {
       const qrCode = await qrCodeService.getQRCodeByToken(token);
       const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
 
-      // If the QR code is unassigned or scanned by a third-party app, redirect to the base frontend URL
-      if (qrCode.status === 'unassigned' || !isApp) {
+      // Unassigned QR codes: redirect to frontend base URL
+      if (qrCode.status === 'unassigned') {
         return res.redirect(302, baseUrl);
       }
 
-      // Redirect assigned QR codes to the frontend calling page
-      const frontendUrl = `${baseUrl}/call/${token}`;
-      res.redirect(302, frontendUrl);
+      // For assigned QR codes, use scanQRCode to safely get the QR and user details
+      let scanResult;
+      try {
+        scanResult = await qrCodeService.scanQRCode(token);
+      } catch (err) {
+        // Fallback to baseUrl if scanning fails (e.g., QR disabled or user blocked)
+        if (!isApp) return res.redirect(302, baseUrl);
+        throw err;
+      }
+
+      const { user } = scanResult;
+
+      // Third-party app: redirect to contact page with user details
+      if (!isApp) {
+        const frontendUrl = `${baseUrl}/contact?token=${token}&userId=${user.id}&ownerName=${encodeURIComponent(user.username)}`;
+        return res.redirect(302, frontendUrl);
+      }
+
+      // Official app: do not redirect, return successful response instead
+      return sendSuccessResponse(res, 200, 'App scan resolved successfully', {
+        qrCode: scanResult.qrCode,
+        user: scanResult.user,
+      });
     }
   );
 }
