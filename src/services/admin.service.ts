@@ -1,5 +1,10 @@
 import { eq, and, desc, sql, gte, lte, or, count } from 'drizzle-orm';
 import { db } from '../db';
+import { Response } from 'express';
+import archiver from 'archiver';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import {
   users,
   qrCodes,
@@ -1408,6 +1413,91 @@ export class AdminService {
         count: Number(u.count),
       })),
     };
+  }
+
+  async exportUnassignedQRCodesZip(res: Response, limit?: number) {
+    const { qrCodeService } = await import('./qrCode.service');
+    const MAX_LIMIT = 10000;
+    const exportLimit = limit ? Math.min(limit, MAX_LIMIT) : MAX_LIMIT;
+
+    // Write to a temp file first — guarantees raw binary delivery via res.download()
+    const tmpFile = path.join(os.tmpdir(), `unassigned-qrs-${Date.now()}.zip`);
+    const output = fs.createWriteStream(tmpFile);
+
+    const archive = archiver('zip', {
+      zlib: { level: 6 },
+    });
+
+    archive.on('error', err => {
+      logger.error('Archiver error:', err);
+      fs.unlink(tmpFile, () => {});
+      if (!res.headersSent) {
+        res
+          .status(500)
+          .json({ success: false, message: 'Failed to generate archive' });
+      }
+    });
+
+    archive.pipe(output);
+
+    const batchSize = 500;
+    let offset = 0;
+    let processed = 0;
+
+    try {
+      while (processed < exportLimit) {
+        const fetchLimit = Math.min(batchSize, exportLimit - processed);
+
+        const batch = await db
+          .select()
+          .from(qrCodes)
+          .where(eq(qrCodes.status, 'unassigned'))
+          .orderBy(desc(qrCodes.createdAt))
+          .limit(fetchLimit)
+          .offset(offset);
+
+        if (batch.length === 0) break;
+
+        for (const qr of batch) {
+          const buffer = await qrCodeService.generateQRCodeBuffer(qr.token);
+          const safeName = qr.humanToken.replace(/[^a-zA-Z0-9-]/g, '');
+          archive.append(buffer, { name: `qr-${safeName}.png` });
+          processed++;
+        }
+
+        offset += fetchLimit;
+
+        // Yield to event loop between batches
+        await new Promise(resolve => setTimeout(resolve, 10));
+      }
+
+      logger.info(`Zipping completed. Packaged ${processed} unassigned QRs.`);
+      await archive.finalize();
+
+      // Wait for the write stream to finish flushing to disk
+      await new Promise<void>((resolve, reject) => {
+        output.on('finish', resolve);
+        output.on('error', reject);
+      });
+
+      // Send the temp file as raw binary — client gets a clean, uncorrupted ZIP
+      res.download(tmpFile, 'unassigned-qrs.zip', err => {
+        // Cleanup temp file regardless of success or failure
+        fs.unlink(tmpFile, () => {});
+        if (err && !res.headersSent) {
+          logger.error('Error sending ZIP file:', err);
+        }
+      });
+    } catch (error) {
+      logger.error('Error generating QR zip:', error);
+      archive.abort();
+      fs.unlink(tmpFile, () => {});
+      if (!res.headersSent) {
+        res
+          .status(500)
+          .json({ success: false, message: 'Failed to generate ZIP' });
+      }
+    }
   }
 }
 

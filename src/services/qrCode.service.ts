@@ -462,6 +462,25 @@ export class QRCodeService {
 
     return dataURL;
   }
+
+  async generateQRCodeBuffer(input: string): Promise<Buffer> {
+    const token = extractQRCodeToken(input);
+
+    if (!token) {
+      throw new BadRequestError('Invalid QR token format');
+    }
+
+    const qrUrl = `${appConfig.backendUrl}/api/qr-codes/resolve/${token}`;
+
+    const buffer = await QRCode.toBuffer(qrUrl, {
+      type: 'png',
+      width: 300,
+      margin: 2,
+      color: { dark: '#000000', light: '#FFFFFF' },
+    });
+
+    return buffer;
+  }
 }
 
 export const qrCodeService = new QRCodeService();

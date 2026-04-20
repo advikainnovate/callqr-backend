@@ -510,6 +510,16 @@ export class AdminController {
     }
   );
 
+  exportUnassignedQRCodesZip = asyncHandler(
+    async (req: AuthenticatedRequest, res: Response) => {
+      const { limit } = req.query;
+      const parsedLimit = limit ? parseInt(limit as string, 10) : undefined;
+
+      // Pass response to service to handle exact stream streaming
+      await adminService.exportUnassignedQRCodesZip(res, parsedLimit);
+    }
+  );
+
   exportCallHistory = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
       const { startDate, endDate, status } = req.query;
