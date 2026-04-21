@@ -21,7 +21,7 @@ Mobile App                  Backend (Express)              Firebase (FCM)
     │  FCM push wakes the app     │                               │
 ```
 
-**Rule:** User **online** (socket connected) → socket event. User **offline** → FCM push.
+**Rule:** User **online** (socket connected) → socket event. User **offline** (no socket connection) → FCM push fallback.
 
 ---
 
@@ -78,6 +78,26 @@ Sent when recipient is not connected to the socket room.
 
 ---
 
+### 🔍 QR Scanned Notification (Attention event)
+
+Sent when a third-party scans a user's QR code and the user is offline. This acts as an "attention" signal.
+
+**Data payload:**
+
+```json
+{
+  "data": {
+    "type": "qr_scanned",
+    "qrCodeId": "QR-XXXX-XXXX",
+    "title": "QR Scanned",
+    "body": "Someone is viewing your contact page",
+    "timestamp": "2026-03-16T07:00:00.000Z"
+  }
+}
+```
+
+---
+
 ## Device Token API
 
 ### Register a token (call after login)
@@ -115,6 +135,8 @@ Body:
 
 Response 200:
 { "message": "Push token removed successfully" }
+
+---
 
 ---
 
@@ -187,7 +209,8 @@ export async function unregisterDeviceToken(apiClient: any) {
   const token = await messaging().getToken();
   if (!token) return;
   await apiClient.delete('/users/push-token', {
-    data: { token },
+    platform: Platform.OS,
+    deviceId: await DeviceInfo.getUniqueId(), // react-native-device-info
   });
   await messaging().deleteToken();
 }
@@ -248,7 +271,9 @@ messaging().setBackgroundMessageHandler(async remoteMessage => {
 
 ```env
 # Option A — service account JSON file (recommended for local dev)
-FIREBASE_SERVICE_ACCOUNT_PATH=/path/to/serviceAccount.json
+FIREBASE_SERVICE_ACCOUNT=./serviceAccountKey.json
+# or legacy name:
+# FIREBASE_SERVICE_ACCOUNT_PATH=/path/to/serviceAccount.json
 
 # Option B — individual values (recommended for production/CI)
 FIREBASE_PROJECT_ID=your-project-id
@@ -264,7 +289,7 @@ The server starts normally even if Firebase is not configured — it just silent
 
 | Topic                    | Status              | Action needed                                                             |
 | ------------------------ | ------------------- | ------------------------------------------------------------------------- |
-| Stale token cleanup      | Logged as warning   | Delete token from DB when FCM returns `registration-token-not-registered` |
+| Stale token cleanup      | ✅ Implemented      | Tokens are automatically removed from DB on registration error            |
 | iOS VoIP / CallKit       | APNs data push sent | Mobile: register separate PushKit token, send with `platform: "ios-voip"` |
 | Call timeout (missed)    | No auto-expiry      | Cron job to mark calls as `missed` after 30s in `ringing` state           |
 | Notification preferences | All-or-nothing      | Add `notification_settings` table for per-chat mute / DND                 |

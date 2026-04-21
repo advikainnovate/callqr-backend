@@ -474,7 +474,7 @@ POST /api/users/verify/email
 ### Register/Update Device Token
 
 ```
-POST /api/users/device-tokens
+POST /api/users/push-token
 ```
 
 **Auth:** Required  
@@ -493,7 +493,17 @@ POST /api/users/device-tokens
 ### Remove Device Token (Logout)
 
 ```
-DELETE /api/users/device-tokens/:token
+DELETE /api/users/push-token
+```
+
+**Body:**
+
+```json
+{
+  "token": "string (FCM registration token, required)",
+  "platform": "string (required)",
+  "deviceId": "string (required if platform is not 'web')"
+}
 ```
 
 **Auth:** Required  

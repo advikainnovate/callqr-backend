@@ -61,11 +61,11 @@ TWILIO_AUTH_TOKEN=your_auth_token
 TWILIO_PHONE_NUMBER=+1234567890
 
 # Firebase (Optional - for push notifications)
-FIREBASE_SERVICE_ACCOUNT_PATH=/path/to/serviceAccount.json
-# OR individual values:
-FIREBASE_PROJECT_ID=your-project-id
-FIREBASE_CLIENT_EMAIL=firebase-adminsdk@your-project.iam.gserviceaccount.com
-FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
+# Set either FIREBASE_SERVICE_ACCOUNT (path) or individual values:
+FIREBASE_SERVICE_ACCOUNT=./serviceAccountKey.json
+# FIREBASE_PROJECT_ID=your-project-id
+# FIREBASE_CLIENT_EMAIL=firebase-adminsdk@your-project.iam.gserviceaccount.com
+# FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
 
 # CORS
 ALLOWED_ORIGINS=*
