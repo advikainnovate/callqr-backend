@@ -79,3 +79,8 @@ token.txt
 
 # TypeScript cache
 *.tsbuildinfo 
+
+# Firebase
+serviceAccountKey.json
+/config/firebase/*.json
+src/config/serviceAccountKey.json

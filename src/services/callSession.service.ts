@@ -18,6 +18,8 @@ import { userService } from './user.service';
 import { subscriptionService } from './subscription.service';
 import { parseIdentity } from '../utils/identityUtils';
 import { chatSessionService } from './chatSession.service';
+import { notificationService } from './notification.service';
+import { socketEmitter } from './socketEmitter.service';
 
 type CallActor =
   | { kind: 'user'; id: string; rawId: string }
@@ -100,6 +102,10 @@ export class CallSessionService {
     logger.info(
       `Callback initiated from history ${sourceCallId}: ${callSession.id} from ${callerId} to ${receiverId}`
     );
+
+    // 📱 [PUSH NOTIFICATION] Trigger if receiver is offline
+    this.triggerPushIfOffline(callSession.id, receiverId, callerId);
+
     return callSession;
   }
 
@@ -156,6 +162,10 @@ export class CallSessionService {
     logger.info(
       `Call session initiated from chat ${chatSessionId}: ${callSession.id} from ${callerId} to ${receiverId}`
     );
+
+    // 📱 [PUSH NOTIFICATION] Trigger if receiver is offline
+    this.triggerPushIfOffline(callSession.id, receiverId, callerId);
+
     return callSession;
   }
 
@@ -229,7 +239,59 @@ export class CallSessionService {
     logger.info(
       `Call session initiated: ${callSession.id} from ${callerId || guestId} to ${qrCode.assignedUserId}`
     );
+
+    // 📱 [PUSH NOTIFICATION] Trigger if receiver is offline
+    this.triggerPushIfOffline(callSession.id, qrCode.assignedUserId, callerId);
+
     return callSession;
+  }
+
+  /**
+   * Helper to trigger a high-priority call push notification if the receiver is offline.
+   * This is a "fire and forget" call; failure to send push shouldn't block the main flow.
+   */
+  private async triggerPushIfOffline(
+    callId: string,
+    receiverId: string,
+    callerId?: string | null
+  ): Promise<void> {
+    try {
+      // 1. Check if user is already online via sockets
+      if (socketEmitter.isUserOnline(receiverId)) {
+        logger.debug(
+          `Push skipped for user ${receiverId}: User is online via socket.`
+        );
+        return;
+      }
+
+      // 2. Fetch receiver's device tokens
+      const tokens = await userService.getUserDeviceTokens(receiverId);
+      if (tokens.length === 0) {
+        logger.debug(`Push skipped for user ${receiverId}: No device tokens.`);
+        return;
+      }
+
+      // 3. Determine caller username
+      let callerUsername = 'guest';
+      if (callerId) {
+        try {
+          const sender = await userService.getUserById(callerId);
+          callerUsername = sender.username;
+        } catch (err) {
+          logger.warn(`Failed to fetch caller username for push: ${callerId}`);
+        }
+      }
+
+      // 4. Send notification
+      await notificationService.sendCallNotification(tokens, {
+        callId,
+        callerId: callerId || 'anonymous',
+        callerUsername,
+      });
+    } catch (error) {
+      // Catch-all to ensure main flow is never interrupted
+      logger.error('Error in triggerPushIfOffline:', error);
+    }
   }
 
   async updateCallStatus(

@@ -171,6 +171,16 @@ class SocketEmitterService {
   broadcast(event: string, payload: any) {
     this.ioServer.emit(event, payload);
   }
+
+  /**
+   * Checks if a user has any active socket connections.
+   * Useful for determining if we should fallback to push notifications.
+   */
+  isUserOnline(userId: string): boolean {
+    if (!this.io) return false;
+    const room = this.io.sockets.adapter.rooms.get(userId);
+    return !!room && room.size > 0;
+  }
 }
 
 export const socketEmitter = new SocketEmitterService();

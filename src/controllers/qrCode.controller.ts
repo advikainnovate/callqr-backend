@@ -1,7 +1,10 @@
 import { Response } from 'express';
 import { qrCodeService } from '../services/qrCode.service';
+import { userService } from '../services/user.service';
+import { notificationService } from '../services/notification.service';
+import { socketEmitter } from '../services/socketEmitter.service';
 import { AuthenticatedRequest } from '../middlewares/auth.middleware';
-import { asyncHandler, UnauthorizedError } from '../utils';
+import { asyncHandler, logger, UnauthorizedError } from '../utils';
 import { sendSuccessResponse } from '../utils/responseHandler';
 import { appConfig } from '../config';
 
@@ -237,9 +240,13 @@ export class QRCodeController {
       }
 
       const { user } = scanResult;
+      const qrCodeId = scanResult.qrCode.humanToken;
 
       // Third-party app: redirect to contact page with user details
       if (!isApp) {
+        // 📱 [PUSH NOTIFICATION] Notify owner if they are offline
+        this.triggerScanNotificationIfOffline(user.id, qrCodeId);
+
         const frontendUrl = `${baseUrl}/contact?token=${token}&userId=${user.id}&ownerName=${encodeURIComponent(user.username)}`;
         return res.redirect(302, frontendUrl);
       }
@@ -251,6 +258,33 @@ export class QRCodeController {
       });
     }
   );
+
+  /**
+   * Helper to notify a user that their QR code was scanned via web.
+   * Only triggers if the user is offline (push fallback).
+   */
+  private async triggerScanNotificationIfOffline(
+    userId: string,
+    qrCodeId: string
+  ): Promise<void> {
+    try {
+      if (!socketEmitter.isUserOnline(userId)) {
+        const tokens = await userService.getUserDeviceTokens(userId);
+        if (tokens.length > 0) {
+          await notificationService.sendDataNotification(tokens, {
+            type: 'qr_scanned',
+            qrCodeId,
+            title: 'QR Scanned',
+            body: 'Someone is viewing your contact page',
+            timestamp: new Date().toISOString(),
+          });
+          logger.info(`📱 Push [scan notification]: Sent to user ${userId}`);
+        }
+      }
+    } catch (error) {
+      logger.error('Error sending scan notification:', error);
+    }
+  }
 }
 
 export const qrCodeController = new QRCodeController();

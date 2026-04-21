@@ -1,6 +1,9 @@
 import { getFirebaseMessaging, isFirebaseReady } from '../config/firebase';
 import { logger } from '../utils';
 import type { MulticastMessage } from 'firebase-admin/messaging';
+import { db } from '../db';
+import { deviceTokens } from '../models';
+import { eq } from 'drizzle-orm';
 
 // ─── Payload Interfaces ───────────────────────────────────────────────────────
 
@@ -193,8 +196,14 @@ class NotificationService {
               errorCode === 'messaging/registration-token-not-registered'
             ) {
               logger.warn(
-                `Stale device token detected: ${token.substring(0, 10)}... — should be removed`
+                `Stale device token detected: ${token.substring(0, 10)}... — removing from DB`
               );
+              // Clean up stale tokens from DB
+              db.delete(deviceTokens)
+                .where(eq(deviceTokens.token, token))
+                .catch(err => {
+                  logger.error('Failed to remove stale token from DB:', err);
+                });
             }
           }
         });

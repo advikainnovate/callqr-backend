@@ -14,7 +14,9 @@ let firebaseApp: admin.app.App | null = null;
 export const initializeFirebase = (): void => {
   if (firebaseApp) return; // Already initialized
 
-  const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH;
+  const serviceAccountPath =
+    process.env.FIREBASE_SERVICE_ACCOUNT ||
+    process.env.FIREBASE_SERVICE_ACCOUNT_PATH;
   const projectId = process.env.FIREBASE_PROJECT_ID;
   const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
   const privateKey = process.env.FIREBASE_PRIVATE_KEY;
@@ -22,7 +24,7 @@ export const initializeFirebase = (): void => {
   if (!serviceAccountPath && !projectId) {
     logger.warn(
       '⚠️  Firebase not configured. Push notifications will be disabled. ' +
-        'Set FIREBASE_SERVICE_ACCOUNT_PATH or FIREBASE_PROJECT_ID/FIREBASE_CLIENT_EMAIL/FIREBASE_PRIVATE_KEY to enable.'
+        'Set FIREBASE_SERVICE_ACCOUNT or FIREBASE_PROJECT_ID/FIREBASE_CLIENT_EMAIL/FIREBASE_PRIVATE_KEY to enable.'
     );
     return;
   }
