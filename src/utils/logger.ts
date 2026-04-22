@@ -20,6 +20,10 @@ const colors = {
 winston.addColors(colors);
 
 const level = () => {
+  const envLevel = process.env.LOG_LEVEL;
+  if (envLevel && levels[envLevel as keyof typeof levels] !== undefined) {
+    return envLevel;
+  }
   const env = process.env.NODE_ENV || 'development';
   const isDevelopment = env === 'development';
   return isDevelopment ? 'debug' : 'warn';

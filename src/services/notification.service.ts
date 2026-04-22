@@ -62,6 +62,7 @@ class NotificationService {
         notification: {
           channelId: 'incoming_calls',
           sound: 'ringtone',
+          // 'high' is the correct lowercase value for the SDK
           priority: 'high',
         },
       },
