@@ -91,12 +91,20 @@ Express-level limits apply to REST API routes (configured via `express-rate-limi
 
 ## Attack Prevention
 
-| Attack                | Without limiting  | With limiting       |
-| --------------------- | ----------------- | ------------------- |
-| Message flooding      | Unlimited spam    | Max 30 msg/min      |
-| Signal flooding       | Fake offer DoS    | Max 100 signals/min |
-| Connection exhaustion | Unlimited sockets | 10 conn/min per IP  |
-| Typing spam           | Event overload    | Max 20/10s          |
+| Typing spam | Event overload | Max 20/10s |
+
+---
+
+## Socket Reliability (Heartbeats)
+
+To detect dead connections and backgrounded mobile apps faster, the system uses aggressive heartbeat settings:
+
+| Property       | Value | Purpose                                      |
+| -------------- | ----- | -------------------------------------------- |
+| `pingInterval` | 10s   | Frequency of server pings to client          |
+| `pingTimeout`  | 5s    | Max wait time for pong before closing socket |
+
+These settings ensure that a "zombie" connection is detected within 15 seconds, allowing the **Call Reconnection Grace Period** to start correctly.
 
 ---
 

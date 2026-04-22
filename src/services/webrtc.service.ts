@@ -65,22 +65,27 @@ export class WebRTCService {
   > = new Map();
   private pendingDeliveries: Map<string, NodeJS.Timeout> = new Map(); // messageId -> timeout
   private lastTypingEmitted: Map<string, number> = new Map(); // userId -> lastTimestamp
+  private reconnectTimers: Map<string, NodeJS.Timeout[]> = new Map(); // userId -> active timers
 
   constructor(server: HTTPServer) {
     // Initialize rate limiters
     this.rateLimiter = new SocketRateLimiter();
     this.connectionLimiter = new ConnectionRateLimiter(10, 60000); // 10 connections per minute per IP
 
-    this.io = new SocketIOServer(server, {
+    const ioOptions: any = {
       path: '/socket.io',
-      perMessageDeflate: false, // Fix for Nginx RSV1 error
+      perMessageDeflate: false,
       cors: {
-        origin: true, // Echoes back the request origin (perfect for credentials)
+        origin: true,
         methods: ['GET', 'POST'],
         credentials: true,
       },
-      transports: ['websocket'], // Skip polling to avoid 'Worker Process' mismatch
-    });
+      transports: ['websocket'],
+      pingInterval: 10000, // Detect dead sockets faster (10s)
+      pingTimeout: 5000, // Timeout after 5s of no response
+    };
+
+    this.io = new SocketIOServer(server, ioOptions);
 
     // Initialize ICE configuration with STUN/TURN servers
     this.iceConfig = {
@@ -214,6 +219,14 @@ export class WebRTCService {
 
       logger.info(`User connected to WebRTC: ${userId}`);
 
+      // Check for and cancel any pending cleanup timers for this user
+      const timers = this.reconnectTimers.get(userId);
+      if (timers) {
+        timers.forEach(t => clearTimeout(t));
+        this.reconnectTimers.delete(userId);
+        logger.info(`✅ User ${userId} reconnected. Pending cleanup canceled.`);
+      }
+
       // Store user connection
       this.connectedUsers.set(userId, socket.id);
       logger.info(
@@ -307,64 +320,128 @@ export class WebRTCService {
           await this.handleMessageDelivered(socket, data);
         }
       ); // Handle disconnection with 5s grace period for network flickers
+      // Handle disconnection with configurable grace period and "wake-up" push notifications
       socket.on('disconnect', async reason => {
         logger.info(
           `User socket disconnected from WebRTC: ${userId}. Reason: ${reason}`
         );
 
-        // Wait 5 seconds before cleaning up sessions
-        setTimeout(async () => {
-          // Check if user has reconnected with a new socket in the meantime
+        // 1. Determine Grace Period (with 60s hard limit safety bound)
+        let gracePeriod = Math.min(
+          appConfig.callDisconnectGracePeriodMs || 30000,
+          60000
+        );
+
+        // 2. Optimization: If BOTH participants are offline, shorten timeout to 10s
+        try {
+          const activeCalls = await callSessionService.getActiveCalls(userId);
+          if (activeCalls.length > 0) {
+            const allParticipantsOffline = activeCalls.every(call => {
+              const otherId =
+                call.callerId === userId
+                  ? call.receiverId
+                  : call.callerId || `guest:${call.guestId}`;
+              return !this.isUserOnline(otherId);
+            });
+
+            if (allParticipantsOffline) {
+              gracePeriod = 10000;
+              logger.info(
+                `Dual disconnect detected for ${userId}. Shortening grace period to 10s.`
+              );
+            }
+          }
+        } catch (err) {
+          logger.error('Error during mutual disconnect check:', err);
+        }
+
+        const timers: NodeJS.Timeout[] = [];
+
+        // Stage A: Wake-up Push (Delayed by 2-3s)
+        const wakeupTimer = setTimeout(async () => {
+          if (!this.isUserOnline(userId)) {
+            logger.info(
+              `📱 Sending "wake-up" push to disconnected user ${userId}`
+            );
+            try {
+              const activeCalls =
+                await callSessionService.getActiveCalls(userId);
+              for (const call of activeCalls) {
+                // Re-trigger the incoming call notification to wake the app
+                const tokens = await userService.getUserDeviceTokens(userId);
+                if (tokens.length > 0) {
+                  await notificationService.sendCallNotification(tokens, {
+                    callId: call.id,
+                    callerId: call.callerId || `guest:${call.guestId}`,
+                    callerUsername: 'Still Calling...', // Logic to keep them engaged
+                    reconnect: true,
+                  });
+                }
+              }
+            } catch (err) {
+              logger.error('Error sending wake-up push:', err);
+            }
+          }
+        }, appConfig.callWakeupPushDelayMs || 3000);
+        timers.push(wakeupTimer);
+
+        // Stage B: Full Cleanup (After Grace Period)
+        const cleanupTimer = setTimeout(async () => {
+          // Final Race-Condition Safety: Check if user reconnected with ANY socket
           const sockets = await this.io.in(userId).fetchSockets();
           if (sockets.length > 0) {
             logger.info(
-              `User ${userId} reconnected within grace period. Skipping call cleanup.`
+              `User ${userId} reconnected within grace period. Aborting cleanup.`
             );
             return;
           }
 
           logger.info(
-            `Cleaning up calls for user ${userId} after grace period.`
+            `Cleaning up calls for user ${userId} after ${gracePeriod}ms grace period.`
           );
+
+          // Remove from connected users map if this was their last/active socket
           const currentSocketId = this.connectedUsers.get(userId);
           if (currentSocketId === socket.id) {
             this.connectedUsers.delete(userId);
           }
           this.lastTypingEmitted.delete(userId);
+          this.reconnectTimers.delete(userId);
 
           try {
             const endedCalls = await callSessionService.endActiveCallsForUser(
               userId,
-              'error'
+              'network_lost'
             );
+
             for (const call of endedCalls) {
               this.signalQueue.delete(call.id);
-              const callerId = call.callerId || `guest:${call.guestId}`;
-              const otherUserId =
-                callerId === userId ? call.receiverId : callerId;
+              const otherId =
+                call.callerId === userId
+                  ? call.receiverId
+                  : call.callerId || `guest:${call.guestId}`;
 
-              // Emit to the other party's personal room (guaranteed delivery)
-              socketEmitter.emitToUser(otherUserId, 'call-ended', {
+              // Notify the other party
+              socketEmitter.emitToUser(otherId, 'call-ended', {
                 callId: call.id,
                 endedBy: userId,
-                reason: 'disconnect',
+                reason: 'network_lost',
               });
 
-              // Broadast to call room (if anyone still there)
               socketEmitter.emitCallStatus(call.id, 'ended', {
                 endedBy: userId,
-                reason: 'disconnect',
+                reason: 'network_lost',
               });
 
               socketEmitter.leaveCallRoom(call.id);
             }
           } catch (err) {
-            logger.error(
-              `Error cleaning up calls on disconnect for user ${userId}:`,
-              err
-            );
+            logger.error(`Error cleaning up calls for user ${userId}:`, err);
           }
-        }, 5000);
+        }, gracePeriod);
+        timers.push(cleanupTimer);
+
+        this.reconnectTimers.set(userId, timers);
       });
     });
   }

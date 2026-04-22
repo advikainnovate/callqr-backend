@@ -40,10 +40,13 @@ Sent when receiver has no active socket. Wakes the device even if the app is kil
     "callId": "uuid",
     "callerId": "uuid",
     "callerUsername": "john_doe",
+    "reconnect": "true", // "true" if this is a wake-up push during a reconnection window
     "timestamp": "2026-03-16T07:00:00.000Z"
   }
 }
 ```
+
+> **Wake-up Logic:** If a user loses socket connection during an active call, the server waits 3 seconds then sends this "wake-up" push with `reconnect: "true"`. This tells the mobile app to force a socket reconnection to resume the call.
 
 **iOS APNs headers also set:**
 
@@ -224,6 +227,7 @@ type PushData = {
   callId?: string;
   callerId?: string;
   callerUsername?: string;
+  reconnect?: string; // "true" or "false"
   chatSessionId?: string;
   senderUsername?: string;
 };
@@ -287,9 +291,9 @@ The server starts normally even if Firebase is not configured — it just silent
 
 ## Known Limitations & Next Steps
 
-| Topic                    | Status              | Action needed                                                             |
-| ------------------------ | ------------------- | ------------------------------------------------------------------------- |
-| Stale token cleanup      | ✅ Implemented      | Tokens are automatically removed from DB on registration error            |
-| iOS VoIP / CallKit       | APNs data push sent | Mobile: register separate PushKit token, send with `platform: "ios-voip"` |
-| Call timeout (missed)    | No auto-expiry      | Cron job to mark calls as `missed` after 30s in `ringing` state           |
-| Notification preferences | All-or-nothing      | Add `notification_settings` table for per-chat mute / DND                 |
+| Topic                 | Status              | Action needed                                                             |
+| --------------------- | ------------------- | ------------------------------------------------------------------------- |
+| Stale token cleanup   | ✅ Implemented      | Tokens are automatically removed from DB on registration error            |
+| iOS VoIP / CallKit    | APNs data push sent | Mobile: register separate PushKit token, send with `platform: "ios-voip"` |
+| Call timeout (missed) | ✅ Implemented      | Calls are auto-ended after 60s ringing or 30s network loss                |
+| Notification settings | All-or-nothing      | Add `notification_settings` table for per-chat mute / DND                 |

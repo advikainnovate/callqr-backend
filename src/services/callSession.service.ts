@@ -27,7 +27,13 @@ type CallActor =
   | { kind: 'system'; id: 'system'; rawId: 'system' };
 
 type CallStatus = 'initiated' | 'ringing' | 'connected' | 'ended' | 'failed';
-type CallEndReason = 'busy' | 'rejected' | 'timeout' | 'error' | 'completed';
+type CallEndReason =
+  | 'busy'
+  | 'rejected'
+  | 'timeout'
+  | 'error'
+  | 'completed'
+  | 'network_lost';
 
 export class CallSessionService {
   async initiateCallbackCall(
@@ -491,12 +497,15 @@ export class CallSessionService {
    */
   async endActiveCallsForUser(
     userId: string,
-    reason: 'error' | 'timeout' = 'error'
+    reason: CallEndReason = 'error'
   ): Promise<CallSession[]> {
-    const activeCalls = await this.getActiveCalls(userId);
-    const ended: CallSession[] = [];
+    const actor = this.parseActor(userId);
     const systemActor = this.parseActor('system');
 
+    // Find all active calls where user is participant
+    const activeCalls = await this.getActiveCalls(userId);
+
+    const ended: CallSession[] = [];
     for (const call of activeCalls) {
       try {
         const updated = await this.transitionCall(

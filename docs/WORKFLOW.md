@@ -214,6 +214,12 @@ Headers: Authorization: Bearer <token>
 { "reason": "completed" }
 ```
 
+#### Step 7: Reliability & Reconnection (Automatic)
+
+- **Network loss**: If a user's socket drops, the call stays active for **30 seconds**.
+- **Wake-up push**: If the user is still offline after 3 seconds, the server sends a "wake-up" push with `reconnect: "true"`.
+- **Termination**: If 30 seconds pass without reconnection, the call is ended with reason `network_lost`.
+
 #### Get Call History
 
 ```
@@ -395,7 +401,14 @@ Headers: Authorization: Bearer <token>
 3. If **offline**, Server sends FCM push (type: `new_message`) with message preview.
 4. Recipient is notified via system tray.
 
-See **[docs/PUSH_NOTIFICATIONS.md](docs/PUSH_NOTIFICATIONS.md)** for detailed integration steps.
+#### Call Reconnection (Wake-up)
+
+1. Participant loses socket during active call.
+2. Server waits 3 seconds then sends high-priority FCM push with `reconnect: "true"`.
+3. App wakes up, re-connects socket within the 30s window.
+4. Signaling resumes automatically.
+
+See **[PUSH_NOTIFICATIONS.md](./PUSH_NOTIFICATIONS.md)** for detailed integration steps.
 
 ### 7. Full Payment & Subscription Workflow
 

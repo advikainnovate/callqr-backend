@@ -87,6 +87,7 @@ ALLOWED_ORIGINS=*
 - **Push Notifications (FCM)** for offline calls and messages
 - **Anonymous Calling Support**: Allow calls from non-registered users via QR scans
 - **Guest Identity & Blocking**: Privacy-safe guest IDs with IP-based blocking
+- **Call Reliability**: 30-second reconnection window with automated wake-up push notifications
 
 ### Communication
 - Real-time text messaging (Registered users only)
@@ -142,8 +143,8 @@ PostgreSQL Database (Users, QR Codes, Sessions, Messages)
 - **[docs/ADMIN_AND_BLOCKING.md](docs/ADMIN_AND_BLOCKING.md)** - Global and user-level blocking
 - **[docs/RATE_LIMITING.md](docs/RATE_LIMITING.md)** - Socket and API protection
 - **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)** - Production setup and Nginx config
-- **[API_ENDPOINTS.md](API_ENDPOINTS.md)** - Reference list of all REST endpoints
-- **[WORKFLOW.md](WORKFLOW.md)** - End-to-end integration examples
+- **[docs/API_ENDPOINTS.md](docs/API_ENDPOINTS.md)** - Reference list of all REST endpoints
+- **[docs/WORKFLOW.md](docs/WORKFLOW.md)** - End-to-end integration examples
 - **[Swagger Docs](http://localhost:9001/api-docs)** - Live interactive API documentation
 
 ## 🛠️ Development
@@ -317,7 +318,7 @@ const options = {
 new Razorpay(options).open();
 ```
 
-See [WORKFLOW.md](WORKFLOW.md#6-payment--subscription-workflow) for complete payment flow.
+See [docs/WORKFLOW.md](docs/WORKFLOW.md#6-payment--subscription-workflow) for complete payment flow.
 
 ## 🔌 WebRTC Integration
 

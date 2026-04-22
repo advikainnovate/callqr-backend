@@ -58,7 +58,26 @@ Once both parties are in the `call:[callId]` room, the Peer-to-Peer handshake be
 
 ---
 
-## 3. Common Failure Modes & Debugging
+## 3. Reconnection & Grace Period (Mobile Reliability)
+
+The system is designed to handle aggressive mobile OS restrictions (app backgrounding/killing) and network flickers.
+
+### Disconnection Window
+
+When a participant's socket disconnects during an active call, the server **does not** end the call immediately. Instead:
+
+1. **Mark Reconnecting**: The server acknowledges the disconnect but waits (default 30s).
+2. **Wake-up Push (3s)**: If the user stays disconnected for 3 seconds, a high-priority FCM push is sent with `reconnect: "true"`.
+3. **Re-establishment**: If the user re-joins (new socket) within 30s, the session continues and all queued signals are replayed.
+4. **Cleanup**: If no reconnection happens within 30s, the call is ended with reason `network_lost`.
+
+### Mutual Disconnect
+
+If **both** participants are disconnected at the same time, the grace period window shrinks to **10 seconds** to release server resources faster.
+
+---
+
+## 4. Common Failure Modes & Debugging
 
 ### "No Voice" / ICE Failures
 

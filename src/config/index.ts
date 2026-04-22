@@ -36,6 +36,15 @@ const config = {
     clientEmail: process.env.FIREBASE_CLIENT_EMAIL || '',
     privateKey: process.env.FIREBASE_PRIVATE_KEY || '',
   },
+
+  callDisconnectGracePeriodMs: parseInt(
+    process.env.CALL_DISCONNECT_GRACE_PERIOD_MS || '30000',
+    10
+  ),
+  callWakeupPushDelayMs: parseInt(
+    process.env.CALL_WAKEUP_PUSH_DELAY_MS || '3000',
+    10
+  ),
 };
 
 // Freeze the config object to make it immutable

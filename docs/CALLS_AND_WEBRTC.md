@@ -80,11 +80,13 @@ This means:
 - the receiver still gets the queued offer/ICE on join
 - clients should no longer rely on filtering their own replayed signals during queue flush
 
-## Timeout Behavior
+## Timeout & Reliability Behavior
 
-- The per-call timeout path has been removed
-- Unanswered calls are timed out only by the global stale-call sweeper
-- Timed-out calls emit `call-ended` and are marked with `endedReason: timeout`
+- **Global Sweet**: Unanswered calls are timed out by the global stale-call sweeper (ringing > 60s). Reason: `timeout`.
+- **Disconnection Grace Period**: If a participant's socket drops during an active call, the server **waits 30 seconds** before ending the call. This handles app backgrounding and brief network flickers.
+- **Reconnection**: If the user re-establishes a socket within these 30s, the cleanup is canceled and signaling resumes (via queued signals).
+- **Mutual Disconnect**: If BOTH participants are offline, the window shrinks to 10s.
+- **Reason**: Calls ending due to persistent disconnection are marked with `endedReason: network_lost`.
 
 ## REST Endpoints
 
@@ -106,6 +108,9 @@ This means:
 - Rejected calls record `endedReason: rejected`
 - Timeout cleanup clears queued signals for the call
 
-## Push Fallback
+## Push Fallback & Wake-up
 
-If the receiver has no active socket, the backend sends a high-priority push notification so the device can reconnect and join the call flow.
+1. **Initial Fallback**: If the receiver is offline during initiation, a high-priority push is sent instantly.
+2. **Wake-up Push**: If an active participant's socket drops, the server waits **3 seconds**. If they are still disconnected, it sends a "wake-up" push notification with `reconnect: "true"` to force the app to reconnect its socket.
+
+See [PUSH_NOTIFICATIONS.md](./PUSH_NOTIFICATIONS.md) for data payload details.

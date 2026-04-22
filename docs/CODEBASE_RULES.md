@@ -79,8 +79,24 @@ Subscriptions control daily usage quotas.
 
 ---
 
-## 5. Technical Constraints
+---
 
-- **Bulk Creation**: Admins can create up to **2000** QR codes in a single request.
-- **Data Privacy**: Phone numbers and emails are stored **encrypted** in the database using `AES-256-CBC`.
-- **Searchability**: SHA-256 hashes of phone numbers and emails are used for fast lookup without decrypting.
+## 6. Call Reliability & Reconnection
+
+The system enforces specific timeout and recovery behaviors to handle real-world mobile network conditions.
+
+### Reconnection Window (The "30s Grace Period")
+
+- **Active Call Disconnect**: If a socket disconnects during an active call, the call does not end immediately. The system enters a **30-second grace period**.
+- **Cancellation**: If the user re-connects within the 30s window, the call resumes and cleanup is cancelled.
+- **Mutual Disconnection**: If BOTH participants are offline, the window is shortened to **10 seconds** to release server resources.
+
+### Wake-up Notifications
+
+- **Delay**: If a user stays disconnected for **3 seconds**, the server automatically triggers a high-priority "wake-up" push notification.
+- **Payload**: The notification includes a `reconnect: "true"` flag to instruct the mobile app to force a socket reconnection.
+
+### Termination Reasons
+
+- **Network Lost**: If the 30s window expires without reconnection, the call is ended with the status reason `network_lost`.
+- **Missed Call**: If an initiated call is never answered within **60 seconds**, it is ended by the global sweeper with reason `timeout`.

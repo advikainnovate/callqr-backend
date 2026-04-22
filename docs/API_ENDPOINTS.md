@@ -753,7 +753,7 @@ PATCH /api/calls/:callId/end
 
 ```json
 {
-  "reason": "string (optional)"
+  "reason": "string (optional: busy|rejected|timeout|error|completed|network_lost)"
 }
 ```
 
@@ -778,7 +778,7 @@ GET /api/calls/history/all
         "callerId": "uuid",
         "receiverId": "uuid",
         "status": "string (initiated|ringing|connected|ended|failed)",
-        "endedReason": "string | null",
+        "endedReason": "string | null (busy|rejected|timeout|error|completed|network_lost)",
         "startedAt": "ISO date",
         "endedAt": "ISO date | null"
       }
