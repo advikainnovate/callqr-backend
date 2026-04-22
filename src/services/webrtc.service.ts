@@ -704,14 +704,34 @@ export class WebRTCService {
         }
       }
 
-      // Notify receiver
-      const isReceiverOnline = this.isUserOnline(call.receiverId);
-      logger.debug(
-        `[WebRTC] Notifying receiver ${call.receiverId}. Online status: ${isReceiverOnline}`
-      );
+      // 📱 Always send push notification for calls:
+      // This is the only reliable way to wake up backgrounded/killed mobile apps
+      // and trigger the native system Call UI.
+      try {
+        const deviceTokens = await userService.getUserDeviceTokens(
+          call.receiverId
+        );
+        if (deviceTokens.length > 0) {
+          logger.info(
+            `📱 Sending call push notification to receiver ${call.receiverId}`
+          );
+          await notificationService.sendCallNotification(deviceTokens, {
+            callId: call.id,
+            callerId: call.callerId || `guest:${call.guestId}`,
+            callerUsername: callerUsername,
+            iceServers: JSON.stringify(this.iceConfig.iceServers),
+          });
+        }
+      } catch (pushErr) {
+        logger.error(
+          `Failed to send initial call push to ${call.receiverId}:`,
+          pushErr
+        );
+      }
 
+      // 🔌 Also deliver via socket for real-time foreground handling
+      const isReceiverOnline = this.isUserOnline(call.receiverId);
       if (isReceiverOnline) {
-        // Receiver is online — deliver via their personal room
         logger.debug(
           `[WebRTC] Emitting incoming-call to user room ${call.receiverId}`
         );
@@ -724,20 +744,6 @@ export class WebRTCService {
         logger.info(
           `[CALL_TIMING] incoming-call emitted for ${callId} to receiver ${call.receiverId} after ${Date.now() - initiationStartedAt}ms`
         );
-      } else {
-        // Receiver is offline — wake them via push notification
-        logger.info(
-          `Receiver ${call.receiverId} is offline, sending push notification for call ${callId}`
-        );
-        const deviceTokens = await userService.getUserDeviceTokens(
-          call.receiverId
-        );
-        await notificationService.sendCallNotification(deviceTokens, {
-          callId: call.id,
-          callerId: call.callerId || `guest:${call.guestId}`,
-          callerUsername: callerUsername,
-          iceServers: JSON.stringify(this.iceConfig.iceServers),
-        });
       }
 
       // Always update status to ringing so the call is trackable

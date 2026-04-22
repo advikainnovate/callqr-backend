@@ -71,13 +71,15 @@ export class MessageController {
             senderId
           );
 
-        const { getWebRTCService } = await import('../services/webrtc.service');
-        const ws = getWebRTCService();
-        if (!ws || !ws.isUserOnline(otherParticipantId)) {
-          const [sender, deviceTokens] = await Promise.all([
-            userService.getUserById(senderId),
-            userService.getUserDeviceTokens(otherParticipantId),
-          ]);
+        const [sender, deviceTokens] = await Promise.all([
+          userService.getUserById(senderId),
+          userService.getUserDeviceTokens(otherParticipantId),
+        ]);
+
+        if (deviceTokens.length > 0) {
+          logger.info(
+            `📱 Sending message push notification to user ${otherParticipantId}`
+          );
           await notificationService.sendMessageNotification(deviceTokens, {
             chatSessionId,
             senderId,
