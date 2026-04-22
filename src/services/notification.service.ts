@@ -39,7 +39,14 @@ class NotificationService {
 
     const message: MulticastMessage = {
       tokens: deviceTokens,
-      // Data-only — app handles UI in foreground/background/killed state
+      // Top-level notification block: CRITICAL for killed-state delivery
+      notification: {
+        title: 'Incoming Call',
+        body: payload.reconnect
+          ? 'Reconnecting call...'
+          : `${payload.callerUsername} is calling you`,
+      },
+      // Data payload for app-level VoIP/reconnection logic
       data: {
         type: 'incoming_call',
         callId: payload.callId,
@@ -51,29 +58,22 @@ class NotificationService {
       },
       android: {
         priority: 'high',
-        ttl: 30000, // 30s — if not delivered in 30s, drop it (call will have timed out)
+        ttl: 30000,
         notification: {
-          // Shown as a heads-up notification on Android if app is not handling it as VoIP
-          title: 'Incoming Call',
-          body: `${payload.callerUsername} is calling you`,
-          channelId: 'incoming_calls', // Must be created in the app with HIGH importance
+          channelId: 'incoming_calls',
           sound: 'ringtone',
+          priority: 'high',
         },
       },
       apns: {
         headers: {
           'apns-priority': '10',
-          'apns-expiration': String(Math.floor(Date.now() / 1000) + 30), // Expire after 30s
+          'apns-expiration': String(Math.floor(Date.now() / 1000) + 30),
         },
         payload: {
           aps: {
-            // For standard APNs (non-VoIP) — use content-available for silent wake
             'content-available': 1,
             sound: 'ringtone.caf',
-            alert: {
-              title: 'Incoming Call',
-              body: `${payload.callerUsername} is calling you`,
-            },
           },
         },
       },
@@ -112,11 +112,11 @@ class NotificationService {
         timestamp: new Date().toISOString(),
       },
       android: {
-        priority: 'normal',
+        priority: 'high', // Use high priority for better killed-state delivery
         notification: {
           channelId: 'messages',
           sound: 'default',
-          clickAction: 'OPEN_CHAT', // Intent action on Android
+          clickAction: 'OPEN_CHAT',
         },
       },
       apns: {
@@ -143,11 +143,24 @@ class NotificationService {
 
     const message: MulticastMessage = {
       tokens: deviceTokens,
+      // Include notification block if title/body present in data (fallback for killed state)
+      ...(data.title || data.body
+        ? {
+            notification: {
+              title: data.title,
+              body: data.body,
+            },
+          }
+        : {}),
       data,
-      android: { priority: 'normal' },
+      android: {
+        priority: data.type === 'qr_scanned' ? 'high' : 'normal',
+      },
       apns: {
         payload: { aps: { 'content-available': 1 } },
-        headers: { 'apns-priority': '5' },
+        headers: {
+          'apns-priority': data.type === 'qr_scanned' ? '10' : '5',
+        },
       },
     };
 
