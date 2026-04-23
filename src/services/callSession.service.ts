@@ -139,6 +139,10 @@ export class CallSessionService {
 
     // Enforce 24-hour expiration window
     const chatWindowStart = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    if (!chatSession.startedAt) {
+      throw new BadRequestError('Chat session is missing its start time');
+    }
+
     if (chatSession.startedAt < chatWindowStart) {
       throw new BadRequestError(
         'Call window has expired. Please scan the QR code again'
