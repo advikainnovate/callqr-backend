@@ -214,6 +214,26 @@ describe('CallSessionService', () => {
     expect(mockInsert).toHaveBeenCalled();
   });
 
+  it('rejects calls from chat sessions after 24 hours', async () => {
+    const { callSessionService } = await import('../callSession.service');
+    const { chatSessionService } = await import('../chatSession.service');
+
+    jest.spyOn(chatSessionService, 'getChatSessionForUser').mockResolvedValue({
+      id: 'chat-1',
+      participant1Id: 'caller-1',
+      participant2Id: 'receiver-1',
+      qrId: 'qr-1',
+      status: 'active',
+      startedAt: new Date(Date.now() - 25 * 60 * 60 * 1000), // 25 hours ago
+    } as any);
+
+    await expect(
+      callSessionService.initiateCallFromChat('caller-1', 'chat-1')
+    ).rejects.toMatchObject({
+      message: 'Call window has expired. Please scan the QR code again',
+    });
+  });
+
   it('allows a registered user to callback a registered participant within 24 hours', async () => {
     const { callSessionService } = await import('../callSession.service');
     const { userService } = await import('../user.service');

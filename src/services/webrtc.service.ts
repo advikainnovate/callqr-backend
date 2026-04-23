@@ -693,16 +693,8 @@ export class WebRTCService {
       // Replay any queued signals that were specifically waiting for this socket.
       this.flushSignalQueue(callId, socket);
 
-      // Get caller's username
-      let callerUsername = 'Anonymous Caller';
-      if (call.callerId) {
-        try {
-          const caller = await userService.getUserById(call.callerId);
-          callerUsername = caller.username;
-        } catch (err) {
-          logger.warn(`Failed to fetch caller ${call.callerId}:`, err);
-        }
-      }
+      // Get caller's username (already fetched via join in callSessionService)
+      let callerUsername = call.callerName || 'Anonymous Caller';
 
       // 📱 Always send push notification for calls:
       // This is the only reliable way to wake up backgrounded/killed mobile apps

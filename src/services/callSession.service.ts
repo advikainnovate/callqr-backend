@@ -110,7 +110,14 @@ export class CallSessionService {
     );
 
     // 📱 [PUSH NOTIFICATION] Trigger if receiver is offline
-    this.triggerPushIfOffline(callSession.id, receiverId, callerId);
+    this.triggerPushIfOffline(
+      callSession.id,
+      receiverId,
+      callerId,
+      sourceCall.callerId === callerId
+        ? sourceCall.callerName
+        : sourceCall.receiverName
+    );
 
     return callSession;
   }
@@ -127,6 +134,14 @@ export class CallSessionService {
     if (chatSession.status !== 'active') {
       throw new BadRequestError(
         `Cannot start a call from a ${chatSession.status} chat`
+      );
+    }
+
+    // Enforce 24-hour expiration window
+    const chatWindowStart = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    if (chatSession.startedAt < chatWindowStart) {
+      throw new BadRequestError(
+        'Call window has expired. Please scan the QR code again'
       );
     }
 
@@ -170,7 +185,14 @@ export class CallSessionService {
     );
 
     // 📱 [PUSH NOTIFICATION] Trigger if receiver is offline
-    this.triggerPushIfOffline(callSession.id, receiverId, callerId);
+    this.triggerPushIfOffline(
+      callSession.id,
+      receiverId,
+      callerId,
+      chatSession.participant1Id === callerId
+        ? chatSession.participant1Name
+        : chatSession.participant2Name
+    );
 
     return callSession;
   }
@@ -259,7 +281,8 @@ export class CallSessionService {
   private async triggerPushIfOffline(
     callId: string,
     receiverId: string,
-    callerId?: string | null
+    callerId?: string | null,
+    callerUsernameOverride?: string | null
   ): Promise<void> {
     try {
       // 1. Check if user is already online via sockets
@@ -278,8 +301,8 @@ export class CallSessionService {
       }
 
       // 3. Determine caller username
-      let callerUsername = 'guest';
-      if (callerId) {
+      let callerUsername = callerUsernameOverride || 'Anonymous Caller';
+      if (!callerUsernameOverride && callerId) {
         try {
           const sender = await userService.getUserById(callerId);
           callerUsername = sender.username;
