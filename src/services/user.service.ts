@@ -660,6 +660,65 @@ export class UserService {
     return true;
   }
 
+  // Verify phone using Missed Call (Webhook from Exotel)
+  async verifyUserByMissedCall(phoneNumber: string): Promise<boolean> {
+    // Normalize phone number to match the +91 format stored in DB
+    let normalizedPhone = phoneNumber;
+    if (phoneNumber.startsWith('0') && phoneNumber.length === 11) {
+      normalizedPhone = '+91' + phoneNumber.substring(1);
+    } else if (phoneNumber.length === 12 && phoneNumber.startsWith('91')) {
+      normalizedPhone = '+' + phoneNumber;
+    } else if (!phoneNumber.startsWith('+')) {
+      normalizedPhone = '+' + phoneNumber;
+    }
+
+    const phoneHash = this.hashData(normalizedPhone);
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.phoneHash, phoneHash))
+      .limit(1);
+
+    if (!user) {
+      logger.warn(
+        `Missed call verification failed: User not found for phone ${normalizedPhone}`
+      );
+      return false;
+    }
+
+    if (user.isPhoneVerified === 'true') {
+      logger.info(`User ${user.id} is already verified.`);
+      return true;
+    }
+
+    // Check if verification has expired
+    if (
+      !user.phoneVerificationExpires ||
+      new Date() > user.phoneVerificationExpires
+    ) {
+      logger.warn(
+        `Missed call verification failed: Verification expired for user ${user.id}`
+      );
+      return false;
+    }
+
+    // Mark phone as verified and activate account
+    await db
+      .update(users)
+      .set({
+        isPhoneVerified: 'true',
+        phoneVerificationCode: null,
+        phoneVerificationExpires: null,
+        status: user.status === 'pending_verification' ? 'active' : user.status,
+      })
+      .where(eq(users.id, user.id));
+
+    logger.info(
+      `Phone verified successfully via Missed Call for user ${user.id}`
+    );
+    return true;
+  }
+
   // Check if user's phone is verified
   async isPhoneVerified(userId: string): Promise<boolean> {
     const user = await this.getUserById(userId);

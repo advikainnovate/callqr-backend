@@ -1,0 +1,22 @@
+meta {
+  name: Exotel Webhook (Missed Call)
+  type: http
+  seq: 11
+}
+
+post {
+  url: {{baseUrl}}/api/auth/exotel-webhook
+  body: formUrlEncoded
+  auth: none
+}
+
+body:form-urlencoded {
+  From: +919876543210
+  CallStatus: no-answer
+}
+
+docs {
+  Simulates the Exotel Webhook for Missed Call Verification.
+  It is a public endpoint that does not require an auth token.
+  Exotel sends data as application/x-www-form-urlencoded.
+}

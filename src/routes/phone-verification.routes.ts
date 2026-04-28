@@ -8,7 +8,9 @@ const router = Router();
 router.post(
   '/send-phone-verification',
   authenticateToken,
-  phoneVerificationController.sendPhoneVerificationOTP.bind(phoneVerificationController)
+  phoneVerificationController.sendPhoneVerificationOTP.bind(
+    phoneVerificationController
+  )
 );
 
 router.post(
@@ -20,13 +22,25 @@ router.post(
 router.post(
   '/resend-phone-verification',
   authenticateToken,
-  phoneVerificationController.resendPhoneVerificationOTP.bind(phoneVerificationController)
+  phoneVerificationController.resendPhoneVerificationOTP.bind(
+    phoneVerificationController
+  )
+);
+
+// Exotel Webhook for Missed Call Verification (Public route, no auth required)
+router.post(
+  '/exotel-webhook',
+  phoneVerificationController.handleExotelWebhook.bind(
+    phoneVerificationController
+  )
 );
 
 router.get(
   '/phone-verification-status',
   authenticateToken,
-  phoneVerificationController.getPhoneVerificationStatus.bind(phoneVerificationController)
+  phoneVerificationController.getPhoneVerificationStatus.bind(
+    phoneVerificationController
+  )
 );
 
 export default router;

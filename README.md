@@ -60,6 +60,15 @@ TWILIO_ACCOUNT_SID=your_account_sid
 TWILIO_AUTH_TOKEN=your_auth_token
 TWILIO_PHONE_NUMBER=+1234567890
 
+# Exotel (Optional - Primary for India SMS OTP)
+EXOTEL_ACCOUNT_SID=your_exotel_sid
+EXOTEL_API_KEY=your_exotel_key
+EXOTEL_API_TOKEN=your_exotel_token
+EXOTEL_SUBDOMAIN=api.exotel.com
+EXOTEL_SENDER_ID=your_sender_id
+EXOTEL_DLT_ENTITY_ID=your_dlt_entity_id
+EXOTEL_DLT_OTP_TEMPLATE_ID=your_dlt_template_id
+
 # Firebase (Optional - for push notifications)
 # Set either FIREBASE_SERVICE_ACCOUNT (path) or individual values:
 FIREBASE_SERVICE_ACCOUNT=./serviceAccountKey.json

@@ -64,7 +64,9 @@ POST /api/auth/register
       "isPhoneVerified": false,
       "createdAt": "timestamp"
     },
-    "message": "An OTP has been sent to your phone number. Please verify to activate your account."
+    "verificationType": "missed_call",
+    "mcvNumber": "09513886363",
+    "message": "Give a missed call to the verification number to activate your account."
   }
 }
 ```
@@ -73,7 +75,8 @@ POST /api/auth/register
 
 - Phone number is now REQUIRED for registration
 - Emergency contact is optional
-- OTP is sent immediately after registration
+- `+91` numbers use missed-call verification when `EXOTEL_MCV_NUMBER` is configured
+- International numbers receive OTP over SMS
 - Account status is `pending_verification` until phone is verified
 
 ### Login
@@ -108,7 +111,7 @@ POST /api/auth/login
     },
     "verification": {
       "required": true,
-      "hint": "Use POST /api/auth/resend-phone-verification to get a new OTP"
+      "hint": "Use POST /api/auth/resend-phone-verification to restart phone verification"
     }
   }
 }
@@ -116,7 +119,7 @@ POST /api/auth/login
 
 **Note:**
 
-- Unverified users can log in and should be redirected to OTP verification in the client
+- Unverified users can log in and should be redirected to the correct verification flow in the client
 - Accounts left unverified for more than 7 days are soft-deleted on login attempt
 
 ### Forgot Password (Request OTP)
@@ -187,7 +190,7 @@ POST /api/auth/reset-password
 - OTP is verified before password change
 - Old password is replaced with new one
 
-### Send Phone Verification OTP
+### Start Phone Verification
 
 ```
 POST /api/auth/send-phone-verification
@@ -208,11 +211,18 @@ POST /api/auth/send-phone-verification
 ```json
 {
   "success": true,
-  "message": "Verification code sent to your phone"
+  "message": "Please give a missed call to verify your number.",
+  "mcvNumber": "09513886363",
+  "verificationType": "missed_call"
 }
 ```
 
-**Note:** OTP expires in 10 minutes. In development mode (without Twilio configured), OTP is logged to console.
+**Note:**
+
+- `+91` numbers return `verificationType: "missed_call"` with `mcvNumber`
+- International numbers return `verificationType: "otp"` and receive an SMS code
+- Verification expires in 10 minutes
+- In development mode without an SMS provider, OTP messages are logged to the console
 
 ### Verify Phone Number
 
@@ -239,7 +249,9 @@ POST /api/auth/verify-phone
 }
 ```
 
-### Resend Phone Verification OTP
+**Note:** This endpoint is used for OTP verification only.
+
+### Restart Phone Verification
 
 ```
 POST /api/auth/resend-phone-verification
@@ -252,9 +264,36 @@ POST /api/auth/resend-phone-verification
 ```json
 {
   "success": true,
-  "message": "Verification code resent to your phone"
+  "message": "Please give a missed call to verify your number.",
+  "mcvNumber": "09513886363",
+  "verificationType": "missed_call"
 }
 ```
+
+**Note:**
+
+- `+91` numbers restart missed-call verification
+- International numbers restart OTP verification and return `verificationType: "otp"`
+
+### Exotel Verification Webhook
+
+```
+POST /api/auth/exotel-webhook
+```
+
+**Auth:** Not Required
+
+**Content-Type:** `application/x-www-form-urlencoded`
+
+**Body:**
+
+```text
+From=+919876543210&CallStatus=no-answer
+```
+
+**Response:** Plain text `Verified`
+
+**Note:** Exotel calls this endpoint after a missed call. The frontend should not call this in production.
 
 ### Get Phone Verification Status
 

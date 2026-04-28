@@ -34,12 +34,21 @@ export class AuthController {
     // Generate OTP
     const otp = await userService.generatePhoneVerificationOTP(user.id);
 
-    // Send OTP via SMS
+    // Send phone verification via missed call for India, OTP SMS otherwise
     const { smsService } = await import('../services/sms.service');
     const userProfile = await userService.getUserProfile(user.id);
+    const mcvNumber = process.env.EXOTEL_MCV_NUMBER;
+    let verificationType: 'missed_call' | 'otp' = 'otp';
 
     if (userProfile.phone) {
-      await smsService.sendOTP(userProfile.phone, otp);
+      if (userProfile.phone.startsWith('+91') && mcvNumber) {
+        verificationType = 'missed_call';
+        logger.info(
+          `Missed Call Verification initiated during registration for user ${user.id}`
+        );
+      } else {
+        await smsService.sendOTP(userProfile.phone, otp);
+      }
     }
 
     // Generate JWT token (but user can't login until verified)
@@ -64,8 +73,12 @@ export class AuthController {
           isPhoneVerified: false,
           createdAt: user.createdAt,
         },
+        verificationType,
+        mcvNumber: verificationType === 'missed_call' ? mcvNumber : undefined,
         message:
-          'An OTP has been sent to your phone number. Please verify to activate your account.',
+          verificationType === 'missed_call'
+            ? 'Give a missed call to the verification number to activate your account.'
+            : 'An OTP has been sent to your phone number. Please verify to activate your account.',
       }
     );
   });
@@ -112,7 +125,7 @@ export class AuthController {
         required: !isAdmin && user.isPhoneVerified !== 'true',
         hint:
           !isAdmin && user.isPhoneVerified !== 'true'
-            ? 'Use POST /api/auth/resend-phone-verification to get a new OTP'
+            ? 'Use POST /api/auth/resend-phone-verification to restart phone verification'
             : null,
       },
     });

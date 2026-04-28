@@ -19,7 +19,7 @@ export class PhoneVerificationController {
    * @swagger
    * /api/auth/send-phone-verification:
    *   post:
-   *     summary: Send phone verification OTP
+   *     summary: Start phone verification
    *     tags: [Authentication]
    *     security:
    *       - bearerAuth: []
@@ -37,7 +37,7 @@ export class PhoneVerificationController {
    *                 example: "+1234567890"
    *     responses:
    *       200:
-   *         description: OTP sent successfully
+   *         description: Verification started successfully
    *       400:
    *         description: Invalid phone number or already verified
    *       401:
@@ -73,10 +73,10 @@ export class PhoneVerificationController {
         return;
       }
 
-      // Generate OTP
+      // Generate OTP/Expiry session
       const otp = await userService.generatePhoneVerificationOTP(userId);
 
-      // Get the phone to send OTP to
+      // Get the phone to verify
       const updatedProfile = await userService.getUserProfile(userId);
       const phoneToSend = phone || updatedProfile.phone;
 
@@ -84,15 +84,29 @@ export class PhoneVerificationController {
         throw new BadRequestError('Phone number not found');
       }
 
-      // Send OTP via SMS
-      await smsService.sendOTP(phoneToSend, otp);
+      const mcvNumber = process.env.EXOTEL_MCV_NUMBER;
 
-      logger.info(`Phone verification OTP sent to user ${userId}`);
+      if (phoneToSend.startsWith('+91') && mcvNumber) {
+        // Missed Call Verification (MCV) route for India
+        logger.info(`Missed Call Verification initiated for user ${userId}`);
 
-      res.status(200).json({
-        success: true,
-        message: 'Verification code sent to your phone',
-      });
+        res.status(200).json({
+          success: true,
+          message: 'Please give a missed call to verify your number.',
+          mcvNumber: mcvNumber,
+          verificationType: 'missed_call',
+        });
+      } else {
+        // Send OTP via SMS for international numbers or if MCV is unconfigured
+        await smsService.sendOTP(phoneToSend, otp);
+        logger.info(`Phone verification OTP sent to user ${userId}`);
+
+        res.status(200).json({
+          success: true,
+          message: 'Verification code sent to your phone',
+          verificationType: 'otp',
+        });
+      }
     } catch (error) {
       if (error instanceof z.ZodError) {
         res.status(400).json({
@@ -193,13 +207,13 @@ export class PhoneVerificationController {
    * @swagger
    * /api/auth/resend-phone-verification:
    *   post:
-   *     summary: Resend phone verification OTP
+   *     summary: Restart phone verification
    *     tags: [Authentication]
    *     security:
    *       - bearerAuth: []
    *     responses:
    *       200:
-   *         description: OTP resent successfully
+   *         description: Verification restarted successfully
    *       400:
    *         description: Phone already verified or no phone number
    *       401:
@@ -227,7 +241,21 @@ export class PhoneVerificationController {
         throw new BadRequestError('Phone number not found');
       }
 
-      // Send OTP via SMS
+      const mcvNumber = process.env.EXOTEL_MCV_NUMBER;
+
+      if (phoneToSend.startsWith('+91') && mcvNumber) {
+        logger.info(`Missed Call Verification restarted for user ${userId}`);
+
+        res.status(200).json({
+          success: true,
+          message: 'Please give a missed call to verify your number.',
+          mcvNumber,
+          verificationType: 'missed_call',
+        });
+        return;
+      }
+
+      // Send OTP via SMS for international numbers
       await smsService.sendOTP(phoneToSend, otp);
 
       logger.info(`Phone verification OTP resent to user ${userId}`);
@@ -235,6 +263,7 @@ export class PhoneVerificationController {
       res.status(200).json({
         success: true,
         message: 'Verification code resent to your phone',
+        verificationType: 'otp',
       });
     } catch (error) {
       logger.error('Error resending phone verification OTP:', error);
@@ -245,6 +274,46 @@ export class PhoneVerificationController {
             ? error.message
             : 'Failed to resend verification code',
       });
+    }
+  }
+
+  /**
+   * @swagger
+   * /api/auth/exotel-webhook:
+   *   post:
+   *     summary: Exotel Webhook for Missed Call Verification
+   *     tags: [Authentication]
+   *     responses:
+   *       200:
+   *         description: Webhook received successfully
+   */
+  async handleExotelWebhook(
+    req: AuthenticatedRequest,
+    res: Response
+  ): Promise<void> {
+    try {
+      // Exotel sends data as x-www-form-urlencoded
+      const callerNumber = req.body.From;
+      const callStatus = req.body.CallStatus; // Usually 'no-answer' or 'completed'
+
+      if (!callerNumber) {
+        res.status(400).send('Bad Request: Missing From number');
+        return;
+      }
+
+      logger.info(
+        `Received Exotel webhook for Missed Call from: ${callerNumber}, Status: ${callStatus}`
+      );
+
+      // Even if status is completed or no-answer, we attempt to verify
+      await userService.verifyUserByMissedCall(callerNumber);
+
+      // Always return 200 OK so Exotel doesn't retry
+      res.status(200).send('Verified');
+    } catch (error) {
+      logger.error('Error handling Exotel webhook:', error);
+      // Still send 200 so Exotel stops calling if it's an internal error
+      res.status(200).send('Error Processed');
     }
   }
 

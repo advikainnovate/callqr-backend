@@ -35,6 +35,15 @@ TWILIO_ACCOUNT_SID=ACxxxxxxxxxxx
 TWILIO_AUTH_TOKEN=your_auth_token
 TWILIO_PHONE_NUMBER=+1234567890
 
+# Exotel (Primary for India SMS OTP)
+EXOTEL_ACCOUNT_SID=your_exotel_sid
+EXOTEL_API_KEY=your_exotel_key
+EXOTEL_API_TOKEN=your_exotel_token
+EXOTEL_SUBDOMAIN=api.exotel.com
+EXOTEL_SENDER_ID=your_sender_id
+EXOTEL_DLT_ENTITY_ID=your_dlt_entity_id
+EXOTEL_DLT_OTP_TEMPLATE_ID=your_dlt_template_id
+
 # Cloudinary (media uploads)
 CLOUDINARY_CLOUD_NAME=your_cloud
 CLOUDINARY_API_KEY=your_key

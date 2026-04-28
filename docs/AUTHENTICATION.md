@@ -6,10 +6,13 @@
 
 1. `POST /api/auth/register`
 2. Backend creates the user with `status: pending_verification`
-3. OTP is sent via SMS
+3. Verification starts immediately:
+   - `+91` numbers use Exotel missed-call verification when `EXOTEL_MCV_NUMBER` is configured
+   - all other numbers use OTP over SMS
 4. User can log in immediately
-5. Client should redirect unverified users to OTP verification
-6. `POST /api/auth/verify-phone` activates the account
+5. Client should redirect unverified users to the verification screen
+6. For OTP users, `POST /api/auth/verify-phone` activates the account
+7. For missed-call users, Exotel calls `POST /api/auth/exotel-webhook` and the backend activates the account
 
 ### Register
 
@@ -48,7 +51,9 @@ Example response:
       "status": "pending_verification",
       "isPhoneVerified": false
     },
-    "message": "An OTP has been sent to your phone number. Please verify to activate your account."
+    "verificationType": "missed_call",
+    "mcvNumber": "09513886363",
+    "message": "Give a missed call to the verification number to activate your account."
   }
 }
 ```
@@ -70,7 +75,7 @@ Current behavior:
 
 - Unverified users can log in
 - Login response includes verification metadata for the client
-- The client should route unverified users to OTP verification immediately
+- The client should route unverified users to the correct verification flow immediately
 - Accounts left unverified for more than 7 days are soft-deleted on login attempt
 
 Example response:
@@ -90,7 +95,7 @@ Example response:
     },
     "verification": {
       "required": true,
-      "hint": "Use POST /api/auth/resend-phone-verification to get a new OTP"
+      "hint": "Use POST /api/auth/resend-phone-verification to restart phone verification"
     }
   }
 }
@@ -103,6 +108,12 @@ Login fails if:
 - verification window has expired and the backend soft-deletes the pending account
 
 ## Phone Verification
+
+### Verification Modes
+
+- Indian numbers (`+91`) use Exotel missed-call verification when `EXOTEL_MCV_NUMBER` is configured
+- International numbers use OTP verification through SMS
+- The backend still creates a 10-minute verification window for both modes
 
 ### Verify Phone
 
@@ -121,15 +132,40 @@ Successful verification sets:
 
 - `isPhoneVerified = true`
 - `status = active` if the user was `pending_verification`
+- This endpoint is used only for OTP verification
 
-### Resend OTP
+### Exotel Webhook
+
+```http
+POST /api/auth/exotel-webhook
+Content-Type: application/x-www-form-urlencoded
+```
+
+Example body:
+
+```text
+From=+919876543210&CallStatus=no-answer
+```
+
+Notes:
+
+- This is a public Exotel callback endpoint
+- The frontend does not call this endpoint directly in production
+- The backend verifies the user automatically when the missed call matches a pending verification
+
+### Restart Verification
 
 ```http
 POST /api/auth/resend-phone-verification
 Authorization: Bearer <token>
 ```
 
-### Send Phone Verification OTP For Existing User
+Response behavior:
+
+- For `+91` numbers, returns `verificationType: "missed_call"` and `mcvNumber`
+- For international numbers, returns `verificationType: "otp"`
+
+### Start Phone Verification For Existing User
 
 ```http
 POST /api/auth/send-phone-verification
@@ -141,6 +177,11 @@ Authorization: Bearer <token>
   "phone": "+919876543210"
 }
 ```
+
+Response behavior:
+
+- For `+91` numbers, returns `verificationType: "missed_call"` and `mcvNumber`
+- For international numbers, sends OTP and returns `verificationType: "otp"`
 
 ### Check Verification Status
 
