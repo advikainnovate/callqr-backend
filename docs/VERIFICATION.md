@@ -19,7 +19,7 @@ The backend decides the verification mode from the phone number:
   - response includes `verificationType: "missed_call"`
   - response includes `mcvNumber`
   - user must place a missed call to that number
-  - backend verifies the account after Exotel hits `/api/auth/exotel-webhook`
+  - backend verifies the account after Exotel hits `/api/auth/exotel-webhook` with the shared webhook token
 - Otherwise:
   - response includes `verificationType: "otp"`
   - backend sends an OTP by SMS
@@ -92,6 +92,7 @@ If the user is still unverified, the response includes:
 Frontend behavior:
 
 - if `verification.required` is `true`, route the user to the verification screen
+- expect all non-verification protected APIs to return `403` until the phone is verified
 - do not assume OTP only
 - call `GET /api/auth/phone-verification-status` if you need to show the masked phone
 
@@ -161,6 +162,7 @@ The frontend should use this endpoint to confirm when missed-call verification i
    - show the OTP input UI
    - submit the OTP to `POST /api/auth/verify-phone`
 5. Keep the user on a verification screen after login when `verification.required === true`.
+6. If the user edits their phone number, treat the account as unverified again and restart the appropriate verification mode.
 
 ## Recommended UX
 
@@ -190,5 +192,6 @@ For missed-call verification, a simple approach is:
 
 - Exotel webhook verification is handled by the backend only
 - The frontend should never call `/api/auth/exotel-webhook` in production
+- The webhook now requires a shared secret on the server side and is no longer intended to accept anonymous test traffic without that token
 - Registration and resend now follow the same India-vs-international rule
-- Password reset is still OTP-based and is separate from this signup verification flow
+- Password reset OTP is separate from signup phone verification OTP and does not verify the phone number

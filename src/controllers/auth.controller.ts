@@ -279,7 +279,7 @@ export class AuthController {
       }
 
       // Generate OTP for password reset
-      const otp = await userService.generatePhoneVerificationOTP(user.id);
+      const otp = await userService.generatePasswordResetOTP(user.id);
 
       // Send OTP via SMS
       const { smsService } = await import('../services/sms.service');
@@ -328,7 +328,7 @@ export class AuthController {
 
       // Verify OTP
       try {
-        await userService.verifyPhoneOTP(userId, otp);
+        await userService.verifyPasswordResetOTP(userId, otp);
       } catch (error) {
         res.status(400).json({
           success: false,

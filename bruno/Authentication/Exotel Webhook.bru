@@ -10,6 +10,10 @@ post {
   auth: none
 }
 
+headers {
+  X-Exotel-Webhook-Token: {{exotelWebhookToken}}
+}
+
 body:form-urlencoded {
   From: +919876543210
   CallStatus: no-answer
@@ -17,6 +21,6 @@ body:form-urlencoded {
 
 docs {
   Simulates the Exotel Webhook for Missed Call Verification.
-  It is a public endpoint that does not require an auth token.
+  It does not use JWT auth, but it now requires the shared X-Exotel-Webhook-Token header.
   Exotel sends data as application/x-www-form-urlencoded.
 }

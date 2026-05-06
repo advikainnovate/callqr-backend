@@ -48,7 +48,7 @@ app.get(
     try {
       // Import database client for health check
       const { client } = await import('./db');
-      const { cloudinary } = await import('./config/cloudinary');
+      const { checkS3Health } = await import('./config/storage');
 
       const health = {
         status: 'ok',
@@ -58,7 +58,7 @@ app.get(
         services: {
           database: { status: 'unknown', details: '' },
           webrtc: { status: 'unknown', details: '' },
-          cloudinary: { status: 'unknown', details: '' },
+          storage: { status: 'unknown', details: '' },
           environment: {
             status: 'ok',
             details: process.env.NODE_ENV || 'development',
@@ -95,37 +95,10 @@ app.get(
         health.status = 'degraded';
       }
 
-      // Check Cloudinary connection
-      try {
-        const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
-        const apiKey = process.env.CLOUDINARY_API_KEY;
-        const apiSecret = process.env.CLOUDINARY_API_SECRET;
-
-        if (!cloudName || !apiKey || !apiSecret) {
-          health.services.cloudinary = {
-            status: 'warning',
-            details: 'Cloudinary credentials not configured',
-          };
-        } else {
-          const result = await cloudinary.api.ping();
-          if (result.status === 'ok') {
-            health.services.cloudinary = {
-              status: 'connected',
-              details: `Cloudinary connected (Cloud: ${cloudName})`,
-            };
-          } else {
-            health.services.cloudinary = {
-              status: 'error',
-              details: 'Cloudinary ping failed',
-            };
-            health.status = 'degraded';
-          }
-        }
-      } catch (error) {
-        health.services.cloudinary = {
-          status: 'error',
-          details: `Cloudinary connection failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        };
+      // Check S3 connection
+      const storageHealth = await checkS3Health();
+      health.services.storage = storageHealth;
+      if (storageHealth.status === 'error') {
         health.status = 'degraded';
       }
 

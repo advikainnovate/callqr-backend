@@ -15,6 +15,21 @@ const verifyOTPSchema = z.object({
 });
 
 export class PhoneVerificationController {
+  private isAuthorizedExotelWebhook(req: AuthenticatedRequest): boolean {
+    const configuredToken = process.env.EXOTEL_WEBHOOK_TOKEN;
+    if (!configuredToken) {
+      logger.error('EXOTEL_WEBHOOK_TOKEN is not configured');
+      return false;
+    }
+
+    const headerToken = req.headers['x-exotel-webhook-token'];
+    const providedToken =
+      (Array.isArray(headerToken) ? headerToken[0] : headerToken) ||
+      (typeof req.query.token === 'string' ? req.query.token : '');
+
+    return providedToken === configuredToken;
+  }
+
   /**
    * @swagger
    * /api/auth/send-phone-verification:
@@ -55,22 +70,26 @@ export class PhoneVerificationController {
       }
       const userId = identity.userId;
 
+      const existingUser = await userService.getUserById(userId);
+
       // Get user profile with decrypted phone
       const userProfile = await userService.getUserProfile(userId);
 
-      // If phone is provided, update it
-      if (phone) {
-        await userService.updateUser(userId, { phone });
-      }
-
       // Check if phone is already verified
-      const user = await userService.getUserById(userId);
-      if (user.isPhoneVerified === 'true' && userProfile.phone === phone) {
+      if (
+        existingUser.isPhoneVerified === 'true' &&
+        userProfile.phone === phone
+      ) {
         res.status(400).json({
           success: false,
           message: 'Phone number is already verified',
         });
         return;
+      }
+
+      // If phone is provided, update it after the already-verified check
+      if (phone) {
+        await userService.updateUser(userId, { phone });
       }
 
       // Generate OTP/Expiry session
@@ -292,6 +311,11 @@ export class PhoneVerificationController {
     res: Response
   ): Promise<void> {
     try {
+      if (!this.isAuthorizedExotelWebhook(req)) {
+        res.status(403).send('Forbidden');
+        return;
+      }
+
       // Exotel sends data as x-www-form-urlencoded
       const callerNumber = req.body.From;
       const callStatus = req.body.CallStatus; // Usually 'no-answer' or 'completed'

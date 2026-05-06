@@ -97,18 +97,20 @@ docs {
       "mediaAttachments": [
         {
           "publicId": "callqr/messages/user_timestamp_random",
-          "url": "https://res.cloudinary.com/cloud/image/upload/...",
-          "secureUrl": "https://res.cloudinary.com/cloud/image/upload/...",
+          "url": "https://your-bucket.s3.ap-south-1.amazonaws.com/callqr/messages/.../original.webp",
+          "secureUrl": "https://your-bucket.s3.ap-south-1.amazonaws.com/callqr/messages/.../original.webp",
           "width": 1200,
           "height": 800,
           "format": "webp",
           "bytes": 156789,
           "originalFilename": "photo1.jpg",
-          "thumbnailUrl": "https://res.cloudinary.com/cloud/image/upload/w_150,h_150,c_fill,f_webp,q_auto/..."
+          "thumbnailUrl": "https://your-bucket.s3.ap-south-1.amazonaws.com/callqr/messages/.../thumbnail.webp"
         }
       ],
       "sentAt": "2024-01-01T12:00:00.000Z"
     }
   }
   ```
+
+  Note: returned media URLs must be publicly reachable through your S3 bucket policy or `S3_PUBLIC_BASE_URL`.
 }

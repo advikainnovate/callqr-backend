@@ -1,13 +1,17 @@
 import multer from 'multer';
 import { Request } from 'express';
-import { MEDIA_CONFIG } from '../config/cloudinary';
+import { MEDIA_CONFIG } from '../config/storage';
 import { BadRequestError } from '../utils';
 
-// Configure multer for memory storage (we'll upload to Cloudinary)
+// Configure multer for memory storage before uploading to S3
 const storage = multer.memoryStorage();
 
 // File filter function
-const fileFilter = (req: Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
+const fileFilter = (
+  req: Request,
+  file: Express.Multer.File,
+  cb: multer.FileFilterCallback
+) => {
   // Check MIME type
   if (!file.mimetype.startsWith('image/')) {
     return cb(new BadRequestError('Only image files are allowed'));
@@ -16,7 +20,11 @@ const fileFilter = (req: Request, file: Express.Multer.File, cb: multer.FileFilt
   // Check file extension
   const fileExtension = file.originalname.split('.').pop()?.toLowerCase();
   if (!fileExtension || !MEDIA_CONFIG.ALLOWED_FORMATS.includes(fileExtension)) {
-    return cb(new BadRequestError(`Invalid file format. Allowed: ${MEDIA_CONFIG.ALLOWED_FORMATS.join(', ')}`));
+    return cb(
+      new BadRequestError(
+        `Invalid file format. Allowed: ${MEDIA_CONFIG.ALLOWED_FORMATS.join(', ')}`
+      )
+    );
   }
 
   cb(null, true);
@@ -36,10 +44,18 @@ export const upload = multer({
 export const uploadSingleImage = upload.single('image');
 
 // Middleware for multiple image upload
-export const uploadMultipleImages = upload.array('images', MEDIA_CONFIG.MAX_IMAGES_PER_MESSAGE);
+export const uploadMultipleImages = upload.array(
+  'images',
+  MEDIA_CONFIG.MAX_IMAGES_PER_MESSAGE
+);
 
 // Error handler for multer errors
-export const handleUploadError = (error: any, req: Request, res: any, next: any) => {
+export const handleUploadError = (
+  error: any,
+  req: Request,
+  res: any,
+  next: any
+) => {
   if (error instanceof multer.MulterError) {
     switch (error.code) {
       case 'LIMIT_FILE_SIZE':

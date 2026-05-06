@@ -78,6 +78,7 @@ POST /api/auth/register
 - `+91` numbers use missed-call verification when `EXOTEL_MCV_NUMBER` is configured
 - International numbers receive OTP over SMS
 - Account status is `pending_verification` until phone is verified
+- The returned JWT is limited to verification-related endpoints until the phone number is verified
 
 ### Login
 
@@ -120,6 +121,7 @@ POST /api/auth/login
 **Note:**
 
 - Unverified users can log in and should be redirected to the correct verification flow in the client
+- Unverified users receive `403` on other protected endpoints until verification completes
 - Accounts left unverified for more than 7 days are soft-deleted on login attempt
 
 ### Forgot Password (Request OTP)
@@ -222,6 +224,7 @@ POST /api/auth/send-phone-verification
 - `+91` numbers return `verificationType: "missed_call"` with `mcvNumber`
 - International numbers return `verificationType: "otp"` and receive an SMS code
 - Verification expires in 10 minutes
+- Changing a verified phone number resets `isPhoneVerified` and returns the account to `pending_verification`
 - In development mode without an SMS provider, OTP messages are logged to the console
 
 ### Verify Phone Number
@@ -282,6 +285,7 @@ POST /api/auth/exotel-webhook
 ```
 
 **Auth:** Not Required
+**Header:** `X-Exotel-Webhook-Token: <shared-secret>`
 
 **Content-Type:** `application/x-www-form-urlencoded`
 
@@ -293,7 +297,7 @@ From=+919876543210&CallStatus=no-answer
 
 **Response:** Plain text `Verified`
 
-**Note:** Exotel calls this endpoint after a missed call. The frontend should not call this in production.
+**Note:** Exotel calls this endpoint after a missed call. The request must include the shared secret configured in `EXOTEL_WEBHOOK_TOKEN`. The frontend should not call this in production.
 
 ### Get Phone Verification Status
 
@@ -998,14 +1002,14 @@ images: File[] (required, max 5 files)
     "mediaAttachments": [
       {
         "publicId": "callqr/messages/user123_1640995200000_abc123",
-        "url": "https://res.cloudinary.com/cloud/image/upload/v123/...",
-        "secureUrl": "https://res.cloudinary.com/cloud/image/upload/v123/...",
+        "url": "https://your-bucket.s3.ap-south-1.amazonaws.com/callqr/messages/user123/file/original.webp",
+        "secureUrl": "https://your-bucket.s3.ap-south-1.amazonaws.com/callqr/messages/user123/file/original.webp",
         "width": 1200,
         "height": 800,
         "format": "webp",
         "bytes": 156789,
         "originalFilename": "photo.jpg",
-        "thumbnailUrl": "https://res.cloudinary.com/cloud/image/upload/w_150,h_150,c_fill,f_webp,q_auto/..."
+        "thumbnailUrl": "https://your-bucket.s3.ap-south-1.amazonaws.com/callqr/messages/user123/file/thumbnail.webp"
       }
     ],
     "isRead": false,
@@ -1174,17 +1178,27 @@ GET /api/messages/:chatSessionId/search
 
 ### Image URL Variants
 
-Each uploaded image automatically generates multiple optimized versions:
+Each uploaded image automatically generates multiple optimized S3-backed versions:
 
 ```javascript
 const imageUrls = {
-  thumbnail: 'w_150,h_150,c_fill,f_webp,q_auto', // 150x150 cropped
-  small: 'w_300,h_300,c_limit,f_webp,q_auto', // Max 300x300
-  medium: 'w_600,h_600,c_limit,f_webp,q_auto', // Max 600x600
-  large: 'w_1200,h_1200,c_limit,f_webp,q_auto', // Max 1200x1200
-  original: '', // No transformations
+  thumbnail:
+    'https://your-bucket.s3.ap-south-1.amazonaws.com/callqr/messages/.../thumbnail.webp',
+  small:
+    'https://your-bucket.s3.ap-south-1.amazonaws.com/callqr/messages/.../small.webp',
+  medium:
+    'https://your-bucket.s3.ap-south-1.amazonaws.com/callqr/messages/.../medium.webp',
+  large:
+    'https://your-bucket.s3.ap-south-1.amazonaws.com/callqr/messages/.../large.webp',
+  original:
+    'https://your-bucket.s3.ap-south-1.amazonaws.com/callqr/messages/.../original.webp',
 };
 ```
+
+These URLs require either:
+
+- a bucket policy that allows public read for uploaded media, or
+- a public CDN/base URL configured through `S3_PUBLIC_BASE_URL`
 
 ---
 
@@ -2129,7 +2143,7 @@ GET /healthz
       "status": "running|error",
       "details": "string"
     },
-    "cloudinary": {
+    "storage": {
       "status": "connected|warning|error",
       "details": "string"
     },
@@ -2141,11 +2155,11 @@ GET /healthz
 }
 ```
 
-**Cloudinary Status:**
+**Storage Status:**
 
-- `connected`: Media uploads fully functional
-- `warning`: Credentials not configured (uploads disabled)
-- `error`: Connection failed or invalid credentials
+- `connected`: S3 media uploads work and returned public media URLs are reachable
+- `warning`: S3 credentials not configured (uploads disabled)
+- `error`: S3 connection failed, bucket is unreachable, or returned public media URLs are not accessible
 
 **HTTP Status Codes:**
 

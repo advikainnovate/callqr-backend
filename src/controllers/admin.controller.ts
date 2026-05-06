@@ -64,11 +64,12 @@ export class AdminController {
   unblockUser = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
       const { userId } = req.params;
-      const user = await userService.activateUser(userId);
+      const user = await userService.unblockUser(userId);
       sendSuccessResponse(res, 200, 'User unblocked successfully', {
         id: user.id,
         username: user.username,
         status: user.status,
+        isGloballyBlocked: user.isGloballyBlocked,
       });
     }
   );

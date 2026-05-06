@@ -123,14 +123,14 @@ Fields:
     "mediaAttachments": [
       {
         "publicId": "callqr/messages/user123_1640995200000_abc",
-        "url": "https://res.cloudinary.com/...",
-        "secureUrl": "https://res.cloudinary.com/...",
+        "url": "https://your-bucket.s3.ap-south-1.amazonaws.com/...",
+        "secureUrl": "https://your-bucket.s3.ap-south-1.amazonaws.com/...",
         "width": 1200,
         "height": 800,
         "format": "webp",
         "bytes": 156789,
         "originalFilename": "photo.jpg",
-        "thumbnailUrl": "https://res.cloudinary.com/.../w_150,h_150,c_fill,..."
+        "thumbnailUrl": "https://your-bucket.s3.ap-south-1.amazonaws.com/.../thumbnail.webp"
       }
     ],
     "isDelivered": false,
@@ -144,7 +144,7 @@ Fields:
 
 ## Image URL Variants
 
-Each uploaded image auto-generates these Cloudinary variants:
+Each uploaded image auto-generates these S3-backed variants:
 
 | Variant     | Dimensions        | Use For           |
 | ----------- | ----------------- | ----------------- |
@@ -152,6 +152,11 @@ Each uploaded image auto-generates these Cloudinary variants:
 | `small`     | max 300×300       | Mobile view       |
 | `medium`    | max 600×600       | Tablet view       |
 | `large`     | max 1200×1200     | Full view         |
+
+These URLs work only if uploaded media is publicly readable through either:
+
+- the bucket policy, or
+- a CDN/public base URL configured in `S3_PUBLIC_BASE_URL`
 
 ---
 
@@ -397,14 +402,16 @@ Exceeding the limit returns `429 Too Many Requests`.
 | Block check              | If either user has blocked the other, messages are rejected |
 | Sender-only delete       | Only the original sender can delete their message           |
 | Media validation         | MIME type, file size, and Sharp processing validation       |
-| Media cleanup            | Deleted messages remove Cloudinary assets automatically     |
+| Media cleanup            | Deleted messages remove S3 assets automatically             |
 
 ---
 
 ## Environment Variables
 
 ```env
-CLOUDINARY_CLOUD_NAME=your_cloud_name
-CLOUDINARY_API_KEY=your_api_key
-CLOUDINARY_API_SECRET=your_api_secret
+AWS_REGION=ap-south-1
+AWS_ACCESS_KEY_ID=your_access_key
+AWS_SECRET_ACCESS_KEY=your_secret_key
+S3_BUCKET_NAME=your_bucket_name
+S3_PUBLIC_BASE_URL=https://cdn.example.com
 ```

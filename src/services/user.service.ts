@@ -26,6 +26,7 @@ import { appConfig } from '../config';
 
 export class UserService {
   private static readonly PENDING_VERIFICATION_EXPIRY_DAYS = 7;
+  private static readonly OTP_EXPIRY_MS = 10 * 60 * 1000;
 
   private hashData(data: string): string {
     return crypto.createHash('sha256').update(data).digest('hex');
@@ -74,6 +75,10 @@ export class UserService {
     hash: string
   ): Promise<boolean> {
     return bcrypt.compare(password, hash);
+  }
+
+  private generateSixDigitOTP(): string {
+    return Math.floor(100000 + Math.random() * 900000).toString();
   }
 
   async createUser(userData: {
@@ -317,6 +322,8 @@ export class UserService {
       status?: 'active' | 'blocked' | 'deleted';
     }
   ): Promise<User> {
+    const currentUser = await this.getUserById(userId);
+
     // Check if username is being changed and if it's already taken
     if (updateData.username) {
       const existingUser = await db
@@ -339,6 +346,16 @@ export class UserService {
     if (updateData.phone) {
       updatePayload.phone = this.encryptData(updateData.phone);
       updatePayload.phoneHash = this.hashData(updateData.phone);
+
+      if (currentUser.phoneHash !== updatePayload.phoneHash) {
+        updatePayload.isPhoneVerified = 'false';
+        updatePayload.phoneVerificationCode = null;
+        updatePayload.phoneVerificationExpires = null;
+
+        if (currentUser.status === 'active') {
+          updatePayload.status = 'pending_verification';
+        }
+      }
     }
     if (updateData.email) {
       updatePayload.email = this.encryptData(updateData.email);
@@ -372,6 +389,20 @@ export class UserService {
 
   async activateUser(userId: string): Promise<User> {
     return this.updateUser(userId, { status: 'active' });
+  }
+
+  async unblockUser(userId: string): Promise<User> {
+    const user = await this.getUserById(userId);
+
+    if (user.isGloballyBlocked === 'true') {
+      return this.globalUnblockUser(userId);
+    }
+
+    if (user.status === 'blocked') {
+      return this.activateUser(userId);
+    }
+
+    return user;
   }
 
   async isUserActive(userId: string): Promise<boolean> {
@@ -469,6 +500,57 @@ export class UserService {
     logger.info(`Password reset token generated for user: ${user.id}`);
 
     return { token: resetToken, user };
+  }
+
+  async generatePasswordResetOTP(userId: string): Promise<string> {
+    const otp = this.generateSixDigitOTP();
+    const hashedOTP = this.hashData(otp);
+    const expiresAt = new Date(Date.now() + UserService.OTP_EXPIRY_MS);
+
+    await db
+      .update(users)
+      .set({
+        resetPasswordToken: hashedOTP,
+        resetPasswordExpires: expiresAt,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userId));
+
+    logger.info(`Password reset OTP generated for user ${userId}`);
+    return otp;
+  }
+
+  async verifyPasswordResetOTP(userId: string, otp: string): Promise<boolean> {
+    const user = await this.getUserById(userId);
+
+    if (!user.resetPasswordToken || !user.resetPasswordExpires) {
+      throw new BadRequestError(
+        'No password reset code found. Please request a new code.'
+      );
+    }
+
+    if (new Date() > user.resetPasswordExpires) {
+      throw new BadRequestError(
+        'Password reset code has expired. Please request a new code.'
+      );
+    }
+
+    const hashedOTP = this.hashData(otp);
+    if (hashedOTP !== user.resetPasswordToken) {
+      throw new BadRequestError('Invalid password reset code.');
+    }
+
+    await db
+      .update(users)
+      .set({
+        resetPasswordToken: null,
+        resetPasswordExpires: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userId));
+
+    logger.info(`Password reset OTP verified for user ${userId}`);
+    return true;
   }
 
   // Reset Password - Verify token and update password
@@ -598,14 +680,13 @@ export class UserService {
 
   // Generate and store phone verification OTP
   async generatePhoneVerificationOTP(userId: string): Promise<string> {
-    // Generate 6-digit OTP
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const otp = this.generateSixDigitOTP();
 
     // Hash the OTP before storing
     const hashedOTP = this.hashData(otp);
 
     // Set expiry to 10 minutes from now
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+    const expiresAt = new Date(Date.now() + UserService.OTP_EXPIRY_MS);
 
     // Store hashed OTP and expiry in database
     await db

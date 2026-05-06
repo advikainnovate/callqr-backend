@@ -9,10 +9,10 @@
 3. Verification starts immediately:
    - `+91` numbers use Exotel missed-call verification when `EXOTEL_MCV_NUMBER` is configured
    - all other numbers use OTP over SMS
-4. User can log in immediately
+4. User receives a JWT immediately, but protected APIs remain blocked until phone verification completes
 5. Client should redirect unverified users to the verification screen
 6. For OTP users, `POST /api/auth/verify-phone` activates the account
-7. For missed-call users, Exotel calls `POST /api/auth/exotel-webhook` and the backend activates the account
+7. For missed-call users, Exotel calls `POST /api/auth/exotel-webhook` with the shared webhook token and the backend activates the account
 
 ### Register
 
@@ -75,6 +75,7 @@ Current behavior:
 
 - Unverified users can log in
 - Login response includes verification metadata for the client
+- Unverified users can only access verification endpoints until they complete phone verification
 - The client should route unverified users to the correct verification flow immediately
 - Accounts left unverified for more than 7 days are soft-deleted on login attempt
 
@@ -114,6 +115,7 @@ Login fails if:
 - Indian numbers (`+91`) use Exotel missed-call verification when `EXOTEL_MCV_NUMBER` is configured
 - International numbers use OTP verification through SMS
 - The backend still creates a 10-minute verification window for both modes
+- Changing a verified phone number resets `isPhoneVerified` and puts the account back into `pending_verification`
 
 ### Verify Phone
 
@@ -139,6 +141,7 @@ Successful verification sets:
 ```http
 POST /api/auth/exotel-webhook
 Content-Type: application/x-www-form-urlencoded
+X-Exotel-Webhook-Token: <shared-secret>
 ```
 
 Example body:
@@ -149,7 +152,7 @@ From=+919876543210&CallStatus=no-answer
 
 Notes:
 
-- This is a public Exotel callback endpoint
+- This endpoint does not use JWT auth, but it now requires the shared `X-Exotel-Webhook-Token` header or `?token=` query value to match `EXOTEL_WEBHOOK_TOKEN`
 - The frontend does not call this endpoint directly in production
 - The backend verifies the user automatically when the missed call matches a pending verification
 
@@ -192,6 +195,8 @@ Authorization: Bearer <token>
 
 ## Password Reset
 
+Password reset OTPs are now separate from phone verification OTPs. Completing a password reset does not mark the phone number as verified.
+
 ### Request OTP
 
 ```http
@@ -226,6 +231,7 @@ Profile now includes QR image URLs in the `qrCodes.codes[]` payload so the front
 
 - Passwords use `bcrypt`
 - Phone and email fields are encrypted at rest
-- OTPs are stored hashed
+- Phone verification OTPs and password reset OTPs are stored hashed
 - OTP expiry is 10 minutes
 - JWT uses the configured server secret
+- Exotel webhook requests must include the configured shared secret

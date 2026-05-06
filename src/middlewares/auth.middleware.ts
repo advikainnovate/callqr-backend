@@ -22,6 +22,19 @@ export interface AuthenticatedRequest extends Request {
   identity?: Identity;
 }
 
+const VERIFICATION_EXEMPT_ROUTES = new Set([
+  'POST /api/auth/send-phone-verification',
+  'POST /api/auth/verify-phone',
+  'POST /api/auth/resend-phone-verification',
+  'GET /api/auth/phone-verification-status',
+]);
+
+const isVerificationExemptRoute = (req: Request): boolean => {
+  return VERIFICATION_EXEMPT_ROUTES.has(
+    `${req.method.toUpperCase()} ${req.baseUrl}${req.path}`
+  );
+};
+
 export const authenticateToken = asyncHandler(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     const authHeader = req.headers.authorization;
@@ -55,12 +68,32 @@ export const authenticateToken = asyncHandler(
 
     // Check if user is globally blocked
     const { userService } = await import('../services/user.service');
-    const isBlocked = await userService.isGloballyBlocked(req.user.userId);
+    const user = await userService.getUserById(req.user.userId);
+    const isBlocked = user.isGloballyBlocked === 'true';
 
     if (isBlocked) {
       return next(
         new ForbiddenError(
           'Your account has been globally blocked. Please contact support.'
+        )
+      );
+    }
+
+    const adminUserIds = (process.env.ADMIN_USER_IDS || '')
+      .split(',')
+      .map(id => id.trim())
+      .filter(Boolean);
+    const isAdmin = adminUserIds.includes(req.user.userId);
+
+    if (
+      !isAdmin &&
+      (user.status === 'pending_verification' ||
+        user.isPhoneVerified !== 'true') &&
+      !isVerificationExemptRoute(req)
+    ) {
+      return next(
+        new ForbiddenError(
+          'Phone verification is required before accessing this resource.'
         )
       );
     }

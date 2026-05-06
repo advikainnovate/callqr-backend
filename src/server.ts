@@ -4,7 +4,7 @@ import { logger } from './utils';
 import { appConfig, initializeFirebase } from './config';
 import { WebRTCService, setWebRTCService } from './services/webrtc.service';
 import { db, client } from './db'; // Import database connection
-import { cloudinary } from './config/cloudinary';
+import { checkS3Health } from './config/storage';
 
 const PORT = appConfig.port;
 const server = createServer(app);
@@ -19,7 +19,7 @@ const checkServices = async () => {
   const services = {
     database: { status: 'unknown', details: '' },
     webrtc: { status: 'unknown', details: '' },
-    cloudinary: { status: 'unknown', details: '' },
+    storage: { status: 'unknown', details: '' },
     environment: {
       status: 'ok',
       details: process.env.NODE_ENV || 'development',
@@ -60,39 +60,8 @@ const checkServices = async () => {
     };
   }
 
-  // Check Cloudinary connection
-  try {
-    const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
-    const apiKey = process.env.CLOUDINARY_API_KEY;
-    const apiSecret = process.env.CLOUDINARY_API_SECRET;
-
-    if (!cloudName || !apiKey || !apiSecret) {
-      services.cloudinary = {
-        status: 'warning',
-        details:
-          'Cloudinary credentials not configured (media uploads disabled)',
-      };
-    } else {
-      // Test Cloudinary connection by calling the API
-      const result = await cloudinary.api.ping();
-      if (result.status === 'ok') {
-        services.cloudinary = {
-          status: 'connected',
-          details: `Cloudinary connected (Cloud: ${cloudName})`,
-        };
-      } else {
-        services.cloudinary = {
-          status: 'error',
-          details: 'Cloudinary ping failed',
-        };
-      }
-    }
-  } catch (error) {
-    services.cloudinary = {
-      status: 'error',
-      details: `Cloudinary connection failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
-    };
-  }
+  // Check S3 connection
+  services.storage = await checkS3Health();
 
   return services;
 };
@@ -135,13 +104,13 @@ const checkServices = async () => {
     }
 
     // Log warnings for non-critical services
-    if (services.cloudinary.status === 'warning') {
+    if (services.storage.status === 'warning') {
       logger.warn(
-        '⚠️  Media uploads will be disabled without Cloudinary configuration'
+        '⚠️  Media uploads will be disabled without S3 configuration'
       );
-    } else if (services.cloudinary.status === 'error') {
+    } else if (services.storage.status === 'error') {
       logger.warn(
-        '⚠️  Media uploads may not work properly due to Cloudinary connection issues'
+        '⚠️  Media uploads may not work properly due to S3 or public media URL issues'
       );
     }
 

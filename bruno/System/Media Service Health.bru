@@ -13,7 +13,7 @@ get {
 docs {
   # Media Service Health Check
   
-  Check the health status of all services including Cloudinary media service.
+  Check the health status of all services including S3-backed media storage.
   
   ## Response Fields:
   - `status`: Overall system status (ok, degraded, error)
@@ -25,13 +25,13 @@ docs {
   ## Service Statuses:
   - `database`: PostgreSQL connection status
   - `webrtc`: Socket.IO signaling service status
-  - `cloudinary`: Media upload service status
+  - `storage`: Media upload service status
   - `environment`: Environment configuration status
   
-  ## Cloudinary Status Values:
-  - `connected`: Cloudinary API is reachable and configured
-  - `warning`: Credentials not configured (media uploads disabled)
-  - `error`: Connection failed or invalid credentials
+  ## Storage Status Values:
+  - `connected`: S3 bucket is reachable and public media URLs are accessible
+  - `warning`: S3 credentials not configured (media uploads disabled)
+  - `error`: Bucket access failed or returned public media URLs are not reachable
   
   ## HTTP Status Codes:
   - `200`: All services healthy

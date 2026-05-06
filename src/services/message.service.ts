@@ -297,7 +297,7 @@ export class MessageService {
       throw new ForbiddenError('You can only delete your own messages');
     }
 
-    // Delete media attachments from Cloudinary if present
+    // Delete media attachments from S3 if present
     if (message.mediaAttachments && Array.isArray(message.mediaAttachments)) {
       const publicIds = message.mediaAttachments.map(
         (media: MessageMedia) => media.publicId

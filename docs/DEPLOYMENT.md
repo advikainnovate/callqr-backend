@@ -43,11 +43,17 @@ EXOTEL_SUBDOMAIN=api.exotel.com
 EXOTEL_SENDER_ID=your_sender_id
 EXOTEL_DLT_ENTITY_ID=your_dlt_entity_id
 EXOTEL_DLT_OTP_TEMPLATE_ID=your_dlt_template_id
+EXOTEL_MCV_NUMBER=+91XXXXXXXXXX
+EXOTEL_WEBHOOK_TOKEN=replace_with_shared_secret
 
-# Cloudinary (media uploads)
-CLOUDINARY_CLOUD_NAME=your_cloud
-CLOUDINARY_API_KEY=your_key
-CLOUDINARY_API_SECRET=your_secret
+# S3 (media uploads)
+AWS_REGION=ap-south-1
+AWS_ACCESS_KEY_ID=your_key
+AWS_SECRET_ACCESS_KEY=your_secret
+S3_BUCKET_NAME=your_bucket
+S3_ENDPOINT=
+S3_PUBLIC_BASE_URL=
+S3_FORCE_PATH_STYLE=false
 
 # Firebase (push notifications)
 FIREBASE_PROJECT_ID=your-project-id
@@ -105,6 +111,12 @@ pm2 logs callqr-backend
 curl https://your-domain.com/healthz
 ```
 
+S3-specific verification:
+
+- the health check now verifies both bucket access and public media URL access
+- if `/healthz` reports `services.storage.status = "error"` after successful credentials setup, check your bucket public-read policy or `S3_PUBLIC_BASE_URL`
+- if you use Exotel missed-call verification, make sure your Exotel webhook includes `X-Exotel-Webhook-Token` or the matching `?token=` query value
+
 ---
 
 ## Nginx Config (WebSocket support required)
@@ -156,7 +168,9 @@ pm2 restart callqr-backend
 - [ ] Nginx WebSocket config applied
 - [ ] Firebase configured (push notifications)
 - [ ] Twilio configured (SMS OTPs)
-- [ ] Cloudinary configured (media uploads)
+- [ ] Exotel webhook token configured if using missed-call verification
+- [ ] S3 configured (media uploads)
+- [ ] S3 bucket/CDN allows the returned media URLs to be read publicly
 - [ ] PM2 process saved (`pm2 save`)
 - [ ] `pm2 startup` run so process restarts on reboot
 - [ ] Health check returning 200

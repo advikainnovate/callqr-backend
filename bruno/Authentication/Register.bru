@@ -35,6 +35,8 @@ docs {
   Returns:
   - JWT token for API authentication
   - User profile (id, username, status, createdAt)
+  - verificationType and mcvNumber for India missed-call verification when applicable
   
   Use the token in Authorization header: Bearer <token>
+  Note: the token only works on verification-related endpoints until the phone number is verified.
 }

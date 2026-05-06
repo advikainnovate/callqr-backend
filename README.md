@@ -69,6 +69,15 @@ EXOTEL_SENDER_ID=your_sender_id
 EXOTEL_DLT_ENTITY_ID=your_dlt_entity_id
 EXOTEL_DLT_OTP_TEMPLATE_ID=your_dlt_template_id
 
+# S3 (Optional - for media uploads)
+AWS_REGION=ap-south-1
+AWS_ACCESS_KEY_ID=your_aws_access_key_id
+AWS_SECRET_ACCESS_KEY=your_aws_secret_access_key
+S3_BUCKET_NAME=your_s3_bucket_name
+S3_ENDPOINT=
+S3_PUBLIC_BASE_URL=
+S3_FORCE_PATH_STYLE=false
+
 # Firebase (Optional - for push notifications)
 # Set either FIREBASE_SERVICE_ACCOUNT (path) or individual values:
 FIREBASE_SERVICE_ACCOUNT=./serviceAccountKey.json
@@ -94,6 +103,7 @@ ALLOWED_ORIGINS=*
 - Global user blocking for platform-wide access control
 - Phone verification with OTP via Twilio SMS
 - **Push Notifications (FCM)** for offline calls and messages
+- **S3 Media Storage** for image uploads and delivery
 - **Anonymous Calling Support**: Allow calls from non-registered users via QR scans
 - **Guest Identity & Blocking**: Privacy-safe guest IDs with IP-based blocking
 - **Call Reliability**: 30-second reconnection window with automated wake-up push notifications
