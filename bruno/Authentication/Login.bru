@@ -12,7 +12,7 @@ post {
 
 body:json {
   {
-    "username": "testuser_a",
+    "identifier": "testuser@example.com",
     "password": "password123"
   }
 }
@@ -24,14 +24,13 @@ script:post-response {
 }
 
 docs {
-  Authenticate user with username and password.
+  Authenticate user with identifier (username or email) and password.
   
   Returns:
   - JWT token for API authentication
   - User profile (id, username, status, createdAt)
-  - verification.required metadata when the phone is still unverified
+  - verification: { required: boolean, hint: string }
   
   The token is automatically saved to the authToken environment variable.
   Use the token in Authorization header: Bearer <token>
-  Note: unverified users will receive 403 on other protected endpoints until verification completes.
 }

@@ -1,4 +1,3 @@
-import twilio from 'twilio';
 import axios from 'axios';
 import { logger } from '../utils/logger';
 
@@ -10,41 +9,6 @@ interface SMSProvider {
     message: string,
     dltTemplateId?: string
   ): Promise<boolean>;
-}
-
-class TwilioProvider implements SMSProvider {
-  name = 'Twilio';
-  isEnabled: boolean;
-  private client: twilio.Twilio | null = null;
-  private fromNumber: string;
-
-  constructor() {
-    const accountSid = process.env.TWILIO_ACCOUNT_SID;
-    const authToken = process.env.TWILIO_AUTH_TOKEN;
-    this.fromNumber = process.env.TWILIO_PHONE_NUMBER || '';
-    this.isEnabled = !!(accountSid && authToken && this.fromNumber);
-
-    if (this.isEnabled) {
-      this.client = twilio(accountSid, authToken);
-      logger.info('Twilio SMS provider initialized');
-    }
-  }
-
-  async sendSMS(to: string, message: string): Promise<boolean> {
-    if (!this.isEnabled || !this.client) return false;
-    try {
-      const result = await this.client.messages.create({
-        body: message,
-        from: this.fromNumber,
-        to: to,
-      });
-      logger.info(`Twilio SMS sent successfully to ${to}, SID: ${result.sid}`);
-      return true;
-    } catch (error) {
-      logger.error('Twilio failed to send SMS:', error);
-      return false;
-    }
-  }
 }
 
 class ExotelProvider implements SMSProvider {
@@ -64,8 +28,10 @@ class ExotelProvider implements SMSProvider {
     this.subdomain = process.env.EXOTEL_SUBDOMAIN || 'api.exotel.com';
     this.senderId = process.env.EXOTEL_SENDER_ID || '';
     this.entityId = process.env.EXOTEL_DLT_ENTITY_ID || '';
+    const exotelEnabled = process.env.EXOTEL_ENABLED === 'true';
 
     this.isEnabled = !!(
+      exotelEnabled &&
       this.accountSid &&
       this.apiKey &&
       this.apiToken &&
@@ -121,16 +87,14 @@ class ExotelProvider implements SMSProvider {
 }
 
 class SMSService {
-  private twilio: TwilioProvider;
   private exotel: ExotelProvider;
 
   constructor() {
-    this.twilio = new TwilioProvider();
     this.exotel = new ExotelProvider();
 
-    if (!this.twilio.isEnabled && !this.exotel.isEnabled) {
+    if (!this.exotel.isEnabled) {
       logger.warn(
-        'No SMS providers configured - SMS will be logged to console only'
+        'Exotel SMS provider is disabled or not configured - SMS will be logged to console only'
       );
     }
   }
@@ -152,40 +116,21 @@ class SMSService {
     message: string,
     dltTemplateId?: string
   ): Promise<boolean> {
-    if (!this.twilio.isEnabled && !this.exotel.isEnabled) {
+    if (!this.exotel.isEnabled) {
       // Development mode
       logger.info(`[DEV MODE] SMS to ${phoneNumber}: ${message}`);
       return true;
     }
 
-    let success = false;
-
-    // Route logic: +91 goes to Exotel first
-    if (phoneNumber.startsWith('+91') && this.exotel.isEnabled) {
-      logger.info(`Routing SMS to ${phoneNumber} via Exotel...`);
-      success = await this.exotel.sendSMS(phoneNumber, message, dltTemplateId);
-
-      // Fallback to Twilio if Exotel fails and Twilio is enabled
-      if (!success && this.twilio.isEnabled) {
-        logger.warn(
-          `Exotel failed, falling back to Twilio for ${phoneNumber}...`
-        );
-        success = await this.twilio.sendSMS(phoneNumber, message);
-      }
-    } else if (this.twilio.isEnabled) {
-      // Non-Indian number or Exotel disabled: use Twilio
-      logger.info(`Routing SMS to ${phoneNumber} via Twilio...`);
-      success = await this.twilio.sendSMS(phoneNumber, message);
-    } else if (this.exotel.isEnabled) {
-      // Twilio disabled, but Exotel is enabled (try Exotel anyway)
-      logger.info(
-        `Routing SMS to ${phoneNumber} via Exotel (Twilio disabled)...`
-      );
-      success = await this.exotel.sendSMS(phoneNumber, message, dltTemplateId);
-    }
+    logger.info(`Routing SMS to ${phoneNumber} via Exotel...`);
+    const success = await this.exotel.sendSMS(
+      phoneNumber,
+      message,
+      dltTemplateId
+    );
 
     if (!success) {
-      logger.error('All configured SMS providers failed to send message');
+      logger.error('Exotel failed to send message');
       throw new Error('Failed to send verification code');
     }
 

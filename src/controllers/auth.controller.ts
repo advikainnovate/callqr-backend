@@ -12,16 +12,15 @@ export class AuthController {
   register = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const { username, password, phone, email, emergencyContact } = req.body;
 
-    // Validate that phone is provided
-    if (!phone) {
+    // Validate that email is provided
+    if (!email) {
       res.status(400).json({
         success: false,
-        message: 'Phone number is required for registration',
+        message: 'Email is required for registration',
       });
       return;
     }
 
-    // Create user with pending_verification status
     const user = await userService.createUser({
       username,
       password,
@@ -31,81 +30,55 @@ export class AuthController {
       status: 'pending_verification',
     });
 
-    // Generate OTP
-    const otp = await userService.generatePhoneVerificationOTP(user.id);
+    const otp = await userService.generateEmailVerificationOTP(user.id);
+    const { emailService } = await import('../services/email.service');
+    await emailService.sendVerificationOTP(email, otp);
 
-    // Send phone verification via missed call for India, OTP SMS otherwise
-    const { smsService } = await import('../services/sms.service');
-    const userProfile = await userService.getUserProfile(user.id);
-    const mcvNumber = process.env.EXOTEL_MCV_NUMBER;
-    let verificationType: 'missed_call' | 'otp' = 'otp';
-
-    if (userProfile.phone) {
-      if (userProfile.phone.startsWith('+91') && mcvNumber) {
-        verificationType = 'missed_call';
-        logger.info(
-          `Missed Call Verification initiated during registration for user ${user.id}`
-        );
-      } else {
-        await smsService.sendOTP(userProfile.phone, otp);
-      }
-    }
-
-    // Generate JWT token (but user can't login until verified)
     const token = generateAccessToken({
       type: 'user',
       userId: user.id,
       username: user.username,
     });
 
-    logger.info(`User registered, OTP sent: ${user.id}`);
+    logger.info(`User registered and email verification sent: ${user.id}`);
 
     sendSuccessResponse(
       res,
       201,
-      'Registration successful. Please verify your phone number.',
+      'Registration successful. Please verify your email.',
       {
         token,
         user: {
           id: user.id,
           username: user.username,
           status: user.status,
-          isPhoneVerified: false,
+          isEmailVerified: false,
           createdAt: user.createdAt,
         },
-        verificationType,
-        mcvNumber: verificationType === 'missed_call' ? mcvNumber : undefined,
-        message:
-          verificationType === 'missed_call'
-            ? 'Give a missed call to the verification number to activate your account.'
-            : 'An OTP has been sent to your phone number. Please verify to activate your account.',
+        verification: {
+          required: true,
+          type: 'email',
+          hint: 'Use POST /api/auth/verify-email to complete verification',
+        },
       }
     );
   });
 
   login = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
-    const { identifier, username, email, phone, password } = req.body;
+    const { identifier, username, email, password } = req.body;
 
-    // Use identifier if provided, fallback to username, email or phone (legacy support)
-    const loginIdentifier = identifier || username || email || phone;
+    const loginIdentifier = identifier || username || email;
 
     if (!loginIdentifier) {
       res.status(400).json({
         success: false,
-        message: 'Username, email or phone is required',
+        message: 'Username or email is required',
       });
       return;
     }
 
     const user = await userService.authenticateUser(loginIdentifier, password);
 
-    // Check if user is admin (admins bypass phone verification)
-    const ADMIN_USER_IDS = (process.env.ADMIN_USER_IDS || '')
-      .split(',')
-      .filter(Boolean);
-    const isAdmin = ADMIN_USER_IDS.includes(user.id);
-
-    // Generate JWT token
     const token = generateAccessToken({
       type: 'user',
       userId: user.id,
@@ -118,18 +91,140 @@ export class AuthController {
         id: user.id,
         username: user.username,
         status: user.status,
-        isPhoneVerified: isAdmin ? true : user.isPhoneVerified === 'true',
+        isEmailVerified: user.isEmailVerified === 'true',
         createdAt: user.createdAt,
       },
       verification: {
-        required: !isAdmin && user.isPhoneVerified !== 'true',
+        required: user.isEmailVerified !== 'true',
         hint:
-          !isAdmin && user.isPhoneVerified !== 'true'
-            ? 'Use POST /api/auth/resend-phone-verification to restart phone verification'
+          user.isEmailVerified !== 'true'
+            ? 'Use POST /api/auth/resend-email-verification to restart email verification'
             : null,
       },
     });
   });
+
+  sendEmailVerification = asyncHandler(
+    async (req: AuthenticatedRequest, res: Response) => {
+      const identity = req.identity;
+      if (identity?.type !== 'user') {
+        throw new UnauthorizedError('User authentication required');
+      }
+
+      const userId = identity.userId;
+      const { email } = req.body;
+      const userProfile = await userService.getUserProfile(userId);
+
+      if (email && email !== userProfile.email) {
+        await userService.updateUser(userId, { email });
+      }
+
+      const refreshedProfile = await userService.getUserProfile(userId);
+      if (!refreshedProfile.email) {
+        res.status(400).json({
+          success: false,
+          message: 'Email not found',
+        });
+        return;
+      }
+
+      if (
+        refreshedProfile.isEmailVerified &&
+        (!email || email === userProfile.email)
+      ) {
+        res.status(400).json({
+          success: false,
+          message: 'Email is already verified',
+        });
+        return;
+      }
+
+      const otp = await userService.generateEmailVerificationOTP(userId);
+      const { emailService } = await import('../services/email.service');
+      await emailService.sendVerificationOTP(refreshedProfile.email, otp);
+
+      sendSuccessResponse(res, 200, 'Verification code sent to your email.', {
+        verificationType: 'email',
+      });
+    }
+  );
+
+  verifyEmail = asyncHandler(
+    async (req: AuthenticatedRequest, res: Response) => {
+      const identity = req.identity;
+      if (identity?.type !== 'user') {
+        throw new UnauthorizedError('User authentication required');
+      }
+
+      const userId = identity.userId;
+      const { otp } = req.body;
+
+      await userService.verifyEmailOTP(userId, otp);
+
+      const user = await userService.getUserById(userId);
+      if (user.status === 'pending_verification') {
+        await userService.updateUser(userId, { status: 'active' });
+      }
+
+      sendSuccessResponse(
+        res,
+        200,
+        'Email verified successfully. Your account is now active.',
+        null
+      );
+    }
+  );
+
+  resendEmailVerification = asyncHandler(
+    async (req: AuthenticatedRequest, res: Response) => {
+      const identity = req.identity;
+      if (identity?.type !== 'user') {
+        throw new UnauthorizedError('User authentication required');
+      }
+
+      const userId = identity.userId;
+      const otp = await userService.resendEmailVerificationOTP(userId);
+      const userProfile = await userService.getUserProfile(userId);
+
+      if (!userProfile.email) {
+        res.status(400).json({
+          success: false,
+          message: 'Email not found',
+        });
+        return;
+      }
+
+      const { emailService } = await import('../services/email.service');
+      await emailService.sendVerificationOTP(userProfile.email, otp);
+
+      sendSuccessResponse(res, 200, 'Verification code resent to your email.', {
+        verificationType: 'email',
+      });
+    }
+  );
+
+  getEmailVerificationStatus = asyncHandler(
+    async (req: AuthenticatedRequest, res: Response) => {
+      const identity = req.identity;
+      if (identity?.type !== 'user') {
+        throw new UnauthorizedError('User authentication required');
+      }
+
+      const userId = identity.userId;
+      const userProfile = await userService.getUserProfile(userId);
+
+      res.status(200).json({
+        success: true,
+        data: {
+          hasEmail: !!userProfile.email,
+          isEmailVerified: userProfile.isEmailVerified,
+          email: userProfile.email
+            ? userProfile.email.replace(/(^.{2}).+(@.*$)/, '$1****$2')
+            : null,
+        },
+      });
+    }
+  );
 
   changePassword = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
@@ -240,16 +335,16 @@ export class AuthController {
     }
   );
 
-  // Forgot Password - Request OTP via SMS
+  // Forgot Password - Request OTP via Email
   forgotPassword = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
-      const { identifier, username, email, phone } = req.body;
-      const targetIdentifier = identifier || username || email || phone;
+      const { identifier, username, email } = req.body;
+      const targetIdentifier = identifier || username || email;
 
       if (!targetIdentifier) {
         res.status(400).json({
           success: false,
-          message: 'Identifier, username, email or phone is required',
+          message: 'Identifier, username, or email is required',
         });
         return;
       }
@@ -262,18 +357,18 @@ export class AuthController {
         sendSuccessResponse(
           res,
           200,
-          'If an account exists, an OTP has been sent to the registered phone number.',
+          'If an account exists, an OTP has been sent to the registered email address.',
           null
         );
         return;
       }
 
-      // Check if user has a verified phone
-      if (user.isPhoneVerified !== 'true' || !user.phone) {
+      // Check if user has a verified email
+      if (user.isEmailVerified !== 'true' || !user.email) {
         res.status(400).json({
           success: false,
           message:
-            'No verified phone number found for this account. Please contact support.',
+            'No verified email found for this account. Please contact support.',
         });
         return;
       }
@@ -281,23 +376,23 @@ export class AuthController {
       // Generate OTP for password reset
       const otp = await userService.generatePasswordResetOTP(user.id);
 
-      // Send OTP via SMS
-      const { smsService } = await import('../services/sms.service');
+      // Send OTP via email
+      const { emailService } = await import('../services/email.service');
       const userProfile = await userService.getUserProfile(user.id);
 
-      if (userProfile.phone) {
-        await smsService.sendOTP(userProfile.phone, otp);
+      if (userProfile.email) {
+        await emailService.sendPasswordResetOTP(userProfile.email, otp);
       }
 
-      logger.info(`Password reset OTP sent to user: ${user.id}`);
+      logger.info(`Password reset OTP emailed to user: ${user.id}`);
 
       sendSuccessResponse(
         res,
         200,
-        'OTP sent to your registered phone number.',
+        'OTP sent to your registered email address.',
         {
           message:
-            'An OTP has been sent to your phone. Use it to reset your password.',
+            'An OTP has been sent to your email. Use it to reset your password.',
           userId: user.id, // Needed for next step
         }
       );

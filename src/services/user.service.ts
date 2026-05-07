@@ -10,6 +10,7 @@ import {
   type NewBlockedGuest,
   guestIdentifiers,
   type GuestIdentifier,
+  deviceTokens,
 } from '../models';
 import { v4 as uuidv4 } from 'uuid';
 import {
@@ -110,9 +111,10 @@ export class UserService {
 
     // Encrypt and hash phone and email if provided
     const phone = userData.phone ? this.encryptData(userData.phone) : null;
-    const email = userData.email ? this.encryptData(userData.email) : null;
+    const normalizedEmail = userData.email?.toLowerCase();
+    const email = normalizedEmail ? this.encryptData(normalizedEmail) : null;
     const phoneHash = userData.phone ? this.hashData(userData.phone) : null;
-    const emailHash = userData.email ? this.hashData(userData.email) : null;
+    const emailHash = normalizedEmail ? this.hashData(normalizedEmail) : null;
 
     // Create new user
     const [user] = await db
@@ -232,7 +234,7 @@ export class UserService {
   }
 
   private isPendingVerificationExpired(user: User): boolean {
-    if (user.isPhoneVerified === 'true') {
+    if (user.isEmailVerified === 'true') {
       return false;
     }
 
@@ -358,8 +360,19 @@ export class UserService {
       }
     }
     if (updateData.email) {
-      updatePayload.email = this.encryptData(updateData.email);
-      updatePayload.emailHash = this.hashData(updateData.email);
+      const normalizedEmail = updateData.email.toLowerCase();
+      updatePayload.email = this.encryptData(normalizedEmail);
+      updatePayload.emailHash = this.hashData(normalizedEmail);
+
+      if (currentUser.emailHash !== updatePayload.emailHash) {
+        updatePayload.isEmailVerified = 'false';
+        updatePayload.emailVerificationCode = null;
+        updatePayload.emailVerificationExpires = null;
+
+        if (currentUser.status === 'active') {
+          updatePayload.status = 'pending_verification';
+        }
+      }
     }
     if (updateData.emergencyContact)
       updatePayload.emergencyContact = updateData.emergencyContact;
@@ -422,7 +435,7 @@ export class UserService {
   }
 
   async verifyEmail(email: string): Promise<User | null> {
-    const emailHash = this.hashData(email);
+    const emailHash = this.hashData(email.toLowerCase());
     const [user] = await db
       .select()
       .from(users)
@@ -437,6 +450,7 @@ export class UserService {
     username: string;
     phone: string | null;
     email: string | null;
+    isEmailVerified: boolean;
     status: string;
     createdAt: Date | null;
     updatedAt: Date | null;
@@ -448,6 +462,7 @@ export class UserService {
       username: user.username,
       phone: user.phone ? this.decryptData(user.phone) : null,
       email: user.email ? this.decryptData(user.email) : null,
+      isEmailVerified: user.isEmailVerified === 'true',
       status: user.status,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
@@ -518,6 +533,77 @@ export class UserService {
 
     logger.info(`Password reset OTP generated for user ${userId}`);
     return otp;
+  }
+
+  async generateEmailVerificationOTP(userId: string): Promise<string> {
+    const otp = this.generateSixDigitOTP();
+    const hashedOTP = this.hashData(otp);
+    const expiresAt = new Date(Date.now() + UserService.OTP_EXPIRY_MS);
+
+    await db
+      .update(users)
+      .set({
+        emailVerificationCode: hashedOTP,
+        emailVerificationExpires: expiresAt,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userId));
+
+    logger.info(`Email verification OTP generated for user ${userId}`);
+    return otp;
+  }
+
+  async verifyEmailOTP(userId: string, otp: string): Promise<boolean> {
+    const user = await this.getUserById(userId);
+
+    if (!user.emailVerificationCode || !user.emailVerificationExpires) {
+      throw new BadRequestError(
+        'No verification code found. Please request a new code.'
+      );
+    }
+
+    if (new Date() > user.emailVerificationExpires) {
+      throw new BadRequestError(
+        'Verification code has expired. Please request a new code.'
+      );
+    }
+
+    const hashedOTP = this.hashData(otp);
+    if (hashedOTP !== user.emailVerificationCode) {
+      throw new BadRequestError('Invalid verification code.');
+    }
+
+    await db
+      .update(users)
+      .set({
+        isEmailVerified: 'true',
+        emailVerificationCode: null,
+        emailVerificationExpires: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userId));
+
+    logger.info(`Email verified successfully for user ${userId}`);
+    return true;
+  }
+
+  async resendEmailVerificationOTP(userId: string): Promise<string> {
+    const user = await this.getUserById(userId);
+
+    if (!user.email) {
+      throw new BadRequestError('No email associated with this account.');
+    }
+
+    if (user.isEmailVerified === 'true') {
+      throw new BadRequestError('Email is already verified.');
+    }
+
+    return this.generateEmailVerificationOTP(userId);
+  }
+
+  async isEmailVerified(userId: string): Promise<boolean> {
+    const user = await this.getUserById(userId);
+    return user.isEmailVerified === 'true';
   }
 
   async verifyPasswordResetOTP(userId: string, otp: string): Promise<boolean> {
@@ -982,8 +1068,6 @@ export class UserService {
     platform: string,
     deviceId?: string
   ): Promise<void> {
-    const { deviceTokens } = await import('../models');
-
     // Check if token already exists for any user.
     // If it exists for another user (e.g., device changed hands), we might want to overwrite or re-assign.
     // Drizzle currently doesn't have a simple ON CONFLICT for postgres.js without the specific syntax,
@@ -1018,7 +1102,6 @@ export class UserService {
   }
 
   async removeDeviceToken(userId: string, token: string): Promise<void> {
-    const { deviceTokens } = await import('../models');
     await db
       .delete(deviceTokens)
       .where(
@@ -1029,7 +1112,6 @@ export class UserService {
   }
 
   async getUserDeviceTokens(userId: string): Promise<string[]> {
-    const { deviceTokens } = await import('../models');
     const tokens = await db
       .select({ token: deviceTokens.token })
       .from(deviceTokens)

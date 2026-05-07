@@ -12,11 +12,11 @@ post {
 
 body:json {
   {
-    "username": "testuser",
+    "username": "testuser_44",
     "password": "password123",
     "phone": "+1234567890",
     "emergencyContact": "+1234567891",
-    "email": "testuser@example.com"
+    "email": "kklr2684@gmail.com"
   }
 }
 
@@ -26,17 +26,17 @@ docs {
   Required fields:
   - username: 3-50 characters
   - password: minimum 6 characters
-  - phone: phone number
-  - emergencyContact: emergency contact phone number
-
-  Optional fields:
   - email: email address
+  - emergencyContact: emergency contact phone number
+  
+  Optional fields:
+  - phone: user's phone number
   
   Returns:
   - JWT token for API authentication
   - User profile (id, username, status, createdAt)
-  - verificationType and mcvNumber for India missed-call verification when applicable
+  - verification: { required: true, type: 'email' }
   
   Use the token in Authorization header: Bearer <token>
-  Note: the token only works on verification-related endpoints until the phone number is verified.
+  Note: the token only works on verification-related endpoints until the email is verified.
 }

@@ -15,9 +15,9 @@ const registerSchema = z.object({
   body: z.object({
     username: z.string().min(3).max(50),
     password: z.string().min(6).max(100),
-    phone: z.string().min(1, 'Phone number is required'),
+    phone: z.string().optional(),
     emergencyContact: z.string().optional(),
-    email: z.string().email().optional(),
+    email: z.string().email('Email is required'),
   }),
 });
 
@@ -30,15 +30,11 @@ const loginSchema = z.object({
       // Maintain backward compatibility for older frontend versions
       username: z.string().optional(),
       email: z.string().optional(),
-      phone: z.string().optional(),
     })
-    .refine(
-      data => data.identifier || data.username || data.email || data.phone,
-      {
-        message: 'Email, Username or Phone is required',
-        path: ['identifier'],
-      }
-    ),
+    .refine(data => data.identifier || data.username || data.email, {
+      message: 'Email or Username is required',
+      path: ['identifier'],
+    }),
 });
 
 // Change password schema
@@ -49,6 +45,18 @@ const changePasswordSchema = z.object({
   }),
 });
 
+const sendEmailVerificationSchema = z.object({
+  body: z.object({
+    email: z.string().email().optional(),
+  }),
+});
+
+const verifyEmailSchema = z.object({
+  body: z.object({
+    otp: z.string().length(6, 'OTP must be 6 digits'),
+  }),
+});
+
 // Forgot password schema
 const forgotPasswordSchema = z.object({
   body: z
@@ -56,15 +64,11 @@ const forgotPasswordSchema = z.object({
       identifier: z.string().optional(),
       username: z.string().optional(),
       email: z.string().optional(),
-      phone: z.string().optional(),
     })
-    .refine(
-      data => data.identifier || data.username || data.email || data.phone,
-      {
-        message: 'Username, Email, or Phone is required',
-        path: ['identifier'],
-      }
-    ),
+    .refine(data => data.identifier || data.username || data.email, {
+      message: 'Username or Email is required',
+      path: ['identifier'],
+    }),
 });
 
 // Reset password schema
@@ -243,6 +247,28 @@ router.post(
  */
 // Protected routes
 router.get('/profile', authenticateToken, authController.getProfile);
+router.post(
+  '/send-email-verification',
+  authenticateToken,
+  validate(sendEmailVerificationSchema),
+  authController.sendEmailVerification
+);
+router.post(
+  '/verify-email',
+  authenticateToken,
+  validate(verifyEmailSchema),
+  authController.verifyEmail
+);
+router.post(
+  '/resend-email-verification',
+  authenticateToken,
+  authController.resendEmailVerification
+);
+router.get(
+  '/email-verification-status',
+  authenticateToken,
+  authController.getEmailVerificationStatus
+);
 router.post(
   '/change-password',
   authenticateToken,

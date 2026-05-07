@@ -21,8 +21,13 @@ export const users = pgTable(
     status: varchar('status', { length: 20 }).notNull().default('active'), // active, blocked, deleted
     resetPasswordToken: text('reset_password_token'), // Token for password reset
     resetPasswordExpires: timestamp('reset_password_expires'), // Expiry time for reset token
+    emailVerificationCode: text('email_verification_code'), // Hashed OTP for email verification
+    emailVerificationExpires: timestamp('email_verification_expires'), // Expiry time for email OTP
     phoneVerificationCode: text('phone_verification_code'), // Hashed OTP for phone verification
     phoneVerificationExpires: timestamp('phone_verification_expires'), // Expiry time for phone OTP
+    isEmailVerified: varchar('is_email_verified', { length: 10 })
+      .notNull()
+      .default('false'), // Email verification status
     isPhoneVerified: varchar('is_phone_verified', { length: 10 })
       .notNull()
       .default('false'), // Phone verification status
@@ -39,6 +44,9 @@ export const users = pgTable(
     statusIdx: index('users_status_idx').on(table.status),
     resetPasswordTokenIdx: index('users_reset_password_token_idx').on(
       table.resetPasswordToken
+    ),
+    emailVerificationCodeIdx: index('users_email_verification_code_idx').on(
+      table.emailVerificationCode
     ),
     isGloballyBlockedIdx: index('users_is_globally_blocked_idx').on(
       table.isGloballyBlocked

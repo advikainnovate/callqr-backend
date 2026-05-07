@@ -1,0 +1,21 @@
+meta {
+  name: Email Verification Status
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{baseUrl}}/api/auth/email-verification-status
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+docs {
+  Check current user's email verification status.
+  Requires authentication.
+  Returns whether email is present and if it's verified.
+}

@@ -1,0 +1,21 @@
+meta {
+  name: Resend Email Verification
+  type: http
+  seq: 8
+}
+
+post {
+  url: {{baseUrl}}/api/auth/resend-email-verification
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+docs {
+  Resend verification OTP to user's registered email.
+  Requires authentication.
+  OTP expires in 10 minutes.
+}

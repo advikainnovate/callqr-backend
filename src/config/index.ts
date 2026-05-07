@@ -37,6 +37,14 @@ const config = {
     privateKey: process.env.FIREBASE_PRIVATE_KEY || '',
   },
 
+  email: {
+    host: process.env.SMTP_HOST || '',
+    port: parseInt(process.env.SMTP_PORT || '587', 10),
+    user: process.env.SMTP_USER || '',
+    password: process.env.SMTP_PASSWORD || '',
+    fromEmail: process.env.FROM_EMAIL || '',
+  },
+
   callDisconnectGracePeriodMs: parseInt(
     process.env.CALL_DISCONNECT_GRACE_PERIOD_MS || '30000',
     10

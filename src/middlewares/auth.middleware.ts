@@ -23,10 +23,10 @@ export interface AuthenticatedRequest extends Request {
 }
 
 const VERIFICATION_EXEMPT_ROUTES = new Set([
-  'POST /api/auth/send-phone-verification',
-  'POST /api/auth/verify-phone',
-  'POST /api/auth/resend-phone-verification',
-  'GET /api/auth/phone-verification-status',
+  'POST /api/auth/send-email-verification',
+  'POST /api/auth/verify-email',
+  'POST /api/auth/resend-email-verification',
+  'GET /api/auth/email-verification-status',
 ]);
 
 const isVerificationExemptRoute = (req: Request): boolean => {
@@ -88,12 +88,12 @@ export const authenticateToken = asyncHandler(
     if (
       !isAdmin &&
       (user.status === 'pending_verification' ||
-        user.isPhoneVerified !== 'true') &&
+        user.isEmailVerified !== 'true') &&
       !isVerificationExemptRoute(req)
     ) {
       return next(
         new ForbiddenError(
-          'Phone verification is required before accessing this resource.'
+          'Email verification is required before accessing this resource.'
         )
       );
     }

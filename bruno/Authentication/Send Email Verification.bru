@@ -1,11 +1,11 @@
 meta {
-  name: Send Phone Verification
+  name: Send Email Verification
   type: http
   seq: 6
 }
 
 post {
-  url: {{baseUrl}}/api/auth/send-phone-verification
+  url: {{baseUrl}}/api/auth/send-email-verification
   body: json
   auth: bearer
 }
@@ -16,12 +16,12 @@ auth:bearer {
 
 body:json {
   {
-    "phone": "+1234567890"
+    "email": "testuser@example.com"
   }
 }
 
 docs {
-  Send OTP to phone number for verification.
+  Send OTP to email address for verification.
   Requires authentication.
   OTP expires in 10 minutes.
 }
