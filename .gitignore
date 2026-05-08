@@ -29,6 +29,7 @@ logs/
 # Backups
 backups/
 *.sql
+!drizzle/*.sql
 
 # Dependency directories
 jspm_packages/
