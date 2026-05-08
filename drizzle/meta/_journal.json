@@ -19,8 +19,15 @@
     {
       "idx": 2,
       "version": "7",
-      "when": 1775539160661,
-      "tag": "0002_flimsy_zeigeist",
+      "when": 1778230168100,
+      "tag": "0002_add_normalized_email_columns",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1778230186273,
+      "tag": "0003_enforce_email_uniqueness",
       "breakpoints": true
     }
   ]
