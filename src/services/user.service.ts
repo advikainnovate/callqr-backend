@@ -33,6 +33,27 @@ export class UserService {
     return crypto.createHash('sha256').update(data).digest('hex');
   }
 
+  private normalizeEmail(email: string): string {
+    email = email.trim().toLowerCase();
+
+    const [local, domain] = email.split('@');
+
+    // Gmail normalization
+    if (domain === 'gmail.com' || domain === 'googlemail.com') {
+      const cleanLocal = local
+        .split('+')[0] // remove alias
+        .replace(/\./g, ''); // remove dots
+
+      return `${cleanLocal}@gmail.com`;
+    }
+
+    // Other providers:
+    // remove only plus alias
+    const cleanLocal = local.split('+')[0];
+
+    return `${cleanLocal}@${domain}`;
+  }
+
   private encryptData(data: string): string {
     const algorithm = 'aes-256-cbc';
     const key = Buffer.from(appConfig.encryptionKey, 'hex');
@@ -101,6 +122,20 @@ export class UserService {
       throw new ConflictError('Username already exists');
     }
 
+    // Check if phone already exists
+    if (userData.phone) {
+      const phoneHash = this.hashData(userData.phone);
+      const existingPhone = await db
+        .select()
+        .from(users)
+        .where(eq(users.phoneHash, phoneHash))
+        .limit(1);
+
+      if (existingPhone.length > 0) {
+        throw new ConflictError('Phone number already exists');
+      }
+    }
+
     // Validate password
     if (!userData.password || userData.password.length < 6) {
       throw new BadRequestError('Password must be at least 6 characters long');
@@ -111,10 +146,34 @@ export class UserService {
 
     // Encrypt and hash phone and email if provided
     const phone = userData.phone ? this.encryptData(userData.phone) : null;
-    const normalizedEmail = userData.email?.toLowerCase();
-    const email = normalizedEmail ? this.encryptData(normalizedEmail) : null;
+    const normalizedEmail = userData.email
+      ? this.normalizeEmail(userData.email)
+      : null;
+    const email = userData.email
+      ? this.encryptData(userData.email.toLowerCase())
+      : null;
     const phoneHash = userData.phone ? this.hashData(userData.phone) : null;
-    const emailHash = normalizedEmail ? this.hashData(normalizedEmail) : null;
+    const emailHash = userData.email
+      ? this.hashData(userData.email.toLowerCase())
+      : null;
+    const normalizedEmailHash = normalizedEmail
+      ? this.hashData(normalizedEmail)
+      : null;
+
+    // Check if normalized email already exists
+    if (normalizedEmailHash) {
+      const existingEmail = await db
+        .select()
+        .from(users)
+        .where(eq(users.normalizedEmailHash, normalizedEmailHash))
+        .limit(1);
+
+      if (existingEmail.length > 0) {
+        throw new ConflictError(
+          'An account with this email (or its variation) already exists'
+        );
+      }
+    }
 
     // Create new user
     const [user] = await db
@@ -127,6 +186,7 @@ export class UserService {
         email,
         phoneHash,
         emailHash,
+        normalizedEmailHash,
         emergencyContact: userData.emergencyContact || '',
         status: userData.status || 'active',
       })
@@ -154,13 +214,24 @@ export class UserService {
     let user: User | undefined;
 
     if (isEmail) {
-      // Find user by email hash (lowercase email before hashing for consistency)
-      const emailHash = this.hashData(identifier.toLowerCase());
+      // Find user by normalized email hash
+      const normalizedEmail = this.normalizeEmail(identifier);
+      const normalizedEmailHash = this.hashData(normalizedEmail);
       [user] = await db
         .select()
         .from(users)
-        .where(eq(users.emailHash, emailHash))
+        .where(eq(users.normalizedEmailHash, normalizedEmailHash))
         .limit(1);
+
+      // Fallback to exact email hash for legacy accounts
+      if (!user) {
+        const emailHash = this.hashData(identifier.toLowerCase());
+        [user] = await db
+          .select()
+          .from(users)
+          .where(eq(users.emailHash, emailHash))
+          .limit(1);
+      }
     } else {
       // Find user by username (case-insensitive)
       [user] = await db
@@ -346,10 +417,22 @@ export class UserService {
 
     if (updateData.username) updatePayload.username = updateData.username;
     if (updateData.phone) {
-      updatePayload.phone = this.encryptData(updateData.phone);
-      updatePayload.phoneHash = this.hashData(updateData.phone);
+      const phoneHash = this.hashData(updateData.phone);
 
-      if (currentUser.phoneHash !== updatePayload.phoneHash) {
+      if (currentUser.phoneHash !== phoneHash) {
+        // Check if another user already has this phone
+        const existingPhone = await db
+          .select()
+          .from(users)
+          .where(eq(users.phoneHash, phoneHash))
+          .limit(1);
+
+        if (existingPhone.length > 0 && existingPhone[0].id !== userId) {
+          throw new ConflictError('Phone number already exists');
+        }
+
+        updatePayload.phone = this.encryptData(updateData.phone);
+        updatePayload.phoneHash = phoneHash;
         updatePayload.isPhoneVerified = 'false';
         updatePayload.phoneVerificationCode = null;
         updatePayload.phoneVerificationExpires = null;
@@ -360,11 +443,27 @@ export class UserService {
       }
     }
     if (updateData.email) {
-      const normalizedEmail = updateData.email.toLowerCase();
-      updatePayload.email = this.encryptData(normalizedEmail);
-      updatePayload.emailHash = this.hashData(normalizedEmail);
+      const normalizedEmail = this.normalizeEmail(updateData.email);
+      const normalizedEmailHash = this.hashData(normalizedEmail);
+      const emailHash = this.hashData(updateData.email.toLowerCase());
 
-      if (currentUser.emailHash !== updatePayload.emailHash) {
+      if (currentUser.normalizedEmailHash !== normalizedEmailHash) {
+        // Check if another user already has this normalized email
+        const existingEmail = await db
+          .select()
+          .from(users)
+          .where(eq(users.normalizedEmailHash, normalizedEmailHash))
+          .limit(1);
+
+        if (existingEmail.length > 0 && existingEmail[0].id !== userId) {
+          throw new ConflictError(
+            'An account with this email (or its variation) already exists'
+          );
+        }
+
+        updatePayload.email = this.encryptData(updateData.email.toLowerCase());
+        updatePayload.emailHash = emailHash;
+        updatePayload.normalizedEmailHash = normalizedEmailHash;
         updatePayload.isEmailVerified = 'false';
         updatePayload.emailVerificationCode = null;
         updatePayload.emailVerificationExpires = null;

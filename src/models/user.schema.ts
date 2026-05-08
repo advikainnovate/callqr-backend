@@ -15,8 +15,9 @@ export const users = pgTable(
     passwordHash: text('password_hash').notNull(),
     phone: text('phone'), // Encrypted, can be decrypted for display
     email: text('email'), // Encrypted, can be decrypted for display
-    phoneHash: text('phone_hash'), // SHA-256 hash for verification
-    emailHash: text('email_hash'), // SHA-256 hash for verification
+    phoneHash: text('phone_hash').unique(), // SHA-256 hash for verification
+    emailHash: text('email_hash').unique(), // SHA-256 hash for verification
+    normalizedEmailHash: text('normalized_email_hash').unique(), // SHA-256 hash of normalized email for uniqueness
     emergencyContact: text('emergency_contact').notNull().default(''), // Mandatory emergency contact
     status: varchar('status', { length: 20 }).notNull().default('active'), // active, blocked, deleted
     resetPasswordToken: text('reset_password_token'), // Token for password reset
@@ -50,6 +51,9 @@ export const users = pgTable(
     ),
     isGloballyBlockedIdx: index('users_is_globally_blocked_idx').on(
       table.isGloballyBlocked
+    ),
+    normalizedEmailHashIdx: index('users_normalized_email_hash_idx').on(
+      table.normalizedEmailHash
     ),
   })
 );
