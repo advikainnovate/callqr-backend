@@ -171,8 +171,9 @@ export class AdminService {
         phone: user.phone ? this.decryptData(user.phone) : null,
         email: user.email ? this.decryptData(user.email) : null,
         status: user.status,
-        isPhoneVerified: user.isPhoneVerified,
-        isGloballyBlocked: user.isGloballyBlocked,
+        isPhoneVerified: user.isPhoneVerified === 'true',
+        isEmailVerified: user.isEmailVerified === 'true',
+        isGloballyBlocked: user.isGloballyBlocked === 'true',
         globalBlockReason: user.globalBlockReason,
         globalBlockedAt: user.globalBlockedAt,
         createdAt: user.createdAt,
@@ -248,7 +249,14 @@ export class AdminService {
       .where(eq(messages.senderId, userId));
 
     return {
-      user,
+      user: {
+        ...user,
+        phone: user.phone ? this.decryptData(user.phone) : null,
+        email: user.email ? this.decryptData(user.email) : null,
+        isPhoneVerified: user.isPhoneVerified === 'true',
+        isEmailVerified: user.isEmailVerified === 'true',
+        isGloballyBlocked: user.isGloballyBlocked === 'true',
+      },
       qrCodes: userQRCodes,
       subscription: subscription || null,
       stats: {

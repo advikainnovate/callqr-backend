@@ -69,7 +69,7 @@ export class AdminController {
         id: user.id,
         username: user.username,
         status: user.status,
-        isGloballyBlocked: user.isGloballyBlocked,
+        isGloballyBlocked: user.isGloballyBlocked === 'true',
       });
     }
   );
@@ -103,7 +103,7 @@ export class AdminController {
         id: user.id,
         username: user.username,
         status: user.status,
-        isGloballyBlocked: user.isGloballyBlocked,
+        isGloballyBlocked: user.isGloballyBlocked === 'true',
         globalBlockReason: user.globalBlockReason,
         globalBlockedAt: user.globalBlockedAt,
         globalBlockedBy: user.globalBlockedBy,
@@ -121,7 +121,7 @@ export class AdminController {
         id: user.id,
         username: user.username,
         status: user.status,
-        isGloballyBlocked: user.isGloballyBlocked,
+        isGloballyBlocked: user.isGloballyBlocked === 'true',
       });
     }
   );
@@ -144,7 +144,7 @@ export class AdminController {
             id: user.id,
             username: user.username,
             status: user.status,
-            isGloballyBlocked: user.isGloballyBlocked,
+            isGloballyBlocked: user.isGloballyBlocked === 'true',
             globalBlockReason: user.globalBlockReason,
             globalBlockedAt: user.globalBlockedAt,
             globalBlockedBy: user.globalBlockedBy,

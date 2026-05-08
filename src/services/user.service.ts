@@ -401,6 +401,13 @@ export class UserService {
   }
 
   async activateUser(userId: string): Promise<User> {
+    const user = await this.getUserById(userId);
+
+    // If user is globally blocked, we must use globalUnblockUser to clear all global block flags
+    if (user.isGloballyBlocked === 'true') {
+      return this.globalUnblockUser(userId);
+    }
+
     return this.updateUser(userId, { status: 'active' });
   }
 
