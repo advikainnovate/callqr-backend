@@ -218,8 +218,10 @@ export class UserService {
         phoneHash,
         emailHash,
         normalizedEmailHash,
+        isPhoneVerified: 'true',
+        isEmailVerified: 'false',
         emergencyContact: userData.emergencyContact || '',
-        status: userData.status || 'active',
+        status: userData.status || 'pending_verification',
       })
       .returning();
 
@@ -471,12 +473,12 @@ export class UserService {
 
         updatePayload.phone = this.encryptData(updateData.phone);
         updatePayload.phoneHash = phoneHash;
-        updatePayload.isPhoneVerified = 'false';
+        updatePayload.isPhoneVerified = 'true'; // Keep it true as verification is removed
         updatePayload.phoneVerificationCode = null;
         updatePayload.phoneVerificationExpires = null;
 
         if (currentUser.status === 'active') {
-          updatePayload.status = 'pending_verification';
+          // Phone changes no longer trigger pending_verification
         }
       }
     }
@@ -612,6 +614,7 @@ export class UserService {
     phone: string | null;
     email: string | null;
     isEmailVerified: boolean;
+    isPhoneVerified: boolean;
     status: string;
     createdAt: Date | null;
     updatedAt: Date | null;
@@ -624,6 +627,7 @@ export class UserService {
       phone: user.phone ? this.decryptData(user.phone) : null,
       email: user.email ? this.decryptData(user.email) : null,
       isEmailVerified: user.isEmailVerified === 'true',
+      isPhoneVerified: user.isPhoneVerified === 'true',
       status: user.status,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
@@ -734,15 +738,18 @@ export class UserService {
       throw new BadRequestError('Invalid verification code.');
     }
 
-    await db
-      .update(users)
-      .set({
-        isEmailVerified: 'true',
-        emailVerificationCode: null,
-        emailVerificationExpires: null,
-        updatedAt: new Date(),
-      })
-      .where(eq(users.id, userId));
+    const updateData: any = {
+      isEmailVerified: 'true',
+      emailVerificationCode: null,
+      emailVerificationExpires: null,
+      updatedAt: new Date(),
+    };
+
+    if (user.status === 'pending_verification') {
+      updateData.status = 'active';
+    }
+
+    await db.update(users).set(updateData).where(eq(users.id, userId));
 
     logger.info(`Email verified successfully for user ${userId}`);
     return true;
@@ -975,14 +982,18 @@ export class UserService {
     }
 
     // Mark phone as verified and clear verification fields
-    await db
-      .update(users)
-      .set({
-        isPhoneVerified: 'true',
-        phoneVerificationCode: null,
-        phoneVerificationExpires: null,
-      })
-      .where(eq(users.id, userId));
+    const updateData: any = {
+      isPhoneVerified: 'true',
+      phoneVerificationCode: null,
+      phoneVerificationExpires: null,
+      updatedAt: new Date(),
+    };
+
+    if (user.status === 'pending_verification') {
+      // Phone verification no longer activates the account (only Email does)
+    }
+
+    await db.update(users).set(updateData).where(eq(users.id, userId));
 
     logger.info(`Phone verified successfully for user ${userId}`);
     return true;
@@ -1037,7 +1048,7 @@ export class UserService {
         isPhoneVerified: 'true',
         phoneVerificationCode: null,
         phoneVerificationExpires: null,
-        status: user.status === 'pending_verification' ? 'active' : user.status,
+        // Phone verification no longer activates the account
       })
       .where(eq(users.id, user.id));
 

@@ -53,12 +53,14 @@ export class AuthController {
           username: user.username,
           status: user.status,
           isEmailVerified: false,
+          isPhoneVerified: false,
           createdAt: user.createdAt,
         },
         verification: {
           required: true,
-          type: 'email',
-          hint: 'Use POST /api/auth/verify-email to complete verification',
+          emailRequired: true,
+          phoneRequired: true,
+          hint: 'Please verify your email and phone number',
         },
       }
     );
@@ -92,13 +94,15 @@ export class AuthController {
         username: user.username,
         status: user.status,
         isEmailVerified: user.isEmailVerified === 'true',
+        isPhoneVerified: user.isPhoneVerified === 'true',
         createdAt: user.createdAt,
       },
       verification: {
-        required: user.isEmailVerified !== 'true',
+        required: user.status === 'pending_verification',
+        emailRequired: user.isEmailVerified !== 'true',
         hint:
-          user.isEmailVerified !== 'true'
-            ? 'Use POST /api/auth/resend-email-verification to restart email verification'
+          user.status === 'pending_verification'
+            ? 'Email verification is required'
             : null,
       },
     });
@@ -160,11 +164,6 @@ export class AuthController {
       const { otp } = req.body;
 
       await userService.verifyEmailOTP(userId, otp);
-
-      const user = await userService.getUserById(userId);
-      if (user.status === 'pending_verification') {
-        await userService.updateUser(userId, { status: 'active' });
-      }
 
       sendSuccessResponse(
         res,

@@ -28,15 +28,20 @@ async function createAdmin() {
     // Get user input
     const readline = require('readline').createInterface({
       input: process.stdin,
-      output: process.stdout
+      output: process.stdout,
     });
 
-    const question = (query) => new Promise((resolve) => readline.question(query, resolve));
+    const question = query =>
+      new Promise(resolve => readline.question(query, resolve));
 
     const username = await question('Enter admin username: ');
     const password = await question('Enter admin password (min 6 chars): ');
-    const email = await question('Enter admin email (optional, press Enter to skip): ');
-    const phone = await question('Enter admin phone (optional, press Enter to skip): ');
+    const email = await question(
+      'Enter admin email (optional, press Enter to skip): '
+    );
+    const phone = await question(
+      'Enter admin phone (optional, press Enter to skip): '
+    );
 
     readline.close();
 
@@ -70,20 +75,35 @@ async function createAdmin() {
     const passwordHash = await bcrypt.hash(password, 10);
 
     // Encrypt and hash email/phone if provided
-    const emailEncrypted = email ? encryptData(email) : null;
-    const emailHash = email ? hashData(email) : null;
+    const emailEncrypted = email ? encryptData(email.toLowerCase()) : null;
+    const emailHash = email ? hashData(email.toLowerCase()) : null;
     const phoneEncrypted = phone ? encryptData(phone) : null;
     const phoneHash = phone ? hashData(phone) : null;
+
+    // Email normalization for admin
+    let normalizedEmailHash = null;
+    if (email) {
+      const emailLower = email.toLowerCase().trim();
+      const [local, domain] = emailLower.split('@');
+      let normalized = emailLower;
+      if (domain === 'gmail.com' || domain === 'googlemail.com') {
+        const cleanLocal = local.split('+')[0].replace(/\./g, '');
+        normalized = `${cleanLocal}@gmail.com`;
+      } else {
+        normalized = `${local.split('+')[0]}@${domain}`;
+      }
+      normalizedEmailHash = hashData(normalized);
+    }
 
     // Create user
     const userId = uuidv4();
     await sql`
       INSERT INTO users (
-        id, username, password_hash, email, email_hash, phone, phone_hash, 
-        status, is_phone_verified, created_at, updated_at
+        id, username, password_hash, email, email_hash, normalized_email_hash, phone, phone_hash, 
+        status, is_phone_verified, is_email_verified, created_at, updated_at
       ) VALUES (
-        ${userId}, ${username}, ${passwordHash}, ${emailEncrypted}, ${emailHash}, 
-        ${phoneEncrypted}, ${phoneHash}, 'active', 'true', NOW(), NOW()
+        ${userId}, ${username}, ${passwordHash}, ${emailEncrypted}, ${emailHash}, ${normalizedEmailHash}, ${phoneEncrypted}, ${phoneHash}, 
+        'active', 'true', 'true', NOW(), NOW()
       )
     `;
 
@@ -118,17 +138,20 @@ async function createAdmin() {
     console.log(`   Password: [the password you entered]`);
     console.log('\n4. Test admin access:');
     console.log(`   GET /api/admin/users`);
-    console.log('\n💡 Note: Admin users bypass phone verification requirements!');
-
+    console.log(
+      '\n💡 Note: Admin users bypass phone verification requirements!'
+    );
   } catch (error) {
     console.error('\n❌ Error creating admin user:', error.message);
-    
+
     if (error.code === 'ECONNREFUSED') {
-      console.log('\n💡 Make sure PostgreSQL is running and DATABASE_URL is correct in .env');
+      console.log(
+        '\n💡 Make sure PostgreSQL is running and DATABASE_URL is correct in .env'
+      );
     } else if (error.code === '23505') {
       console.log('\n💡 Username already exists. Choose a different username.');
     }
-    
+
     process.exit(1);
   } finally {
     await sql.end();

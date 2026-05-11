@@ -13,6 +13,8 @@ export class UserController {
       id: user.id,
       username: user.username,
       status: user.status,
+      isEmailVerified: user.isEmailVerified === 'true',
+      isPhoneVerified: user.isPhoneVerified === 'true',
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
     });
@@ -25,15 +27,9 @@ export class UserController {
         throw new UnauthorizedError('User authentication required');
       }
       const userId = identity.userId;
-      const user = await userService.getUserById(userId);
+      const profile = await userService.getUserProfile(userId);
 
-      sendSuccessResponse(res, 200, 'Profile retrieved successfully', {
-        id: user.id,
-        username: user.username,
-        status: user.status,
-        createdAt: user.createdAt,
-        updatedAt: user.updatedAt,
-      });
+      sendSuccessResponse(res, 200, 'Profile retrieved successfully', profile);
     }
   );
 
