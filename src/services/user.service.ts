@@ -1,4 +1,4 @@
-import { eq, or, and, sql } from 'drizzle-orm';
+import { eq, or, and, sql, ne } from 'drizzle-orm';
 import { db } from '../db';
 import {
   users,
@@ -122,13 +122,13 @@ export class UserService {
       throw new ConflictError('Username already exists');
     }
 
-    // Check if phone already exists
+    // Check if phone already exists (skip deleted accounts)
     if (userData.phone) {
       const phoneHash = this.hashData(userData.phone);
       const existingPhone = await db
         .select()
         .from(users)
-        .where(eq(users.phoneHash, phoneHash))
+        .where(and(eq(users.phoneHash, phoneHash), ne(users.status, 'deleted')))
         .limit(1);
 
       if (existingPhone.length > 0) {
@@ -160,12 +160,20 @@ export class UserService {
       ? this.hashData(normalizedEmail)
       : null;
 
-    // Check if normalized email already exists
-    if (normalizedEmailHash) {
+    // Check if email already exists (normalized or legacy, skip deleted accounts)
+    if (normalizedEmailHash || emailHash) {
+      const conditions = [];
+      if (normalizedEmailHash) {
+        conditions.push(eq(users.normalizedEmailHash, normalizedEmailHash));
+      }
+      if (emailHash) {
+        conditions.push(eq(users.emailHash, emailHash));
+      }
+
       const existingEmail = await db
         .select()
         .from(users)
-        .where(eq(users.normalizedEmailHash, normalizedEmailHash))
+        .where(and(or(...conditions), ne(users.status, 'deleted')))
         .limit(1);
 
       if (existingEmail.length > 0) {
@@ -173,6 +181,21 @@ export class UserService {
           'An account with this email (or its variation) already exists'
         );
       }
+    }
+
+    // If any deleted accounts exist with this phone/email, remove them to allow re-registration
+    const cleanupConditions = [];
+    if (phoneHash) cleanupConditions.push(eq(users.phoneHash, phoneHash));
+    if (normalizedEmailHash)
+      cleanupConditions.push(
+        eq(users.normalizedEmailHash, normalizedEmailHash)
+      );
+    if (emailHash) cleanupConditions.push(eq(users.emailHash, emailHash));
+
+    if (cleanupConditions.length > 0) {
+      await db
+        .delete(users)
+        .where(and(or(...cleanupConditions), eq(users.status, 'deleted')));
     }
 
     // Create new user
@@ -305,7 +328,8 @@ export class UserService {
   }
 
   private isPendingVerificationExpired(user: User): boolean {
-    if (user.isEmailVerified === 'true') {
+    // If ANY verification is already done, we don't expire the account
+    if (user.isEmailVerified === 'true' || user.isPhoneVerified === 'true') {
       return false;
     }
 
@@ -420,14 +444,20 @@ export class UserService {
       const phoneHash = this.hashData(updateData.phone);
 
       if (currentUser.phoneHash !== phoneHash) {
-        // Check if another user already has this phone
+        // Check if another user already has this phone (skip deleted accounts)
         const existingPhone = await db
           .select()
           .from(users)
-          .where(eq(users.phoneHash, phoneHash))
+          .where(
+            and(
+              eq(users.phoneHash, phoneHash),
+              ne(users.id, userId),
+              ne(users.status, 'deleted')
+            )
+          )
           .limit(1);
 
-        if (existingPhone.length > 0 && existingPhone[0].id !== userId) {
+        if (existingPhone.length > 0) {
           throw new ConflictError('Phone number already exists');
         }
 
@@ -447,15 +477,32 @@ export class UserService {
       const normalizedEmailHash = this.hashData(normalizedEmail);
       const emailHash = this.hashData(updateData.email.toLowerCase());
 
-      if (currentUser.normalizedEmailHash !== normalizedEmailHash) {
-        // Check if another user already has this normalized email
+      if (
+        currentUser.normalizedEmailHash !== normalizedEmailHash ||
+        currentUser.emailHash !== emailHash
+      ) {
+        // Check if another user already has this normalized email or legacy email (skip deleted accounts)
+        const conditions = [];
+        if (normalizedEmailHash) {
+          conditions.push(eq(users.normalizedEmailHash, normalizedEmailHash));
+        }
+        if (emailHash) {
+          conditions.push(eq(users.emailHash, emailHash));
+        }
+
         const existingEmail = await db
           .select()
           .from(users)
-          .where(eq(users.normalizedEmailHash, normalizedEmailHash))
+          .where(
+            and(
+              or(...conditions),
+              ne(users.id, userId),
+              ne(users.status, 'deleted')
+            )
+          )
           .limit(1);
 
-        if (existingEmail.length > 0 && existingEmail[0].id !== userId) {
+        if (existingEmail.length > 0) {
           throw new ConflictError(
             'An account with this email (or its variation) already exists'
           );
