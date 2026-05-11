@@ -34,7 +34,7 @@ export class UserService {
   }
 
   private normalizeEmail(email: string): string {
-    email = email.trim().toLowerCase();
+    email = email.replace(/\s+/g, '').toLowerCase();
 
     const [local, domain] = email.split('@');
 
@@ -111,11 +111,16 @@ export class UserService {
     email?: string;
     status?: string;
   }): Promise<User> {
-    // Check if username already exists
+    // Check if username already exists (case-insensitive, skip deleted accounts)
     const existingUser = await db
       .select()
       .from(users)
-      .where(eq(users.username, userData.username))
+      .where(
+        and(
+          sql`LOWER(${users.username}) = LOWER(${userData.username})`,
+          ne(users.status, 'deleted')
+        )
+      )
       .limit(1);
 
     if (existingUser.length > 0) {
@@ -183,8 +188,11 @@ export class UserService {
       }
     }
 
-    // If any deleted accounts exist with this phone/email, remove them to allow re-registration
+    // If any deleted accounts exist with this username/phone/email, remove them to allow re-registration
     const cleanupConditions = [];
+    cleanupConditions.push(
+      sql`LOWER(${users.username}) = LOWER(${userData.username})`
+    );
     if (phoneHash) cleanupConditions.push(eq(users.phoneHash, phoneHash));
     if (normalizedEmailHash)
       cleanupConditions.push(
