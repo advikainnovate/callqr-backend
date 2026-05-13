@@ -306,12 +306,12 @@ export class UserService {
     }
 
     if (this.isPendingVerificationExpired(user)) {
-      await this.updateUser(user.id, { status: 'deleted' });
+      await this.hardDeleteUser(user.id);
       logger.warn(
-        `Expired pending verification account soft-deleted during login: ${user.id}`
+        `Expired pending verification account permanently deleted during login: ${user.id}`
       );
       throw new UnauthorizedError(
-        'Account verification window expired. Please register again.'
+        'Account verification window expired. Your unverified account has been permanently removed. Please register again.'
       );
     }
 
@@ -553,7 +553,71 @@ export class UserService {
   }
 
   async deleteUser(userId: string): Promise<User> {
-    return this.updateUser(userId, { status: 'deleted' });
+    const [user] = await db
+      .update(users)
+      .set({
+        status: 'deleted',
+        deletedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userId))
+      .returning();
+
+    if (!user) {
+      throw new NotFoundError('User not found');
+    }
+
+    logger.info(`User soft-deleted with grace period: ${userId}`);
+    return user;
+  }
+
+  async hardDeleteUser(userId: string): Promise<void> {
+    // First remove related records to avoid foreign key issues
+    // Note: Drizzle usually handles cascading if defined in schema,
+    // but here we ensure clean removal of device tokens etc.
+    await db.delete(deviceTokens).where(eq(deviceTokens.userId, userId));
+    await db
+      .delete(userBlocks)
+      .where(
+        or(
+          eq(userBlocks.blockerId, userId),
+          eq(userBlocks.blockedUserId, userId)
+        )
+      );
+
+    // Check for subscriptions and other related tables if necessary
+    const { subscriptions } = await import('../models');
+    await db.delete(subscriptions).where(eq(subscriptions.userId, userId));
+
+    await db.delete(users).where(eq(users.id, userId));
+    logger.info(`User permanently deleted from system: ${userId}`);
+  }
+
+  /**
+   * Permanently purges accounts that have been soft-deleted for more than 7 days.
+   */
+  async purgeExpiredDeletedAccounts(): Promise<number> {
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+    // Find users to delete first for logging
+    const expiredUsers = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(
+        and(
+          eq(users.status, 'deleted'),
+          sql`${users.deletedAt} <= ${sevenDaysAgo}`
+        )
+      );
+
+    if (expiredUsers.length === 0) return 0;
+
+    for (const user of expiredUsers) {
+      await this.hardDeleteUser(user.id);
+    }
+
+    return expiredUsers.length;
   }
 
   async activateUser(userId: string): Promise<User> {
@@ -579,6 +643,18 @@ export class UserService {
     }
 
     return user;
+  }
+
+  async restoreUser(userId: string): Promise<User> {
+    const user = await this.getUserById(userId);
+
+    if (user.status !== 'deleted') {
+      throw new BadRequestError('User is not deleted and cannot be restored');
+    }
+
+    // Reuse activateUser logic which handles global unblocking if necessary
+    // and sets status to 'active'
+    return this.activateUser(userId);
   }
 
   async isUserActive(userId: string): Promise<boolean> {

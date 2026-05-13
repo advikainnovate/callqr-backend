@@ -104,6 +104,7 @@ ALLOWED_ORIGINS=*
 - Phone verification with OTP via Twilio SMS
 - **Push Notifications (FCM)** for offline calls and messages
 - **S3 Media Storage** for image uploads and delivery
+- **Account Deletion & Recovery**: 7-day grace period for deactivated accounts with automatic permanent purging
 - **Anonymous Calling Support**: Allow calls from non-registered users via QR scans
 - **Guest Identity & Blocking**: Privacy-safe guest IDs with IP-based blocking
 - **Call Reliability**: 30-second reconnection window with automated wake-up push notifications

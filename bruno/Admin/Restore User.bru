@@ -1,0 +1,23 @@
+meta {
+  name: Restore User
+  type: http
+  seq: 7
+}
+
+patch {
+  url: {{baseUrl}}/api/admin/users/:userId/restore
+  body: none
+  auth: bearer
+}
+
+params:path {
+  userId: c4794fce-6844-4005-b1a7-b970c295a444
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+docs {
+  Restore a soft-deleted user (sets status back to 'active')
+}

@@ -3,6 +3,7 @@ import { createServer } from 'http';
 import { logger } from './utils';
 import { appConfig, initializeFirebase } from './config';
 import { WebRTCService, setWebRTCService } from './services/webrtc.service';
+import { cronService } from './services/cron.service';
 import { db, client } from './db'; // Import database connection
 import { checkS3Health } from './config/storage';
 
@@ -77,6 +78,9 @@ const checkServices = async () => {
     webrtcService = new WebRTCService(server);
     setWebRTCService(webrtcService);
 
+    // Initialize background jobs
+    cronService.init();
+
     // Check all services
     const services = await checkServices();
 
@@ -143,6 +147,9 @@ const gracefulShutdown = async (signal: string) => {
       logger.info('🔌 Shutting down WebRTC service...');
       await webrtcService.shutdown(`Server received ${signal}`);
     }
+
+    // Step 1.5: Stop background jobs
+    cronService.stopAll();
 
     // Step 2: Close the HTTP server (stop accepting new connections)
     await new Promise<void>((resolve, reject) => {

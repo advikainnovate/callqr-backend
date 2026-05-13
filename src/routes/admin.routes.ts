@@ -18,35 +18,174 @@ router.get(
 );
 
 // ==================== USER MANAGEMENT ====================
+
+/**
+ * @swagger
+ * /admin/users:
+ *   get:
+ *     summary: Get all users with filtering and pagination
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [active, blocked, deleted, pending_verification]
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 50
+ *       - in: query
+ *         name: offset
+ *         schema:
+ *           type: integer
+ *           default: 0
+ *     responses:
+ *       200:
+ *         description: Users retrieved successfully
+ */
 router.get(
   '/users',
   authenticateToken,
   requireAdmin,
   adminController.getAllUsers
 );
+
+/**
+ * @swagger
+ * /admin/users/{userId}:
+ *   get:
+ *     summary: Get detailed information about a specific user
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: User details retrieved successfully
+ */
 router.get(
   '/users/:userId',
   authenticateToken,
   requireAdmin,
   adminController.getUserDetails
 );
+
+/**
+ * @swagger
+ * /admin/users/{userId}/block:
+ *   patch:
+ *     summary: Block a user account
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: User blocked successfully
+ */
 router.patch(
   '/users/:userId/block',
   authenticateToken,
   requireAdmin,
   adminController.blockUser
 );
+
+/**
+ * @swagger
+ * /admin/users/{userId}/unblock:
+ *   patch:
+ *     summary: Unblock a user account
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: User unblocked successfully
+ */
 router.patch(
   '/users/:userId/unblock',
   authenticateToken,
   requireAdmin,
   adminController.unblockUser
 );
+
+/**
+ * @swagger
+ * /admin/users/{userId}:
+ *   delete:
+ *     summary: Soft delete a user account (initiates 7-day grace period)
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: User soft-deleted successfully
+ */
 router.delete(
   '/users/:userId',
   authenticateToken,
   requireAdmin,
   adminController.deleteUser
+);
+
+/**
+ * @swagger
+ * /admin/users/{userId}/restore:
+ *   patch:
+ *     summary: Restore a soft-deleted user account (within 7-day grace period)
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: User account restored successfully
+ */
+router.patch(
+  '/users/:userId/restore',
+  authenticateToken,
+  requireAdmin,
+  adminController.restoreUser
 );
 
 // Global User Blocking

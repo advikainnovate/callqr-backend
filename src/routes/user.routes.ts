@@ -45,11 +45,25 @@ router.patch(
   userController.blockUser
 );
 
-// Delete user (soft delete - admin only)
+/**
+ * @swagger
+ * /users/me:
+ *   delete:
+ *     summary: Delete your own account
+ *     description: Initiates soft-deletion with a 7-day grace period.
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Account deactivated successfully
+ */
+router.delete('/me', authenticateToken, userController.deleteSelf);
+
+// Delete user (soft delete - self or admin only)
 router.delete(
   '/:userId',
   authenticateToken,
-  requireAdmin,
   validate(getUserSchema),
   userController.deleteUser
 );

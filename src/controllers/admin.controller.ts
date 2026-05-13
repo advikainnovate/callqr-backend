@@ -86,6 +86,18 @@ export class AdminController {
     }
   );
 
+  restoreUser = asyncHandler(
+    async (req: AuthenticatedRequest, res: Response) => {
+      const { userId } = req.params;
+      const user = await userService.restoreUser(userId);
+      sendSuccessResponse(res, 200, 'User account restored successfully', {
+        id: user.id,
+        username: user.username,
+        status: user.status,
+      });
+    }
+  );
+
   // Global User Blocking
   globalBlockUser = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {

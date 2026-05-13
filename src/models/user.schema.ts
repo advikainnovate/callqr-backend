@@ -38,6 +38,7 @@ export const users = pgTable(
     globalBlockReason: text('global_block_reason'), // Reason for global block
     globalBlockedAt: timestamp('global_blocked_at'), // When user was globally blocked
     globalBlockedBy: uuid('global_blocked_by'), // Admin who blocked the user
+    deletedAt: timestamp('deleted_at'), // When user was soft-deleted
     createdAt: timestamp('created_at').defaultNow(),
     updatedAt: timestamp('updated_at').defaultNow(),
   },

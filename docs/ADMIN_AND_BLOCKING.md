@@ -17,6 +17,38 @@
 
 ---
 
+## 🗑️ Account Deletion & Recovery
+
+The platform uses a "Graceful Deletion" policy to prevent accidental data loss.
+
+### 1. Soft-Deletion (Deactivation)
+
+When a user or admin deletes an account:
+
+- Status is changed to `deleted`.
+- A `deletedAt` timestamp is recorded.
+- The user can no longer log in.
+- **Grace Period**: The account is held in this state for **7 days**.
+
+### 2. Restoration
+
+Within the 7-day grace period, an admin can restore the account:
+
+- **Endpoint**: `PATCH /api/admin/users/:userId/restore`
+- This reverts the status to `active` and preserves all user data (QR codes, history, etc.).
+
+### 3. Permanent Purge
+
+- A background cron job runs every night at **00:00**.
+- Any account that has been in the `deleted` status for **more than 7 days** is permanently removed from the database.
+- Once purged, the data **cannot be recovered**.
+
+### 4. Unverified Accounts
+
+- Accounts that remain in `pending_verification` for more than 7 days are **permanently deleted** upon the next login attempt. They do not get a grace period.
+
+---
+
 ## Global Block (Admin)
 
 Permanently locks a user out of the entire platform. Blocked users cannot:

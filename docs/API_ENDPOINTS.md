@@ -122,7 +122,7 @@ POST /api/auth/login
 
 - Unverified users can log in and should be redirected to the correct verification flow in the client
 - Unverified users receive `403` on other protected endpoints until verification completes
-- Accounts left unverified for more than 7 days are soft-deleted on login attempt
+- Accounts left unverified for more than 7 days are permanently deleted on the next login attempt
 
 ### Forgot Password (Request OTP)
 
@@ -404,6 +404,15 @@ PATCH /api/users/:userId
 }
 ```
 
+### Delete My Account
+
+```
+DELETE /api/users/me
+```
+
+**Auth:** Required
+**Note:** Soft-deletes your own account and starts a 7-day grace period. You will no longer be able to log in.
+
 ### Block User (Admin)
 
 ```
@@ -427,6 +436,16 @@ DELETE /api/users/:userId
 ```
 
 **Auth:** Admin Required
+**Note:** This is a soft-delete that initiates a 7-day grace period. The account is permanently purged after 7 days by a background job.
+
+### Restore User (Admin)
+
+```
+PATCH /api/users/:userId/restore
+```
+
+**Auth:** Admin Required
+**Note:** Restores a soft-deleted user to `active` status. Only works within the 7-day grace period.
 
 ### Global Block User (Admin)
 
@@ -1687,6 +1706,16 @@ DELETE /api/admin/users/:userId
 ```
 
 **Auth:** Admin Required
+**Note:** Soft-deletes the user and starts a 7-day grace period.
+
+### Restore User
+
+```
+PATCH /api/admin/users/:userId/restore
+```
+
+**Auth:** Admin Required
+**Note:** Restores a user from `deleted` status back to `active`.
 
 ### Get All QR Codes
 

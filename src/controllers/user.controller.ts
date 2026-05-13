@@ -1,12 +1,27 @@
 import { Response } from 'express';
 import { userService } from '../services/user.service';
 import { AuthenticatedRequest } from '../middlewares/auth.middleware';
-import { asyncHandler, UnauthorizedError } from '../utils';
+import { asyncHandler, UnauthorizedError, ForbiddenError } from '../utils';
 import { sendSuccessResponse } from '../utils/responseHandler';
 
 export class UserController {
   getUser = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const { userId } = req.params;
+    const identity = req.identity;
+    if (identity?.type !== 'user') {
+      throw new UnauthorizedError('User authentication required');
+    }
+    const currentUserId = identity.userId;
+    const isAdmin = (process.env.ADMIN_USER_IDS || '')
+      .split(',')
+      .filter(Boolean)
+      .includes(currentUserId);
+
+    // Security: Only allow self-access or admin access
+    if (currentUserId !== userId && !isAdmin) {
+      throw new ForbiddenError('You can only access your own profile');
+    }
+
     const user = await userService.getUserById(userId);
 
     sendSuccessResponse(res, 200, 'User retrieved successfully', {
@@ -36,8 +51,22 @@ export class UserController {
   updateUser = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
       const { userId } = req.params;
-      const updateData = req.body;
+      const identity = req.identity;
+      if (identity?.type !== 'user') {
+        throw new UnauthorizedError('User authentication required');
+      }
+      const currentUserId = identity.userId;
+      const isAdmin = (process.env.ADMIN_USER_IDS || '')
+        .split(',')
+        .filter(Boolean)
+        .includes(currentUserId);
 
+      // Security: Only allow self-update or admin update
+      if (currentUserId !== userId && !isAdmin) {
+        throw new ForbiddenError('You can only update your own profile');
+      }
+
+      const updateData = req.body;
       const user = await userService.updateUser(userId, updateData);
 
       sendSuccessResponse(res, 200, 'User updated successfully', {
@@ -62,12 +91,49 @@ export class UserController {
   deleteUser = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
       const { userId } = req.params;
+      const identity = req.identity;
+      if (identity?.type !== 'user') {
+        throw new UnauthorizedError('User authentication required');
+      }
+      const currentUserId = identity.userId;
+      const isAdmin = (process.env.ADMIN_USER_IDS || '')
+        .split(',')
+        .filter(Boolean)
+        .includes(currentUserId);
+
+      // Security: Only allow self-deletion or admin deletion
+      if (currentUserId !== userId && !isAdmin) {
+        throw new ForbiddenError('You can only delete your own account');
+      }
+
       const user = await userService.deleteUser(userId);
 
       sendSuccessResponse(res, 200, 'User deleted successfully', {
         id: user.id,
         status: user.status,
       });
+    }
+  );
+
+  deleteSelf = asyncHandler(
+    async (req: AuthenticatedRequest, res: Response) => {
+      const identity = req.identity;
+      if (identity?.type !== 'user') {
+        throw new UnauthorizedError('User authentication required');
+      }
+      const userId = identity.userId;
+
+      const user = await userService.deleteUser(userId);
+
+      sendSuccessResponse(
+        res,
+        200,
+        'Your account has been deactivated and will be permanently deleted after 7 days.',
+        {
+          id: user.id,
+          status: user.status,
+        }
+      );
     }
   );
 
