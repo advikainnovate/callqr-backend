@@ -74,7 +74,9 @@ export const authenticateToken = asyncHandler(
     if (isBlocked) {
       return next(
         new ForbiddenError(
-          'Your account has been globally blocked. Please contact support.'
+          user.globalBlockReason?.trim()
+            ? `Your account has been globally blocked: ${user.globalBlockReason.trim()}`
+            : 'Your account has been globally blocked. Please contact support.'
         )
       );
     }
@@ -129,8 +131,15 @@ export const authenticateTokenOrGuest = asyncHandler(
         };
 
         const { userService } = await import('../services/user.service');
-        if (await userService.isGloballyBlocked(req.user.userId)) {
-          return next(new ForbiddenError('Account is globally blocked.'));
+        const user = await userService.getUserById(req.user.userId);
+        if (user.isGloballyBlocked === 'true') {
+          return next(
+            new ForbiddenError(
+              user.globalBlockReason?.trim()
+                ? `Your account has been globally blocked: ${user.globalBlockReason.trim()}`
+                : 'Your account has been globally blocked. Please contact support.'
+            )
+          );
         }
       } else if (decoded.type === 'guest' && decoded.guestId) {
         req.guestId = decoded.guestId;

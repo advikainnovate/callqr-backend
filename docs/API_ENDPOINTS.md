@@ -1683,22 +1683,6 @@ GET /api/admin/users/:userId
 
 **Auth:** Admin Required
 
-### Block User
-
-```
-PATCH /api/admin/users/:userId/block
-```
-
-**Auth:** Admin Required
-
-### Unblock User
-
-```
-PATCH /api/admin/users/:userId/unblock
-```
-
-**Auth:** Admin Required
-
 ### Delete User
 
 ```
@@ -1874,6 +1858,8 @@ GET /api/admin/monitoring/active-calls
 ```
 
 **Auth:** Admin Required
+**Query Params:** `historyLimit` (optional, default: 20)
+**Response Note:** Returns both `calls` for live sessions and `recentHistory` for the latest completed/non-live calls.
 
 ### Get Active Chats (Monitoring)
 
@@ -1882,6 +1868,8 @@ GET /api/admin/monitoring/active-chats
 ```
 
 **Auth:** Admin Required
+**Query Params:** `historyLimit` (optional, default: 20)
+**Response Note:** Returns both `chats` for live sessions and `recentHistory` for the latest non-active chats.
 
 ### Get Recent Activity
 

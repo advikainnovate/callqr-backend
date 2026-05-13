@@ -17,6 +17,7 @@ import {
   unblockUserSchema,
   getBlockedUsersSchema,
 } from '../schemas/userBlock.schema';
+import { authLimiter } from '../middlewares/rateLimit.middleware';
 
 const router = Router();
 
@@ -80,6 +81,7 @@ router.patch(
 // Verify phone
 router.post(
   '/verify/phone',
+  authLimiter,
   validate(verifyPhoneSchema),
   userController.verifyPhone
 );
@@ -87,6 +89,7 @@ router.post(
 // Verify email
 router.post(
   '/verify/email',
+  authLimiter,
   validate(verifyEmailSchema),
   userController.verifyEmail
 );

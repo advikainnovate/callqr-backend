@@ -29,6 +29,15 @@ export class UserService {
   private static readonly PENDING_VERIFICATION_EXPIRY_DAYS = 7;
   private static readonly OTP_EXPIRY_MS = 10 * 60 * 1000;
 
+  private buildGlobalBlockMessage(reason?: string | null): string {
+    const normalizedReason = reason?.trim();
+    if (normalizedReason) {
+      return `Your account has been globally blocked: ${normalizedReason}`;
+    }
+
+    return 'Your account has been globally blocked. Please contact support.';
+  }
+
   private hashData(data: string): string {
     return crypto.createHash('sha256').update(data).digest('hex');
   }
@@ -301,7 +310,7 @@ export class UserService {
     // Check if user is globally blocked
     if (user.isGloballyBlocked === 'true') {
       throw new ForbiddenError(
-        'Your account has been globally blocked. Please contact support.'
+        this.buildGlobalBlockMessage(user.globalBlockReason)
       );
     }
 
@@ -732,7 +741,9 @@ export class UserService {
 
     // Check if user is globally blocked
     if (user.isGloballyBlocked === 'true') {
-      throw new ForbiddenError('Account is globally blocked. Contact support.');
+      throw new ForbiddenError(
+        this.buildGlobalBlockMessage(user.globalBlockReason)
+      );
     }
 
     // Generate secure reset token
@@ -906,7 +917,9 @@ export class UserService {
 
     // Check if user is globally blocked
     if (user.isGloballyBlocked === 'true') {
-      throw new ForbiddenError('Account is globally blocked. Contact support.');
+      throw new ForbiddenError(
+        this.buildGlobalBlockMessage(user.globalBlockReason)
+      );
     }
 
     // Validate new password

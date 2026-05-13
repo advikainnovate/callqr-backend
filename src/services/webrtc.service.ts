@@ -236,13 +236,39 @@ export class WebRTCService {
       // Join user to their personal room
       socket.join(userId);
 
-      /*
-      // Handle WebRTC signaling with rate limiting
+      // Handle event rate limiting
       socket.use((packet, next) => {
-        const [eventName, data] = packet;
-        // ... (rest of the rate limit logic)
+        const [eventName] = packet;
+        let profile = rateLimitProfiles.chatMessage; // Default
+
+        if (
+          ['webrtc-offer', 'webrtc-answer', 'webrtc-ice-candidate'].includes(
+            eventName
+          )
+        ) {
+          profile = rateLimitProfiles.signaling;
+        } else if (
+          [
+            'initiate-call',
+            'accept-call',
+            'reject-call',
+            'end-call',
+            'call:end',
+          ].includes(eventName)
+        ) {
+          profile = rateLimitProfiles.callAction;
+        } else if (['typing-start', 'typing-stop'].includes(eventName)) {
+          profile = rateLimitProfiles.typing;
+        } else if (['join-chat', 'leave-chat'].includes(eventName)) {
+          profile = rateLimitProfiles.chatRoom;
+        } else if (['message-read', 'message-delivered'].includes(eventName)) {
+          profile = rateLimitProfiles.readReceipt;
+        }
+
+        // Apply rate limit
+        const limiter = this.rateLimiter.createLimiter(eventName, profile);
+        return limiter(socket, packet[1], next);
       });
-      */
 
       // Handle specific WebRTC events
       socket.on(

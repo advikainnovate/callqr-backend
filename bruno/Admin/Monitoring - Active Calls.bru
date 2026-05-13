@@ -5,7 +5,7 @@ meta {
 }
 
 get {
-  url: {{baseUrl}}/api/admin/monitoring/active-calls
+  url: {{baseUrl}}/api/admin/monitoring/active-calls?historyLimit=20
   body: none
   auth: bearer
 }
@@ -16,5 +16,5 @@ auth:bearer {
 
 docs {
   Get list of currently active calls (initiated, ringing, connected)
-  Includes caller, receiver, and call duration
+  Includes caller, receiver, duration, and recentHistory for the admin live feed
 }

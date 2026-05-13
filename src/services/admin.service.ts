@@ -1,4 +1,4 @@
-import { eq, and, desc, sql, gte, lte, or, count } from 'drizzle-orm';
+import { eq, and, desc, sql, gte, lte, or, count, ne } from 'drizzle-orm';
 import { db } from '../db';
 import { Response } from 'express';
 import archiver from 'archiver';
@@ -1023,7 +1023,7 @@ export class AdminService {
 
   // ==================== REAL-TIME MONITORING ====================
 
-  async getActiveCallsList() {
+  async getActiveCallsList(historyLimit: number = 20) {
     const activeCalls = await db
       .select({
         call: callSessions,
@@ -1051,7 +1051,7 @@ export class AdminService {
       )
       .orderBy(desc(callSessions.initiatedAt));
 
-    return activeCalls.map(c => ({
+    const calls = activeCalls.map(c => ({
       ...c.call,
       caller: c.caller?.id
         ? c.caller
@@ -1066,9 +1066,65 @@ export class AdminService {
         ? Math.floor((Date.now() - c.call.startedAt.getTime()) / 1000)
         : 0,
     }));
+
+    const recentCallsRaw = await db
+      .select({
+        call: callSessions,
+        caller: {
+          id: users.id,
+          username: users.username,
+        },
+        receiver: {
+          id: sql`receiver.id`,
+          username: sql`receiver.username`,
+        },
+      })
+      .from(callSessions)
+      .leftJoin(users, eq(callSessions.callerId, users.id))
+      .leftJoin(
+        sql`users as receiver`,
+        sql`${callSessions.receiverId} = receiver.id`
+      )
+      .where(
+        and(
+          ne(callSessions.status, 'initiated'),
+          ne(callSessions.status, 'ringing'),
+          ne(callSessions.status, 'connected')
+        )
+      )
+      .orderBy(
+        desc(
+          sql`COALESCE(${callSessions.endedAt}, ${callSessions.startedAt}, ${callSessions.initiatedAt})`
+        )
+      )
+      .limit(historyLimit);
+
+    const recentHistory = recentCallsRaw.map(c => ({
+      ...c.call,
+      caller: c.caller?.id
+        ? c.caller
+        : {
+            id: `guest:${c.call.guestId}`,
+            username: 'Anonymous Caller',
+            isGuest: true,
+            ip: c.call.guestIp,
+          },
+      receiver: c.receiver,
+      duration:
+        c.call.startedAt && c.call.endedAt
+          ? Math.floor(
+              (c.call.endedAt.getTime() - c.call.startedAt.getTime()) / 1000
+            )
+          : 0,
+    }));
+
+    return {
+      calls,
+      recentHistory,
+    };
   }
 
-  async getActiveChatsList() {
+  async getActiveChatsList(historyLimit: number = 20) {
     const activeChats = await db
       .select({
         chat: chatSessions,
@@ -1090,11 +1146,48 @@ export class AdminService {
       .where(eq(chatSessions.status, 'active'))
       .orderBy(desc(chatSessions.lastMessageAt));
 
-    return activeChats.map(c => ({
+    const chats = activeChats.map(c => ({
       ...c.chat,
       participant1: c.participant1,
       participant2: c.participant2,
     }));
+
+    const recentChatsRaw = await db
+      .select({
+        chat: chatSessions,
+        participant1: {
+          id: users.id,
+          username: users.username,
+        },
+        participant2: {
+          id: sql`participant2.id`,
+          username: sql`participant2.username`,
+        },
+      })
+      .from(chatSessions)
+      .leftJoin(users, eq(chatSessions.participant1Id, users.id))
+      .leftJoin(
+        sql`users as participant2`,
+        sql`${chatSessions.participant2Id} = participant2.id`
+      )
+      .where(ne(chatSessions.status, 'active'))
+      .orderBy(
+        desc(
+          sql`COALESCE(${chatSessions.endedAt}, ${chatSessions.lastMessageAt}, ${chatSessions.startedAt})`
+        )
+      )
+      .limit(historyLimit);
+
+    const recentHistory = recentChatsRaw.map(c => ({
+      ...c.chat,
+      participant1: c.participant1,
+      participant2: c.participant2,
+    }));
+
+    return {
+      chats,
+      recentHistory,
+    };
   }
 
   async getRecentActivity(limit: number = 50) {

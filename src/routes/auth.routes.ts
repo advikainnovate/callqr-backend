@@ -4,6 +4,7 @@ import { authenticateToken } from '../middlewares/auth.middleware';
 import { validate } from '../middlewares/validate';
 import { z } from 'zod';
 import {
+  authLimiter,
   guestLimiter,
   guestDailyLimiter,
 } from '../middlewares/rateLimit.middleware';
@@ -84,15 +85,22 @@ const resetPasswordSchema = z.object({
 });
 
 // Public routes
-router.post('/register', validate(registerSchema), authController.register);
-router.post('/login', validate(loginSchema), authController.login);
+router.post(
+  '/register',
+  authLimiter,
+  validate(registerSchema),
+  authController.register
+);
+router.post('/login', authLimiter, validate(loginSchema), authController.login);
 router.post(
   '/forgot-password',
+  authLimiter,
   validate(forgotPasswordSchema),
   authController.forgotPassword
 );
 router.post(
   '/reset-password',
+  authLimiter,
   validate(resetPasswordSchema),
   authController.resetPassword
 );

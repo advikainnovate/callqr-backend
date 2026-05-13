@@ -7,6 +7,49 @@ import { asyncHandler, UnauthorizedError } from '../utils';
 import { sendSuccessResponse } from '../utils/responseHandler';
 
 export class AdminController {
+  private async performGlobalBlock(
+    req: AuthenticatedRequest,
+    res: Response
+  ): Promise<void> {
+    const { userId } = req.params;
+    const { reason } = req.body;
+    const identity = req.identity;
+    if (identity?.type !== 'user') {
+      throw new UnauthorizedError('Admin authentication required');
+    }
+
+    const user = await userService.globalBlockUser(
+      userId,
+      identity.userId,
+      reason
+    );
+
+    sendSuccessResponse(res, 200, 'User globally blocked successfully', {
+      id: user.id,
+      username: user.username,
+      status: user.status,
+      isGloballyBlocked: user.isGloballyBlocked === 'true',
+      globalBlockReason: user.globalBlockReason,
+      globalBlockedAt: user.globalBlockedAt,
+      globalBlockedBy: user.globalBlockedBy,
+    });
+  }
+
+  private async performGlobalUnblock(
+    req: AuthenticatedRequest,
+    res: Response
+  ): Promise<void> {
+    const { userId } = req.params;
+    const user = await userService.globalUnblockUser(userId);
+
+    sendSuccessResponse(res, 200, 'User globally unblocked successfully', {
+      id: user.id,
+      username: user.username,
+      status: user.status,
+      isGloballyBlocked: user.isGloballyBlocked === 'true',
+    });
+  }
+
   // ==================== OVERVIEW ====================
 
   getOverviewStats = asyncHandler(
@@ -52,25 +95,12 @@ export class AdminController {
   );
 
   blockUser = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
-    const { userId } = req.params;
-    const user = await userService.blockUser(userId);
-    sendSuccessResponse(res, 200, 'User blocked successfully', {
-      id: user.id,
-      username: user.username,
-      status: user.status,
-    });
+    await this.performGlobalBlock(req, res);
   });
 
   unblockUser = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
-      const { userId } = req.params;
-      const user = await userService.unblockUser(userId);
-      sendSuccessResponse(res, 200, 'User unblocked successfully', {
-        id: user.id,
-        username: user.username,
-        status: user.status,
-        isGloballyBlocked: user.isGloballyBlocked === 'true',
-      });
+      await this.performGlobalUnblock(req, res);
     }
   );
 
@@ -101,40 +131,13 @@ export class AdminController {
   // Global User Blocking
   globalBlockUser = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
-      const { userId } = req.params;
-      const { reason } = req.body;
-      const identity = req.identity;
-      if (identity?.type !== 'user') {
-        throw new UnauthorizedError('Admin authentication required');
-      }
-      const adminId = identity.userId;
-
-      const user = await userService.globalBlockUser(userId, adminId, reason);
-
-      sendSuccessResponse(res, 200, 'User globally blocked successfully', {
-        id: user.id,
-        username: user.username,
-        status: user.status,
-        isGloballyBlocked: user.isGloballyBlocked === 'true',
-        globalBlockReason: user.globalBlockReason,
-        globalBlockedAt: user.globalBlockedAt,
-        globalBlockedBy: user.globalBlockedBy,
-      });
+      await this.performGlobalBlock(req, res);
     }
   );
 
   globalUnblockUser = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
-      const { userId } = req.params;
-
-      const user = await userService.globalUnblockUser(userId);
-
-      sendSuccessResponse(res, 200, 'User globally unblocked successfully', {
-        id: user.id,
-        username: user.username,
-        status: user.status,
-        isGloballyBlocked: user.isGloballyBlocked === 'true',
-      });
+      await this.performGlobalUnblock(req, res);
     }
   );
 
@@ -448,20 +451,30 @@ export class AdminController {
 
   getActiveCallsList = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
-      const activeCalls = await adminService.getActiveCallsList();
+      const historyLimit = req.query.historyLimit
+        ? parseInt(req.query.historyLimit as string)
+        : undefined;
+      const activeCalls = await adminService.getActiveCallsList(historyLimit);
       sendSuccessResponse(res, 200, 'Active calls retrieved successfully', {
-        calls: activeCalls,
-        count: activeCalls.length,
+        calls: activeCalls.calls,
+        count: activeCalls.calls.length,
+        recentHistory: activeCalls.recentHistory,
+        recentHistoryCount: activeCalls.recentHistory.length,
       });
     }
   );
 
   getActiveChatsList = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
-      const activeChats = await adminService.getActiveChatsList();
+      const historyLimit = req.query.historyLimit
+        ? parseInt(req.query.historyLimit as string)
+        : undefined;
+      const activeChats = await adminService.getActiveChatsList(historyLimit);
       sendSuccessResponse(res, 200, 'Active chats retrieved successfully', {
-        chats: activeChats,
-        count: activeChats.length,
+        chats: activeChats.chats,
+        count: activeChats.chats.length,
+        recentHistory: activeChats.recentHistory,
+        recentHistoryCount: activeChats.recentHistory.length,
       });
     }
   );

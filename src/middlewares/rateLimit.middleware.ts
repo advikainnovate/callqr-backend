@@ -11,12 +11,12 @@ export const apiLimiter = (req: Request, res: any, next: any) => next();
 // Rate limiter for authentication endpoints
 export const authLimiter = rateLimit({
   windowMs: 1 * 60 * 1000, // 1 minute
-  limit: 2000, // Limit each IP to 2000 auth attempts per minute
+  limit: 10, // Limit each IP to 10 auth attempts per minute
   message: {
     success: false,
     message: 'Too many authentication attempts, please try again later.',
   },
-  skipSuccessfulRequests: true,
+  skipSuccessfulRequests: true, // Only count failed attempts
   handler: (req, res, next) => {
     logger.warn(`Auth rate limit exceeded for IP: ${req.ip}`);
     next(
@@ -48,5 +48,21 @@ export const guestDailyLimiter = rateLimit({
   handler: (req, res, next) => {
     logger.warn(`Guest DAILY rate limit exceeded for IP: ${req.ip}`);
     next(new TooManyRequestsError('Daily guest token limit exceeded.'));
+  },
+});
+
+// Strict limiter for sensitive actions (QR claiming, scanning, etc.)
+export const strictLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  limit: 30, // 30 requests per 15 minutes
+  handler: (req, res, next) => {
+    logger.warn(
+      `Strict rate limit exceeded for IP: ${req.ip} on path: ${req.path}`
+    );
+    next(
+      new TooManyRequestsError(
+        'Too many attempts for this action. Please try again in 15 minutes.'
+      )
+    );
   },
 });

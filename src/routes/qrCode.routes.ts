@@ -15,6 +15,7 @@ import {
   getQRCodeImageSchema,
   getUnassignedQRCodesSchema,
 } from '../schemas/qrCode.schema';
+import { strictLimiter } from '../middlewares/rateLimit.middleware';
 
 const router = Router();
 
@@ -38,6 +39,7 @@ router.post(
 router.post(
   '/claim',
   authenticateToken,
+  strictLimiter,
   validate(claimQRCodeSchema),
   qrCodeController.claimQRCode
 );
@@ -51,7 +53,12 @@ router.post(
 );
 
 // Scan QR code
-router.post('/scan', validate(scanQRCodeSchema), qrCodeController.scanQRCode);
+router.post(
+  '/scan',
+  strictLimiter,
+  validate(scanQRCodeSchema),
+  qrCodeController.scanQRCode
+);
 
 // Get my QR codes
 router.get('/my-codes', authenticateToken, qrCodeController.getMyQRCodes);
@@ -97,6 +104,6 @@ router.get(
 );
 
 // Resolve QR scan (Public GET for redirection)
-router.get('/resolve/:token', qrCodeController.handleQRScan);
+router.get('/resolve/:token', strictLimiter, qrCodeController.handleQRScan);
 
 export default router;

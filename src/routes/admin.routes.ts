@@ -84,55 +84,38 @@ router.get(
   adminController.getUserDetails
 );
 
-/**
- * @swagger
- * /admin/users/{userId}/block:
- *   patch:
- *     summary: Block a user account
- *     tags: [Admin]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: userId
- *         required: true
- *         schema:
- *           type: string
- *           format: uuid
- *     responses:
- *       200:
- *         description: User blocked successfully
- */
+// Backward-compatible alias for older clients. Canonical admin block route is
+// POST /admin/users/:userId/global-block.
 router.patch(
   '/users/:userId/block',
   authenticateToken,
   requireAdmin,
+  validate(
+    z.object({
+      body: z.object({
+        reason: z.string().min(1).max(500),
+      }),
+      params: z.object({
+        userId: z.string().uuid(),
+      }),
+    })
+  ),
   adminController.blockUser
 );
 
-/**
- * @swagger
- * /admin/users/{userId}/unblock:
- *   patch:
- *     summary: Unblock a user account
- *     tags: [Admin]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: userId
- *         required: true
- *         schema:
- *           type: string
- *           format: uuid
- *     responses:
- *       200:
- *         description: User unblocked successfully
- */
+// Backward-compatible alias for older clients. Canonical admin unblock route is
+// POST /admin/users/:userId/global-unblock.
 router.patch(
   '/users/:userId/unblock',
   authenticateToken,
   requireAdmin,
+  validate(
+    z.object({
+      params: z.object({
+        userId: z.string().uuid(),
+      }),
+    })
+  ),
   adminController.unblockUser
 );
 

@@ -6,8 +6,14 @@ meta {
 
 patch {
   url: {{baseUrl}}/api/admin/users/:userId/block
-  body: none
+  body: json
   auth: bearer
+}
+
+body:json {
+  {
+    "reason": "Repeated harassment reported by multiple users"
+  }
 }
 
 params:path {
@@ -16,4 +22,9 @@ params:path {
 
 auth:bearer {
   token: {{authToken}}
+}
+
+docs {
+  Legacy compatibility alias for the global block endpoint.
+  Reason is required and will be shown to the user on login.
 }

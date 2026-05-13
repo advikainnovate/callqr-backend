@@ -7,13 +7,15 @@ This document outlines the core business rules, constraints, and system behavior
 ### Account Lifecycles
 
 - **Registration**: New users are created with a default `FREE` subscription.
-- **Verification Window**: Unverified accounts (phone not verified) are automatically soft-deleted after **7 days** (implemented in `UserService.isPendingVerificationExpired`).
-  - _Note: User mentioned 3 days, but implementation is currently 7 days._
+- **Unverified Accounts (Hard Delete)**: Accounts that remain in `pending_verification` for more than **7 days** without any verification (Email or Phone) are **permanently deleted** from the database upon the next login attempt.
+- **Deactivated Accounts (Soft Delete)**: When a user or admin deletes an account, it enters a `deleted` status and is recorded with a `deletedAt` timestamp.
+  - **Grace Period**: Soft-deleted accounts are held for **7 days**.
+  - **Recovery**: Within this window, an admin can use the `/restore` endpoint to reactivate the account.
 - **Status Types**:
   - `active`: Fully functional account.
   - `pending_verification`: Registration complete, awaiting phone/email verification.
-  - `blocked`: Manually suspended account.
-  - `deleted`: Soft-deleted account.
+  - `blocked`: Manually suspended account (no access).
+  - `deleted`: Soft-deleted account awaiting permanent purge.
 
 ### Authentication & Security
 
@@ -22,6 +24,14 @@ This document outlines the core business rules, constraints, and system behavior
 - **Reset Token Expiry**: Password reset tokens are valid for **1 hour**.
 - **Global Blocking**: Admins can globally block users. Globally blocked users cannot log in or initiate password resets.
 - **Self-Blocking**: Users are prohibited from blocking themselves.
+- **Self-Deletion**: Users can deactivate their own account via the `DELETE /users/me` endpoint, which initiates the 7-day grace period.
+
+### Data Ownership & Access Control
+
+- **The "Self or Admin" Rule**: Standard users are strictly limited to accessing and modifying their **own data**.
+  - Requests for `GET /api/users/:userId`, `PATCH /api/users/:userId`, or `DELETE /api/users/:userId` are validated by comparing the `userId` in the URL with the authenticated `identity.userId`.
+  - Unauthorized access attempts result in a `403 Forbidden` error.
+- **Admin Privilege**: Administrators (defined by `ADMIN_USER_IDS`) bypass ownership checks and have full CRUD access to all user records.
 
 ---
 
@@ -100,3 +110,18 @@ The system enforces specific timeout and recovery behaviors to handle real-world
 
 - **Network Lost**: If the 30s window expires without reconnection, the call is ended with the status reason `network_lost`.
 - **Missed Call**: If an initiated call is never answered within **60 seconds**, it is ended by the global sweeper with reason `timeout`.
+
+---
+
+## 7. Data Retention & Automated Purging
+
+The system maintains database health through scheduled background tasks.
+
+### Daily Account Purge (Cron Job)
+
+- **Schedule**: Runs every day at **00:00 (Midnight)**.
+- **Logic**: Permanently deletes any user record where `status = 'deleted'` AND `deletedAt` is older than **7 days**.
+- **Scope**: Includes hard-deletion of the user record and all associated data:
+  - Device/Push tokens
+  - User-to-user blocks
+  - Active/expired subscriptions

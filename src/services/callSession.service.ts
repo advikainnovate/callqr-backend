@@ -36,6 +36,37 @@ type CallEndReason =
   | 'network_lost';
 
 export class CallSessionService {
+  private async findExistingActiveCall(params: {
+    callerId?: string | null;
+    guestId?: string | null;
+    receiverId: string;
+    qrId: string;
+  }): Promise<CallSession | null> {
+    const { callerId = null, guestId = null, receiverId, qrId } = params;
+
+    const [existingCall] = await db
+      .select()
+      .from(callSessions)
+      .where(
+        and(
+          eq(callSessions.receiverId, receiverId),
+          eq(callSessions.qrId, qrId),
+          callerId
+            ? eq(callSessions.callerId, callerId)
+            : eq(callSessions.guestId, guestId!),
+          or(
+            eq(callSessions.status, 'initiated'),
+            eq(callSessions.status, 'ringing'),
+            eq(callSessions.status, 'connected')
+          )
+        )
+      )
+      .orderBy(desc(callSessions.initiatedAt))
+      .limit(1);
+
+    return existingCall || null;
+  }
+
   async initiateCallbackCall(
     callerId: string,
     sourceCallId: string
@@ -90,6 +121,19 @@ export class CallSessionService {
     }
 
     await subscriptionService.checkDailyCallLimit(receiverId);
+
+    const existingCall = await this.findExistingActiveCall({
+      callerId,
+      receiverId,
+      qrId: sourceCall.qrId,
+    });
+
+    if (existingCall) {
+      logger.info(
+        `Reusing existing active callback ${existingCall.id} for ${callerId} -> ${receiverId}`
+      );
+      return existingCall;
+    }
 
     const [callSession] = await db
       .insert(callSessions)
@@ -169,6 +213,19 @@ export class CallSessionService {
     }
 
     await subscriptionService.checkDailyCallLimit(receiverId);
+
+    const existingCall = await this.findExistingActiveCall({
+      callerId,
+      receiverId,
+      qrId: chatSession.qrId,
+    });
+
+    if (existingCall) {
+      logger.info(
+        `Reusing existing active call ${existingCall.id} from chat ${chatSessionId} for ${callerId} -> ${receiverId}`
+      );
+      return existingCall;
+    }
 
     const [callSession] = await db
       .insert(callSessions)
@@ -252,6 +309,20 @@ export class CallSessionService {
 
     // Check receiver's daily call limit
     await subscriptionService.checkDailyCallLimit(qrCode.assignedUserId);
+
+    const existingCall = await this.findExistingActiveCall({
+      callerId: callerId || null,
+      guestId: guestId || null,
+      receiverId: qrCode.assignedUserId,
+      qrId: qrCode.id,
+    });
+
+    if (existingCall) {
+      logger.info(
+        `Reusing existing active call ${existingCall.id} from ${callerId || guestId} to ${qrCode.assignedUserId}`
+      );
+      return existingCall;
+    }
 
     // Create call session
     const [callSession] = await db

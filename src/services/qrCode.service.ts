@@ -145,6 +145,17 @@ export class QRCodeService {
       throw new BadRequestError('QR code is already claimed or not available');
     }
 
+    // Business Rule: A user can only have 1 active/disabled QR code at a time
+    const existingQRs = await this.getUserQRCodes(userId);
+    const hasActiveOrDisabled = existingQRs.some(
+      qr => qr.status === 'active' || qr.status === 'disabled'
+    );
+    if (hasActiveOrDisabled) {
+      throw new BadRequestError(
+        'You already have an active or disabled QR code. Please revoke it before claiming a new one.'
+      );
+    }
+
     // Claim the QR code
     const [claimedQR] = await db
       .update(qrCodes)
@@ -176,6 +187,17 @@ export class QRCodeService {
 
     if (!existingQR) {
       throw new NotFoundError('QR code not found');
+    }
+
+    // Business Rule: A user can only have 1 active/disabled QR code at a time
+    const targetUserQRs = await this.getUserQRCodes(userId);
+    const hasActiveOrDisabled = targetUserQRs.some(
+      qr => qr.status === 'active' || qr.status === 'disabled'
+    );
+    if (hasActiveOrDisabled) {
+      throw new BadRequestError(
+        'Target user already has an active or disabled QR code.'
+      );
     }
 
     if (existingQR.status !== 'unassigned') {
