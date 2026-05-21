@@ -21,6 +21,11 @@ auth:bearer {
 docs {
   Export all QR codes to JSON file
   Optional filter by status: unassigned, active, disabled, revoked
+  Includes batch metadata when available:
+  - batchId
+  - batchNumber
+  - batchPurpose
+  - batchStatus
   
   Downloads as: qr-codes-export.json
 }

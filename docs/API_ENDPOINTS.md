@@ -601,9 +601,14 @@ POST /api/qr-codes/bulk-create
 
 ```json
 {
-  "count": "number (1-2000, required)"
+  "count": "10 | 25 | 50 | 100 | 200 | 500 | 1000",
+  "purpose": "printing | digital",
+  "notes": "string (optional)",
+  "printJobRef": "string (optional)"
 }
 ```
+
+Creates a tracked QR batch and assigns the same `batchId` to all generated QR codes.
 
 ### Claim QR Code
 
@@ -688,6 +693,40 @@ GET /api/qr-codes/unassigned
 ```
 
 **Auth:** Admin Required
+
+### Get QR Batches (Admin)
+
+```
+GET /api/admin/qr-batches
+```
+
+**Auth:** Admin Required  
+**Query Params:** `purpose`, `status`, `search`, `limit`, `offset`
+
+### Get QR Batch Details (Admin)
+
+```
+GET /api/admin/qr-batches/:batchId
+```
+
+**Auth:** Admin Required
+
+### Update QR Batch Status (Admin)
+
+```
+PATCH /api/admin/qr-batches/:batchId/status
+```
+
+**Auth:** Admin Required  
+**Body:**
+
+```json
+{
+  "status": "string (required)",
+  "notes": "string (optional)",
+  "printJobRef": "string (optional)"
+}
+```
 
 ### Get QR Code Image
 
@@ -1708,7 +1747,7 @@ GET /api/admin/qr-codes
 ```
 
 **Auth:** Admin Required  
-**Query Params:** `status`, `limit`, `offset`
+**Query Params:** `status`, `search`, `batchId`, `limit`, `offset`
 
 ### Get QR Code Details
 
@@ -1729,9 +1768,14 @@ POST /api/admin/qr-codes/bulk-create
 
 ```json
 {
-  "count": "number (1-2000, required)"
+  "count": "10 | 25 | 50 | 100 | 200 | 500 | 1000",
+  "purpose": "printing | digital",
+  "notes": "string (optional)",
+  "printJobRef": "string (optional)"
 }
 ```
+
+Creates a QR batch and returns both batch metadata and generated QR codes.
 
 ### Assign QR Code
 
@@ -1905,6 +1949,13 @@ GET /api/admin/export/qr-codes
 
 **Auth:** Admin Required  
 **Response:** JSON
+
+Exported QR records include batch metadata when available:
+
+- `batchId`
+- `batchNumber`
+- `batchPurpose`
+- `batchStatus`
 
 ### Export Call History
 

@@ -1,0 +1,26 @@
+meta {
+  name: Get QR Batch Details
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{baseUrl}}/api/admin/qr-batches/:batchId
+  body: none
+  auth: bearer
+}
+
+params:path {
+  batchId: your-batch-id
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+docs {
+  Get one QR batch with:
+  - batch metadata
+  - batch stats
+  - all QR codes in the batch
+}

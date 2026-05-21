@@ -1,0 +1,43 @@
+meta {
+  name: Update QR Batch Status
+  type: http
+  seq: 10
+}
+
+patch {
+  url: {{baseUrl}}/api/admin/qr-batches/:batchId/status
+  body: json
+  auth: bearer
+}
+
+params:path {
+  batchId: your-batch-id
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+body:json {
+  {
+    "status": "printed",
+    "notes": "Sent to print vendor",
+    "printJobRef": "PRINT-001"
+  }
+}
+
+docs {
+  Update a QR batch workflow status.
+  
+  Printing batch statuses:
+  - generated
+  - print_pending
+  - printed
+  - distributed
+  
+  Digital batch statuses:
+  - generated
+  - available
+  - partially_assigned
+  - fully_assigned
+}

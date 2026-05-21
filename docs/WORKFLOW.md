@@ -650,12 +650,52 @@ Headers: Authorization: Bearer <admin-token>
 POST /api/admin/qr-codes/bulk-create
 Headers: Authorization: Bearer <admin-token>
 {
-  "count": 100  // Max: 2000
+  "count": 100,
+  "purpose": "printing",
+  "notes": "Launch print batch",
+  "printJobRef": "PRINT-001"
 }
 ```
 
-- Creates unassigned QR codes
-- Each has token (64-char hex) and humanToken (QR-XXXX-XXXX)
+- Creates a tracked QR batch
+- Each generated QR shares the same `batchId`
+- Allowed counts: 10, 25, 50, 100, 200, 500, 1000
+
+#### Get QR Batches
+
+```
+GET /api/admin/qr-batches?purpose=printing&status=generated&limit=50&offset=0
+Headers: Authorization: Bearer <admin-token>
+```
+
+- Lists QR generation batches
+- Supports printing and digital workflows
+
+#### Get QR Batch Details
+
+```
+GET /api/admin/qr-batches/:batchId
+Headers: Authorization: Bearer <admin-token>
+```
+
+- Returns batch metadata, stats, and all QRs in the batch
+
+#### Update QR Batch Status
+
+```
+PATCH /api/admin/qr-batches/:batchId/status
+Headers: Authorization: Bearer <admin-token>
+{
+  "status": "printed",
+  "notes": "Sent to vendor",
+  "printJobRef": "PRINT-001"
+}
+```
+
+- Printing batch statuses:
+  generated, print_pending, printed, distributed
+- Digital batch statuses:
+  generated, available, partially_assigned, fully_assigned
 
 #### Get All QR Codes
 
@@ -665,6 +705,7 @@ Headers: Authorization: Bearer <admin-token>
 ```
 
 - Filter by status: unassigned, active, disabled, revoked
+- Optional `batchId` filter to inspect a specific batch
 
 #### Get QR Code Details
 
@@ -877,6 +918,8 @@ Headers: Authorization: Bearer <admin-token>
 GET /api/admin/export/qr-codes
 Headers: Authorization: Bearer <admin-token>
 ```
+
+- Includes batch metadata in exported records when available
 
 #### Export Call History
 

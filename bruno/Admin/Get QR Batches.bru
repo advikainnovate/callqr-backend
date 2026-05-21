@@ -1,0 +1,31 @@
+meta {
+  name: Get QR Batches
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{baseUrl}}/api/admin/qr-batches?purpose=printing&limit=50&offset=0
+  body: none
+  auth: bearer
+}
+
+params:query {
+  ~purpose: printing
+  ~status: generated
+  limit: 50
+  offset: 0
+  ~search: QRB-
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+docs {
+  List QR batches with optional filters:
+  - purpose: printing, digital
+  - status: batch workflow status
+  - search: batch number
+  - limit, offset: pagination
+}
