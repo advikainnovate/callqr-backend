@@ -1,13 +1,6 @@
-import {
-  pgTable,
-  text,
-  timestamp,
-  uuid,
-  varchar,
-  index,
-  boolean,
-} from 'drizzle-orm/pg-core';
+import { pgTable, timestamp, uuid, varchar, index } from 'drizzle-orm/pg-core';
 import { users } from './user.schema';
+import { qrBatches } from './qrBatch.schema';
 
 export const qrCodes = pgTable(
   'qr_codes',
@@ -16,6 +9,9 @@ export const qrCodes = pgTable(
     token: varchar('token', { length: 255 }).notNull().unique(),
     humanToken: varchar('human_token', { length: 20 }).notNull().unique(),
     assignedUserId: uuid('assigned_user_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    batchId: uuid('batch_id').references(() => qrBatches.id, {
       onDelete: 'set null',
     }),
     status: varchar('status', { length: 20 }).notNull().default('unassigned'), // unassigned, active, disabled, revoked
@@ -28,6 +24,7 @@ export const qrCodes = pgTable(
     assignedUserIdIdx: index('qr_codes_assigned_user_id_idx').on(
       table.assignedUserId
     ),
+    batchIdIdx: index('qr_codes_batch_id_idx').on(table.batchId),
     statusIdx: index('qr_codes_status_idx').on(table.status),
   })
 );

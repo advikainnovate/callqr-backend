@@ -4,6 +4,12 @@ import { authenticateToken } from '../middlewares/auth.middleware';
 import { requireAdmin } from '../middlewares/admin.middleware';
 import { validate } from '../middlewares/validate';
 import { z } from 'zod';
+import {
+  bulkCreateQRCodeSchema,
+  getQRBatchesSchema,
+  getQRBatchDetailsSchema,
+  updateQRBatchStatusSchema,
+} from '../schemas/qrCode.schema';
 
 const router = Router();
 
@@ -203,6 +209,27 @@ router.get(
 
 // ==================== QR CODE MANAGEMENT ====================
 router.get(
+  '/qr-batches',
+  authenticateToken,
+  requireAdmin,
+  validate(getQRBatchesSchema),
+  adminController.getQRBatches
+);
+router.get(
+  '/qr-batches/:batchId',
+  authenticateToken,
+  requireAdmin,
+  validate(getQRBatchDetailsSchema),
+  adminController.getQRBatchDetails
+);
+router.patch(
+  '/qr-batches/:batchId/status',
+  authenticateToken,
+  requireAdmin,
+  validate(updateQRBatchStatusSchema),
+  adminController.updateQRBatchStatus
+);
+router.get(
   '/qr-codes',
   authenticateToken,
   requireAdmin,
@@ -218,13 +245,7 @@ router.post(
   '/qr-codes/bulk-create',
   authenticateToken,
   requireAdmin,
-  validate(
-    z.object({
-      body: z.object({
-        count: z.number().int().min(1).max(2000),
-      }),
-    })
-  ),
+  validate(bulkCreateQRCodeSchema),
   adminController.bulkCreateQRCodes
 );
 router.post(

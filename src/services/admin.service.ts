@@ -8,6 +8,7 @@ import * as path from 'path';
 import {
   users,
   qrCodes,
+  qrBatches,
   callSessions,
   chatSessions,
   messages,
@@ -272,16 +273,26 @@ export class AdminService {
   async getAllQRCodes(filters?: {
     status?: string;
     search?: string;
+    batchId?: string;
     limit?: number;
     offset?: number;
   }) {
-    const { status, search, limit = 50, offset = 0 } = filters || {};
+    const { status, search, batchId, limit = 50, offset = 0 } = filters || {};
 
-    let query = db.select().from(qrCodes);
+    let query = db
+      .select({
+        qrCode: qrCodes,
+        batch: qrBatches,
+      })
+      .from(qrCodes)
+      .leftJoin(qrBatches, eq(qrCodes.batchId, qrBatches.id));
 
     const conditions = [];
     if (status) {
       conditions.push(eq(qrCodes.status, status as any));
+    }
+    if (batchId) {
+      conditions.push(eq(qrCodes.batchId, batchId));
     }
     if (search) {
       conditions.push(
@@ -307,7 +318,10 @@ export class AdminService {
       .where(conditions.length > 0 ? and(...conditions) : undefined);
 
     return {
-      qrCodes: qrCodesList,
+      qrCodes: qrCodesList.map(item => ({
+        ...item.qrCode,
+        batch: item.batch,
+      })),
       total: Number(totalResult.count),
       limit,
       offset,
@@ -315,15 +329,20 @@ export class AdminService {
   }
 
   async getQRCodeDetails(qrCodeId: string) {
-    const [qrCode] = await db
-      .select()
+    const [result] = await db
+      .select({
+        qrCode: qrCodes,
+        batch: qrBatches,
+      })
       .from(qrCodes)
+      .leftJoin(qrBatches, eq(qrCodes.batchId, qrBatches.id))
       .where(eq(qrCodes.id, qrCodeId))
       .limit(1);
 
-    if (!qrCode) {
+    if (!result) {
       throw new NotFoundError('QR code not found');
     }
+    const { qrCode, batch } = result;
 
     // Get assigned user if any
     let assignedUser = null;
@@ -349,10 +368,116 @@ export class AdminService {
 
     return {
       qrCode,
+      batch,
       assignedUser,
       usage: {
         totalCalls: Number(callStats.count),
         totalChats: Number(chatStats.count),
+      },
+    };
+  }
+
+  async getQRBatches(filters?: {
+    purpose?: string;
+    status?: string;
+    search?: string;
+    limit?: number;
+    offset?: number;
+  }) {
+    const { purpose, status, search, limit = 50, offset = 0 } = filters || {};
+
+    let query = db.select().from(qrBatches);
+    const conditions = [];
+
+    if (purpose) {
+      conditions.push(eq(qrBatches.purpose, purpose as any));
+    }
+    if (status) {
+      conditions.push(eq(qrBatches.status, status as any));
+    }
+    if (search) {
+      conditions.push(sql`${qrBatches.batchNumber} ILIKE ${`%${search}%`}`);
+    }
+
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions)) as any;
+    }
+
+    const batches = await query
+      .orderBy(desc(qrBatches.createdAt))
+      .limit(limit)
+      .offset(offset);
+
+    const [totalResult] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(qrBatches)
+      .where(conditions.length > 0 ? and(...conditions) : undefined);
+
+    const batchesWithStats = await Promise.all(
+      batches.map(async batch => {
+        const [stats] = await db
+          .select({
+            total: count(qrCodes.id),
+            assigned: sql<number>`count(case when ${qrCodes.assignedUserId} is not null then 1 end)`,
+            unassigned: sql<number>`count(case when ${qrCodes.assignedUserId} is null then 1 end)`,
+          })
+          .from(qrCodes)
+          .where(eq(qrCodes.batchId, batch.id));
+
+        return {
+          ...batch,
+          stats: {
+            total: Number(stats.total || 0),
+            assigned: Number(stats.assigned || 0),
+            unassigned: Number(stats.unassigned || 0),
+          },
+        };
+      })
+    );
+
+    return {
+      batches: batchesWithStats,
+      total: Number(totalResult.count),
+      limit,
+      offset,
+    };
+  }
+
+  async getQRBatchDetails(batchId: string) {
+    const [batch] = await db
+      .select()
+      .from(qrBatches)
+      .where(eq(qrBatches.id, batchId))
+      .limit(1);
+
+    if (!batch) {
+      throw new NotFoundError('QR batch not found');
+    }
+
+    const batchQRCodes = await db
+      .select()
+      .from(qrCodes)
+      .where(eq(qrCodes.batchId, batchId))
+      .orderBy(desc(qrCodes.createdAt));
+
+    const [stats] = await db
+      .select({
+        total: count(qrCodes.id),
+        assigned: sql<number>`count(case when ${qrCodes.assignedUserId} is not null then 1 end)`,
+        active: sql<number>`count(case when ${qrCodes.status} = 'active' then 1 end)`,
+        revoked: sql<number>`count(case when ${qrCodes.status} = 'revoked' then 1 end)`,
+      })
+      .from(qrCodes)
+      .where(eq(qrCodes.batchId, batchId));
+
+    return {
+      batch,
+      qrCodes: batchQRCodes,
+      stats: {
+        total: Number(stats.total || 0),
+        assigned: Number(stats.assigned || 0),
+        active: Number(stats.active || 0),
+        revoked: Number(stats.revoked || 0),
       },
     };
   }
@@ -1326,7 +1451,13 @@ export class AdminService {
   async exportQRCodes(filters?: { status?: string }) {
     const { status } = filters || {};
 
-    let query = db.select().from(qrCodes);
+    let query = db
+      .select({
+        qrCode: qrCodes,
+        batch: qrBatches,
+      })
+      .from(qrCodes)
+      .leftJoin(qrBatches, eq(qrCodes.batchId, qrBatches.id));
 
     if (status) {
       query = query.where(eq(qrCodes.status, status as any)) as any;
@@ -1334,14 +1465,18 @@ export class AdminService {
 
     const qrCodesList = await query.orderBy(desc(qrCodes.createdAt));
 
-    return qrCodesList.map(qr => ({
-      id: qr.id,
-      token: qr.token,
-      humanToken: qr.humanToken,
-      assignedUserId: qr.assignedUserId,
-      status: qr.status,
-      createdAt: qr.createdAt,
-      assignedAt: qr.assignedAt,
+    return qrCodesList.map(({ qrCode, batch }) => ({
+      id: qrCode.id,
+      token: qrCode.token,
+      humanToken: qrCode.humanToken,
+      assignedUserId: qrCode.assignedUserId,
+      batchId: qrCode.batchId,
+      batchNumber: batch?.batchNumber || null,
+      batchPurpose: batch?.purpose || null,
+      batchStatus: batch?.status || null,
+      status: qrCode.status,
+      createdAt: qrCode.createdAt,
+      assignedAt: qrCode.assignedAt,
     }));
   }
 

@@ -174,11 +174,12 @@ export class AdminController {
 
   getAllQRCodes = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
-      const { status, search, limit, offset } = req.query;
+      const { status, search, batchId, limit, offset } = req.query;
 
       const result = await adminService.getAllQRCodes({
         status: status as string,
         search: search as string,
+        batchId: batchId as string,
         limit: limit ? parseInt(limit as string) : undefined,
         offset: offset ? parseInt(offset as string) : undefined,
       });
@@ -202,18 +203,88 @@ export class AdminController {
 
   bulkCreateQRCodes = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
-      const { count } = req.body;
-      const qrCodes = await qrCodeService.bulkCreateQRCodes(count);
+      const { count, purpose, notes, printJobRef } = req.body;
+      const identity = req.identity;
+      if (identity?.type !== 'user') {
+        throw new UnauthorizedError('Admin authentication required');
+      }
+
+      const result = await qrCodeService.createQRCodeBatch({
+        count,
+        purpose,
+        createdBy: identity.userId,
+        notes,
+        printJobRef,
+      });
 
       sendSuccessResponse(res, 201, `${count} QR codes created successfully`, {
-        count: qrCodes.length,
-        qrCodes: qrCodes.map(qr => ({
+        batch: result.batch,
+        count: result.qrCodes.length,
+        qrCodes: result.qrCodes.map(qr => ({
           id: qr.id,
           token: qr.token,
           humanToken: qr.humanToken,
           status: qr.status,
+          batchId: qr.batchId,
           createdAt: qr.createdAt,
         })),
+      });
+    }
+  );
+
+  getQRBatches = asyncHandler(
+    async (req: AuthenticatedRequest, res: Response) => {
+      const { purpose, status, search, limit, offset } = req.query;
+      const result = await adminService.getQRBatches({
+        purpose: purpose as string,
+        status: status as string,
+        search: search as string,
+        limit: limit ? parseInt(limit as string, 10) : undefined,
+        offset: offset ? parseInt(offset as string, 10) : undefined,
+      });
+
+      sendSuccessResponse(
+        res,
+        200,
+        'QR batches retrieved successfully',
+        result
+      );
+    }
+  );
+
+  getQRBatchDetails = asyncHandler(
+    async (req: AuthenticatedRequest, res: Response) => {
+      const { batchId } = req.params;
+      const details = await adminService.getQRBatchDetails(batchId);
+
+      sendSuccessResponse(res, 200, 'QR batch details retrieved successfully', {
+        batch: details.batch,
+        stats: details.stats,
+        qrCodes: details.qrCodes.map(qr => ({
+          id: qr.id,
+          token: qr.token,
+          humanToken: qr.humanToken,
+          status: qr.status,
+          batchId: qr.batchId,
+          assignedUserId: qr.assignedUserId,
+          assignedAt: qr.assignedAt,
+          createdAt: qr.createdAt,
+        })),
+      });
+    }
+  );
+
+  updateQRBatchStatus = asyncHandler(
+    async (req: AuthenticatedRequest, res: Response) => {
+      const { batchId } = req.params;
+      const { status, notes, printJobRef } = req.body;
+      const batch = await qrCodeService.updateBatchStatus(batchId, status, {
+        notes,
+        printJobRef,
+      });
+
+      sendSuccessResponse(res, 200, 'QR batch status updated successfully', {
+        batch,
       });
     }
   );

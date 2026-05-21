@@ -1,6 +1,11 @@
-import { eq, and, isNull, lt, or, desc } from 'drizzle-orm';
+import { eq, and, lt, or, desc, sql, count } from 'drizzle-orm';
 import { db } from '../db';
-import { qrCodes, type NewQRCode, type QRCode as QRCodeType } from '../models';
+import {
+  qrCodes,
+  qrBatches,
+  type QRCode as QRCodeType,
+  type QRBatch,
+} from '../models';
 import { v4 as uuidv4 } from 'uuid';
 import {
   logger,
@@ -15,8 +20,36 @@ import { appConfig } from '../config';
 import { extractQRCodeToken } from '../utils/tokenUtils';
 
 export class QRCodeService {
+  private readonly allowedBatchCounts = [10, 25, 50, 100, 200, 500, 1000];
+
   private generateSecureToken(): string {
     return crypto.randomBytes(32).toString('hex');
+  }
+
+  private getInitialBatchStatus(purpose: 'printing' | 'digital'): string {
+    return 'generated';
+  }
+
+  private async generateBatchNumber(): Promise<string> {
+    const now = new Date();
+    const datePart = `${now.getUTCFullYear()}${String(now.getUTCMonth() + 1).padStart(2, '0')}${String(now.getUTCDate()).padStart(2, '0')}`;
+
+    for (let attempt = 0; attempt < 10; attempt++) {
+      const suffix = crypto.randomBytes(2).toString('hex').toUpperCase();
+      const batchNumber = `QRB-${datePart}-${suffix}`;
+
+      const [existing] = await db
+        .select({ id: qrBatches.id })
+        .from(qrBatches)
+        .where(eq(qrBatches.batchNumber, batchNumber))
+        .limit(1);
+
+      if (!existing) {
+        return batchNumber;
+      }
+    }
+
+    throw new Error('Failed to generate unique batch number');
   }
 
   private generateHumanToken(): string {
@@ -63,7 +96,9 @@ export class QRCodeService {
     throw new Error('Failed to generate unique human token');
   }
 
-  async createQRCode(): Promise<QRCodeType> {
+  private async createQRCodeRecord(
+    batchId?: string | null
+  ): Promise<QRCodeType> {
     const token = this.generateSecureToken();
     const humanToken = await this.ensureUniqueHumanToken();
 
@@ -73,6 +108,7 @@ export class QRCodeService {
         id: uuidv4(),
         token,
         humanToken,
+        batchId: batchId || null,
         status: 'unassigned',
       })
       .returning();
@@ -81,20 +117,160 @@ export class QRCodeService {
     return qrCode;
   }
 
-  async bulkCreateQRCodes(count: number): Promise<QRCodeType[]> {
-    if (count < 1 || count > 2000) {
-      throw new BadRequestError('Count must be between 1 and 2000');
+  async createQRCode(): Promise<QRCodeType> {
+    return this.createQRCodeRecord();
+  }
+
+  async createQRCodeBatch(input: {
+    count: number;
+    purpose: 'printing' | 'digital';
+    createdBy?: string;
+    notes?: string;
+    printJobRef?: string;
+  }): Promise<{ batch: QRBatch; qrCodes: QRCodeType[] }> {
+    const { count, purpose, createdBy, notes, printJobRef } = input;
+    if (!this.allowedBatchCounts.includes(count)) {
+      throw new BadRequestError(
+        `Count must be one of: ${this.allowedBatchCounts.join(', ')}`
+      );
     }
 
-    const qrCodes: QRCodeType[] = [];
+    const batchNumber = await this.generateBatchNumber();
 
+    const [batch] = await db
+      .insert(qrBatches)
+      .values({
+        id: uuidv4(),
+        batchNumber,
+        purpose,
+        status: this.getInitialBatchStatus(purpose),
+        quantity: count,
+        createdBy: createdBy || null,
+        notes: notes?.trim() || null,
+        printJobRef: printJobRef?.trim() || null,
+      })
+      .returning();
+
+    const createdQRCodes: QRCodeType[] = [];
     for (let i = 0; i < count; i++) {
-      const qrCode = await this.createQRCode();
-      qrCodes.push(qrCode);
+      createdQRCodes.push(await this.createQRCodeRecord(batch.id));
     }
 
-    logger.info(`Bulk created ${count} QR codes`);
-    return qrCodes;
+    logger.info(
+      `Created QR batch ${batch.batchNumber} with ${count} codes for ${purpose}`
+    );
+
+    return {
+      batch,
+      qrCodes: createdQRCodes,
+    };
+  }
+
+  async bulkCreateQRCodes(count: number): Promise<QRCodeType[]> {
+    const result = await this.createQRCodeBatch({
+      count,
+      purpose: 'digital',
+    });
+    return result.qrCodes;
+  }
+
+  async updateBatchStatus(
+    batchId: string,
+    status: string,
+    options?: { printJobRef?: string; notes?: string }
+  ): Promise<QRBatch> {
+    const [existingBatch] = await db
+      .select()
+      .from(qrBatches)
+      .where(eq(qrBatches.id, batchId))
+      .limit(1);
+
+    if (!existingBatch) {
+      throw new NotFoundError('QR batch not found');
+    }
+
+    const allowedStatuses =
+      existingBatch.purpose === 'printing'
+        ? ['generated', 'print_pending', 'printed', 'distributed']
+        : ['generated', 'available', 'partially_assigned', 'fully_assigned'];
+
+    if (!allowedStatuses.includes(status)) {
+      throw new BadRequestError(
+        `Invalid batch status for ${existingBatch.purpose} batch`
+      );
+    }
+
+    const [updatedBatch] = await db
+      .update(qrBatches)
+      .set({
+        status,
+        printJobRef: options?.printJobRef?.trim() || existingBatch.printJobRef,
+        notes: options?.notes?.trim() || existingBatch.notes,
+        distributedAt: status === 'distributed' ? new Date() : null,
+        updatedAt: new Date(),
+      })
+      .where(eq(qrBatches.id, batchId))
+      .returning();
+
+    return updatedBatch;
+  }
+
+  async getBatchById(batchId: string): Promise<QRBatch> {
+    const [batch] = await db
+      .select()
+      .from(qrBatches)
+      .where(eq(qrBatches.id, batchId))
+      .limit(1);
+
+    if (!batch) {
+      throw new NotFoundError('QR batch not found');
+    }
+
+    return batch;
+  }
+
+  async refreshDigitalBatchStatus(batchId?: string | null): Promise<void> {
+    if (!batchId) return;
+
+    const [batch] = await db
+      .select()
+      .from(qrBatches)
+      .where(eq(qrBatches.id, batchId))
+      .limit(1);
+
+    if (!batch || batch.purpose !== 'digital') {
+      return;
+    }
+
+    const [summary] = await db
+      .select({
+        total: count(qrCodes.id),
+        assigned: sql<number>`count(case when ${qrCodes.assignedUserId} is not null then 1 end)`,
+      })
+      .from(qrCodes)
+      .where(eq(qrCodes.batchId, batchId));
+
+    const total = Number(summary.total || 0);
+    const assigned = Number(summary.assigned || 0);
+
+    let nextStatus = 'generated';
+    if (assigned === 0 && total > 0) {
+      nextStatus = 'available';
+    } else if (assigned > 0 && assigned < total) {
+      nextStatus = 'partially_assigned';
+    } else if (total > 0 && assigned === total) {
+      nextStatus = 'fully_assigned';
+    }
+
+    if (nextStatus !== batch.status) {
+      await db
+        .update(qrBatches)
+        .set({
+          status: nextStatus,
+          updatedAt: new Date(),
+        })
+        .where(eq(qrBatches.id, batchId));
+    }
   }
 
   async claimQRCode(
@@ -167,6 +343,8 @@ export class QRCodeService {
       .where(eq(qrCodes.id, qrCode.id))
       .returning();
 
+    await this.refreshDigitalBatchStatus(claimedQR.batchId);
+
     logger.info(`QR code ${qrCode.humanToken} claimed by user ${userId}`);
     return claimedQR;
   }
@@ -214,6 +392,8 @@ export class QRCodeService {
       })
       .where(eq(qrCodes.id, qrCodeId))
       .returning();
+
+    await this.refreshDigitalBatchStatus(updatedQR.batchId);
 
     logger.info(`QR code ${qrCodeId} assigned to user ${userId}`);
     return updatedQR;
