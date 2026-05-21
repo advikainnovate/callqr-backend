@@ -44,6 +44,7 @@ export const users = pgTable(
   },
   table => ({
     statusIdx: index('users_status_idx').on(table.status),
+    deletedAtIdx: index('users_deleted_at_idx').on(table.deletedAt),
     resetPasswordTokenIdx: index('users_reset_password_token_idx').on(
       table.resetPasswordToken
     ),
