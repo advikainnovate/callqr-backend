@@ -9,6 +9,7 @@ import {
   getQRBatchesSchema,
   getQRBatchDetailsSchema,
   updateQRBatchStatusSchema,
+  downloadQRBatchSchema,
 } from '../schemas/qrCode.schema';
 
 const router = Router();
@@ -228,6 +229,13 @@ router.patch(
   requireAdmin,
   validate(updateQRBatchStatusSchema),
   adminController.updateQRBatchStatus
+);
+router.get(
+  '/qr-batches/:batchId/download',
+  authenticateToken,
+  requireAdmin,
+  validate(downloadQRBatchSchema),
+  adminController.exportQRBatchZip
 );
 router.get(
   '/qr-codes',

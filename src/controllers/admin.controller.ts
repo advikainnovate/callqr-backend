@@ -216,9 +216,13 @@ export class AdminController {
         notes,
         printJobRef,
       });
+      const batchDetails = await adminService.getQRBatchDetails(
+        result.batch.id
+      );
 
       sendSuccessResponse(res, 201, `${count} QR codes created successfully`, {
-        batch: result.batch,
+        batch: batchDetails.batch,
+        stats: batchDetails.stats,
         count: result.qrCodes.length,
         qrCodes: result.qrCodes.map(qr => ({
           id: qr.id,
@@ -234,13 +238,27 @@ export class AdminController {
 
   getQRBatches = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
-      const { purpose, status, search, limit, offset } = req.query;
+      const {
+        purpose,
+        status,
+        search,
+        page,
+        limit,
+        offset,
+        sort,
+        sortBy,
+        sortOrder,
+      } = req.query;
       const result = await adminService.getQRBatches({
         purpose: purpose as string,
         status: status as string,
         search: search as string,
+        page: page ? parseInt(page as string, 10) : undefined,
         limit: limit ? parseInt(limit as string, 10) : undefined,
         offset: offset ? parseInt(offset as string, 10) : undefined,
+        sort: sort as string,
+        sortBy: sortBy as string,
+        sortOrder: sortOrder as string,
       });
 
       sendSuccessResponse(
@@ -257,20 +275,12 @@ export class AdminController {
       const { batchId } = req.params;
       const details = await adminService.getQRBatchDetails(batchId);
 
-      sendSuccessResponse(res, 200, 'QR batch details retrieved successfully', {
-        batch: details.batch,
-        stats: details.stats,
-        qrCodes: details.qrCodes.map(qr => ({
-          id: qr.id,
-          token: qr.token,
-          humanToken: qr.humanToken,
-          status: qr.status,
-          batchId: qr.batchId,
-          assignedUserId: qr.assignedUserId,
-          assignedAt: qr.assignedAt,
-          createdAt: qr.createdAt,
-        })),
-      });
+      sendSuccessResponse(
+        res,
+        200,
+        'QR batch details retrieved successfully',
+        details
+      );
     }
   );
 
@@ -278,13 +288,15 @@ export class AdminController {
     async (req: AuthenticatedRequest, res: Response) => {
       const { batchId } = req.params;
       const { status, notes, printJobRef } = req.body;
-      const batch = await qrCodeService.updateBatchStatus(batchId, status, {
+      await qrCodeService.updateBatchStatus(batchId, status, {
         notes,
         printJobRef,
       });
+      const details = await adminService.getQRBatchDetails(batchId);
 
       sendSuccessResponse(res, 200, 'QR batch status updated successfully', {
-        batch,
+        batch: details.batch,
+        stats: details.stats,
       });
     }
   );
@@ -614,6 +626,13 @@ export class AdminController {
 
       // Pass response to service to handle exact stream streaming
       await adminService.exportUnassignedQRCodesZip(res, parsedLimit);
+    }
+  );
+
+  exportQRBatchZip = asyncHandler(
+    async (req: AuthenticatedRequest, res: Response) => {
+      const { batchId } = req.params;
+      await adminService.exportQRBatchZip(batchId, res);
     }
   );
 

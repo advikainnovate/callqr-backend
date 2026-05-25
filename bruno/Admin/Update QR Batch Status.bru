@@ -11,7 +11,7 @@ patch {
 }
 
 params:path {
-  batchId: your-batch-id
+  batchId: fe6e18b2-2c46-4090-8a2e-343ce1947776
 }
 
 auth:bearer {
@@ -27,17 +27,12 @@ body:json {
 }
 
 docs {
-  Update a QR batch workflow status.
+  Update a printing batch workflow status.
   
-  Printing batch statuses:
-  - generated
-  - print_pending
-  - printed
-  - distributed
+  Allowed transitions:
+  - generated -> print_pending
+  - print_pending -> printed
+  - printed -> distributed
   
-  Digital batch statuses:
-  - generated
-  - available
-  - partially_assigned
-  - fully_assigned
+  Digital batches are not manually updated through this endpoint.
 }

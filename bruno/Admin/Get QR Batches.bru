@@ -5,17 +5,21 @@ meta {
 }
 
 get {
-  url: {{baseUrl}}/api/admin/qr-batches?purpose=printing&limit=50&offset=0
+  url: {{baseUrl}}/api/admin/qr-batches?status=generated&page=1&limit=50&sort=newest
   body: none
   auth: bearer
 }
 
 params:query {
-  ~purpose: printing
-  ~status: generated
+  status: generated
+  page: 1
   limit: 50
-  offset: 0
-  ~search: QRB-
+  sort: newest
+  ~purpose: printing
+  ~offset: 0
+  ~sortBy: updatedAt
+  ~sortOrder: asc
+  ~search: PR-250526-
 }
 
 auth:bearer {
@@ -27,5 +31,8 @@ docs {
   - purpose: printing, digital
   - status: batch workflow status
   - search: batch number
-  - limit, offset: pagination
+  - page, limit, offset: pagination
+  - sort: newest, oldest
+  - sortBy: createdAt, updatedAt
+  - sortOrder: asc, desc
 }

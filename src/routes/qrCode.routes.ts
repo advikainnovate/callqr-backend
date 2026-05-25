@@ -27,14 +27,6 @@ router.post(
   qrCodeController.createQRCode
 );
 
-// Bulk create QR codes (admin)
-router.post(
-  '/bulk-create',
-  authenticateToken,
-  validate(bulkCreateQRCodeSchema),
-  qrCodeController.bulkCreateQRCodes
-);
-
 // Claim QR code (user claims an unassigned QR)
 router.post(
   '/claim',

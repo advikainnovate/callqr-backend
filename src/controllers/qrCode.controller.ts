@@ -23,33 +23,6 @@ export class QRCodeController {
     }
   );
 
-  bulkCreateQRCodes = asyncHandler(
-    async (req: AuthenticatedRequest, res: Response) => {
-      const { count, purpose, notes, printJobRef } = req.body;
-      const identity = req.identity;
-      const result = await qrCodeService.createQRCodeBatch({
-        count,
-        purpose: purpose || 'digital',
-        createdBy: identity?.type === 'user' ? identity.userId : undefined,
-        notes,
-        printJobRef,
-      });
-
-      sendSuccessResponse(res, 201, `${count} QR codes created successfully`, {
-        batch: result.batch,
-        count: result.qrCodes.length,
-        qrCodes: result.qrCodes.map(qr => ({
-          id: qr.id,
-          token: qr.token,
-          humanToken: qr.humanToken,
-          status: qr.status,
-          batchId: qr.batchId,
-          createdAt: qr.createdAt,
-        })),
-      });
-    }
-  );
-
   claimQRCode = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
       const identity = req.identity;

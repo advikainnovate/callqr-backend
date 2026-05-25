@@ -78,6 +78,25 @@ QR generation now supports preset counts only:
 - `500`
 - `1000`
 
+### Batch number format
+
+Batch numbers now use:
+
+`<TYPE>-<DDMMYY>-<RUNNING_NUMBER>`
+
+Examples:
+
+- `PR-250526-001`
+- `DG-250526-002`
+
+Rules:
+
+- `PR` = printing
+- `DG` = digital
+- running numbers reset each day
+- the running number is shared across all batches created on the same day
+- generation is retry-safe for concurrent requests because insert collisions are retried
+
 When a batch is generated:
 
 1. one `qr_batches` row is created
@@ -104,6 +123,7 @@ Now accepts:
 Response now includes:
 
 - created `batch`
+- `batch.batchNumber` immediately
 - generated QRs with `batchId`
 
 The legacy behavior is preserved in the sense that bulk creation still works, but it now always creates a tracked batch.
@@ -114,16 +134,30 @@ The legacy behavior is preserved in the sense that bulk creation still works, bu
 
 - list batches
 - supports filtering by `purpose`, `status`, and `search`
+- supports `page`, `limit`, `sort`, `sortBy`, `sortOrder`
+- returns `page`, `limit`, `total`, `totalPages`
 
 `GET /api/admin/qr-batches/:batchId`
 
 - returns one batch
-- includes QR list and assignment stats
+- includes QR list using the admin QR row structure
+- includes batch workflow metadata
+- includes assigned/unassigned summary counts
+
+`GET /api/admin/qr-batches/:batchId/download`
+
+- downloads one printing batch as a ZIP of PNG QR files
+- ZIP filename uses `batchNumber.zip`
+- disabled for distributed batches and digital batches
 
 `PATCH /api/admin/qr-batches/:batchId/status`
 
 - updates batch workflow status
-- mainly intended for printing batches
+- only for printing batches
+- allowed transitions:
+  - `generated -> print_pending`
+  - `print_pending -> printed`
+  - `printed -> distributed`
 
 Example body:
 
@@ -143,6 +177,12 @@ Admin QR listing/export responses now include batch information when available:
 - `batchNumber`
 - `batchPurpose`
 - `batchStatus`
+
+Batch list/detail responses now also include:
+
+- `downloadable`
+- `allowedActions`
+- `allowedTransitions`
 
 ## Automatic batch status updates
 

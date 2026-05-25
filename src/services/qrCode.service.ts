@@ -1,4 +1,4 @@
-import { eq, and, lt, or, desc, sql, count } from 'drizzle-orm';
+import { eq, and, lt, or, desc, sql, count, gte } from 'drizzle-orm';
 import { db } from '../db';
 import {
   qrCodes,
@@ -30,26 +30,108 @@ export class QRCodeService {
     return 'generated';
   }
 
-  private async generateBatchNumber(): Promise<string> {
-    const now = new Date();
-    const datePart = `${now.getUTCFullYear()}${String(now.getUTCMonth() + 1).padStart(2, '0')}${String(now.getUTCDate()).padStart(2, '0')}`;
+  private getBatchTypeCode(purpose: 'printing' | 'digital'): 'PR' | 'DG' {
+    return purpose === 'printing' ? 'PR' : 'DG';
+  }
 
-    for (let attempt = 0; attempt < 10; attempt++) {
-      const suffix = crypto.randomBytes(2).toString('hex').toUpperCase();
-      const batchNumber = `QRB-${datePart}-${suffix}`;
+  private formatBatchDateParts(date: Date): {
+    dayKey: string;
+    displayDate: string;
+  } {
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = String(date.getFullYear()).slice(-2);
 
-      const [existing] = await db
-        .select({ id: qrBatches.id })
-        .from(qrBatches)
-        .where(eq(qrBatches.batchNumber, batchNumber))
-        .limit(1);
+    return {
+      dayKey: `${date.getFullYear()}-${month}-${day}`,
+      displayDate: `${day}${month}${year}`,
+    };
+  }
 
-      if (!existing) {
-        return batchNumber;
+  private async generateBatchNumber(
+    purpose: 'printing' | 'digital',
+    date: Date
+  ): Promise<string> {
+    const typeCode = this.getBatchTypeCode(purpose);
+    const { dayKey, displayDate } = this.formatBatchDateParts(date);
+    const startOfDay = new Date(`${dayKey}T00:00:00.000`);
+    const nextDayStart = new Date(startOfDay);
+    nextDayStart.setDate(nextDayStart.getDate() + 1);
+
+    const rows = await db
+      .select({
+        batchNumber: qrBatches.batchNumber,
+      })
+      .from(qrBatches)
+      .where(
+        and(
+          gte(qrBatches.createdAt, startOfDay),
+          lt(qrBatches.createdAt, nextDayStart)
+        )
+      )
+      .orderBy(desc(qrBatches.createdAt));
+
+    let maxSequence = 0;
+    for (const row of rows) {
+      const match = row.batchNumber.match(/-(\d{3})$/);
+      if (!match) continue;
+      const sequence = parseInt(match[1], 10);
+      if (sequence > maxSequence) {
+        maxSequence = sequence;
       }
     }
 
-    throw new Error('Failed to generate unique batch number');
+    return `${typeCode}-${displayDate}-${String(maxSequence + 1).padStart(3, '0')}`;
+  }
+
+  private isUniqueViolation(error: unknown): boolean {
+    return (
+      typeof error === 'object' &&
+      error !== null &&
+      'code' in error &&
+      (error as { code?: string }).code === '23505'
+    );
+  }
+
+  private async createBatchRecord(input: {
+    count: number;
+    purpose: 'printing' | 'digital';
+    createdBy?: string;
+    notes?: string;
+    printJobRef?: string;
+  }): Promise<QRBatch> {
+    const { count, purpose, createdBy, notes, printJobRef } = input;
+
+    for (let attempt = 0; attempt < 10; attempt++) {
+      const now = new Date();
+      const batchNumber = await this.generateBatchNumber(purpose, now);
+
+      try {
+        const [batch] = await db
+          .insert(qrBatches)
+          .values({
+            id: uuidv4(),
+            batchNumber,
+            purpose,
+            status: this.getInitialBatchStatus(purpose),
+            quantity: count,
+            createdBy: createdBy || null,
+            notes: notes?.trim() || null,
+            printJobRef: printJobRef?.trim() || null,
+          })
+          .returning();
+
+        return batch;
+      } catch (error) {
+        if (this.isUniqueViolation(error)) {
+          continue;
+        }
+
+        throw error;
+      }
+    }
+
+    throw new Error('Failed to generate a unique batch number');
   }
 
   private generateHumanToken(): string {
@@ -135,21 +217,13 @@ export class QRCodeService {
       );
     }
 
-    const batchNumber = await this.generateBatchNumber();
-
-    const [batch] = await db
-      .insert(qrBatches)
-      .values({
-        id: uuidv4(),
-        batchNumber,
-        purpose,
-        status: this.getInitialBatchStatus(purpose),
-        quantity: count,
-        createdBy: createdBy || null,
-        notes: notes?.trim() || null,
-        printJobRef: printJobRef?.trim() || null,
-      })
-      .returning();
+    const batch = await this.createBatchRecord({
+      count,
+      purpose,
+      createdBy,
+      notes,
+      printJobRef,
+    });
 
     const createdQRCodes: QRCodeType[] = [];
     for (let i = 0; i < count; i++) {
@@ -189,14 +263,26 @@ export class QRCodeService {
       throw new NotFoundError('QR batch not found');
     }
 
-    const allowedStatuses =
-      existingBatch.purpose === 'printing'
-        ? ['generated', 'print_pending', 'printed', 'distributed']
-        : ['generated', 'available', 'partially_assigned', 'fully_assigned'];
+    if (existingBatch.purpose !== 'printing') {
+      throw new BadRequestError(
+        'Digital batch status is managed automatically by assignment state'
+      );
+    }
+
+    const allowedTransitions: Record<string, string[]> = {
+      generated: ['generated', 'print_pending'],
+      print_pending: ['print_pending', 'printed'],
+      printed: ['printed', 'distributed'],
+      distributed: ['distributed'],
+    };
+
+    const allowedStatuses = allowedTransitions[existingBatch.status] || [
+      existingBatch.status,
+    ];
 
     if (!allowedStatuses.includes(status)) {
       throw new BadRequestError(
-        `Invalid batch status for ${existingBatch.purpose} batch`
+        `Invalid batch status transition from ${existingBatch.status} to ${status}`
       );
     }
 

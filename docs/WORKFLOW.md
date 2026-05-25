@@ -670,6 +670,7 @@ Headers: Authorization: Bearer <admin-token>
 
 - Lists QR generation batches
 - Supports printing and digital workflows
+- Supports `page`, `limit`, `offset`, `sort`, `sortBy`, `sortOrder`
 
 #### Get QR Batch Details
 
@@ -679,6 +680,17 @@ Headers: Authorization: Bearer <admin-token>
 ```
 
 - Returns batch metadata, stats, and all QRs in the batch
+- Includes `downloadable`, `allowedActions`, and `allowedTransitions`
+
+#### Download QR Batch ZIP
+
+```
+GET /api/admin/qr-batches/:batchId/download
+Headers: Authorization: Bearer <admin-token>
+```
+
+- Downloads one printing batch as `batchNumber.zip`
+- Not available for digital or distributed batches
 
 #### Update QR Batch Status
 
@@ -694,8 +706,9 @@ Headers: Authorization: Bearer <admin-token>
 
 - Printing batch statuses:
   generated, print_pending, printed, distributed
-- Digital batch statuses:
-  generated, available, partially_assigned, fully_assigned
+- Allowed transitions:
+  generated -> print_pending -> printed -> distributed
+- Digital batch statuses are automatic and not manually updated through this endpoint
 
 #### Get All QR Codes
 

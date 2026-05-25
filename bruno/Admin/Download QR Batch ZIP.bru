@@ -1,0 +1,26 @@
+meta {
+  name: Download QR Batch ZIP
+  type: http
+  seq: 11
+}
+
+get {
+  url: {{baseUrl}}/api/admin/qr-batches/:batchId/download
+  body: none
+  auth: bearer
+}
+
+params:path {
+  batchId: fe6e18b2-2c46-4090-8a2e-343ce1947776
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+docs {
+  Download one printing batch as a ZIP of PNG QR files.
+  - filename: batchNumber.zip
+  - available only for printing batches
+  - distributed batches are not downloadable
+}

@@ -593,7 +593,7 @@ POST /api/qr-codes/create
 ### Bulk Create QR Codes (Admin)
 
 ```
-POST /api/qr-codes/bulk-create
+POST /api/admin/qr-codes/bulk-create
 ```
 
 **Auth:** Admin Required  
@@ -701,7 +701,7 @@ GET /api/admin/qr-batches
 ```
 
 **Auth:** Admin Required  
-**Query Params:** `purpose`, `status`, `search`, `limit`, `offset`
+**Query Params:** `purpose`, `status`, `search`, `page`, `limit`, `offset`, `sort`, `sortBy`, `sortOrder`
 
 ### Get QR Batch Details (Admin)
 
@@ -710,6 +710,15 @@ GET /api/admin/qr-batches/:batchId
 ```
 
 **Auth:** Admin Required
+
+### Download QR Batch ZIP (Admin)
+
+```
+GET /api/admin/qr-batches/:batchId/download
+```
+
+**Auth:** Admin Required  
+**Response:** ZIP archive of PNG QR files for a printable batch
 
 ### Update QR Batch Status (Admin)
 
@@ -727,6 +736,8 @@ PATCH /api/admin/qr-batches/:batchId/status
   "printJobRef": "string (optional)"
 }
 ```
+
+**Note:** Manual status updates are for printing batches only.
 
 ### Get QR Code Image
 

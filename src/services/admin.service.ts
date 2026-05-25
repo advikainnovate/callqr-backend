@@ -1,4 +1,4 @@
-import { eq, and, desc, sql, gte, lte, or, count, ne } from 'drizzle-orm';
+import { eq, and, desc, asc, sql, gte, lte, or, count, ne } from 'drizzle-orm';
 import { db } from '../db';
 import { Response } from 'express';
 import archiver from 'archiver';
@@ -15,7 +15,12 @@ import {
   subscriptions,
   bugReports,
 } from '../models';
-import { logger, NotFoundError, ForbiddenError } from '../utils';
+import {
+  logger,
+  NotFoundError,
+  ForbiddenError,
+  BadRequestError,
+} from '../utils';
 import { appConfig } from '../config';
 import crypto from 'crypto';
 
@@ -42,6 +47,174 @@ export class AdminService {
       logger.error('Decryption failed:', error);
       return '[DECRYPTION_ERROR]';
     }
+  }
+
+  private getBatchAllowedTransitions(batch: {
+    purpose: string;
+    status: string;
+  }): string[] {
+    if (batch.purpose !== 'printing') {
+      return [];
+    }
+
+    const transitions: Record<string, string[]> = {
+      generated: ['print_pending'],
+      print_pending: ['printed'],
+      printed: ['distributed'],
+      distributed: [],
+    };
+
+    return transitions[batch.status] || [];
+  }
+
+  private getBatchAllowedActions(batch: {
+    purpose: string;
+    status: string;
+  }): string[] {
+    if (batch.purpose !== 'printing') {
+      return [];
+    }
+
+    const actions: string[] = [];
+    if (this.isBatchDownloadable(batch)) {
+      actions.push('download');
+    }
+
+    const transitionActions: Record<string, string[]> = {
+      generated: ['mark_print_pending'],
+      print_pending: ['mark_printed'],
+      printed: ['mark_distributed'],
+      distributed: [],
+    };
+
+    actions.push(...(transitionActions[batch.status] || []));
+    return actions;
+  }
+
+  private isBatchDownloadable(batch: {
+    purpose: string;
+    status: string;
+  }): boolean {
+    return batch.purpose === 'printing' && batch.status !== 'distributed';
+  }
+
+  private formatBatchStats(stats?: {
+    total?: number | string | null;
+    assigned?: number | string | null;
+    unassigned?: number | string | null;
+    active?: number | string | null;
+    disabled?: number | string | null;
+    revoked?: number | string | null;
+  }) {
+    return {
+      total: Number(stats?.total || 0),
+      assigned: Number(stats?.assigned || 0),
+      unassigned: Number(stats?.unassigned || 0),
+      active: Number(stats?.active || 0),
+      disabled: Number(stats?.disabled || 0),
+      revoked: Number(stats?.revoked || 0),
+    };
+  }
+
+  private enrichBatch<T extends { purpose: string; status: string }>(
+    batch: T,
+    stats?: {
+      total?: number | string | null;
+      assigned?: number | string | null;
+      unassigned?: number | string | null;
+      active?: number | string | null;
+      disabled?: number | string | null;
+      revoked?: number | string | null;
+    }
+  ) {
+    return {
+      ...batch,
+      stats: this.formatBatchStats(stats),
+      downloadable: this.isBatchDownloadable(batch),
+      allowedActions: this.getBatchAllowedActions(batch),
+      allowedTransitions: this.getBatchAllowedTransitions(batch),
+    };
+  }
+
+  private formatAdminQRCodeRow(item: {
+    qrCode: typeof qrCodes.$inferSelect;
+    batch?: typeof qrBatches.$inferSelect | null;
+    assignedUser?: {
+      id: string | null;
+      username: string | null;
+      status: string | null;
+    } | null;
+  }) {
+    return {
+      id: item.qrCode.id,
+      token: item.qrCode.token,
+      humanToken: item.qrCode.humanToken,
+      status: item.qrCode.status,
+      assignedUserId: item.qrCode.assignedUserId,
+      assignedAt: item.qrCode.assignedAt,
+      createdAt: item.qrCode.createdAt,
+      batchId: item.qrCode.batchId,
+      batch: item.batch
+        ? {
+            id: item.batch.id,
+            batchNumber: item.batch.batchNumber,
+            purpose: item.batch.purpose,
+            status: item.batch.status,
+            quantity: item.batch.quantity,
+            createdBy: item.batch.createdBy,
+            notes: item.batch.notes,
+            printJobRef: item.batch.printJobRef,
+            distributedAt: item.batch.distributedAt,
+            createdAt: item.batch.createdAt,
+            updatedAt: item.batch.updatedAt,
+            downloadable: this.isBatchDownloadable(item.batch),
+            allowedActions: this.getBatchAllowedActions(item.batch),
+            allowedTransitions: this.getBatchAllowedTransitions(item.batch),
+          }
+        : null,
+      assignedUser:
+        item.assignedUser?.id && item.assignedUser?.username
+          ? {
+              id: item.assignedUser.id,
+              username: item.assignedUser.username,
+              status: item.assignedUser.status,
+            }
+          : null,
+    };
+  }
+
+  private getPaginationMeta(input: {
+    total: number;
+    limit: number;
+    page?: number;
+    offset?: number;
+  }) {
+    const { total, limit } = input;
+    const page =
+      input.page && input.page > 0
+        ? input.page
+        : Math.floor((input.offset || 0) / limit) + 1;
+
+    return {
+      page,
+      limit,
+      total,
+      totalPages: total === 0 ? 0 : Math.ceil(total / limit),
+      offset: (page - 1) * limit,
+    };
+  }
+
+  private resolveBatchSort(sort?: string, sortBy?: string, sortOrder?: string) {
+    if (sort === 'oldest') {
+      return asc(qrBatches.createdAt);
+    }
+    if (sort === 'newest') {
+      return desc(qrBatches.createdAt);
+    }
+
+    const field =
+      sortBy === 'updatedAt' ? qrBatches.updatedAt : qrBatches.createdAt;
+    return sortOrder === 'asc' ? asc(field) : desc(field);
   }
 
   // ==================== OVERVIEW STATS ====================
@@ -283,9 +456,15 @@ export class AdminService {
       .select({
         qrCode: qrCodes,
         batch: qrBatches,
+        assignedUser: {
+          id: users.id,
+          username: users.username,
+          status: users.status,
+        },
       })
       .from(qrCodes)
-      .leftJoin(qrBatches, eq(qrCodes.batchId, qrBatches.id));
+      .leftJoin(qrBatches, eq(qrCodes.batchId, qrBatches.id))
+      .leftJoin(users, eq(qrCodes.assignedUserId, users.id));
 
     const conditions = [];
     if (status) {
@@ -318,10 +497,7 @@ export class AdminService {
       .where(conditions.length > 0 ? and(...conditions) : undefined);
 
     return {
-      qrCodes: qrCodesList.map(item => ({
-        ...item.qrCode,
-        batch: item.batch,
-      })),
+      qrCodes: qrCodesList.map(item => this.formatAdminQRCodeRow(item)),
       total: Number(totalResult.count),
       limit,
       offset,
@@ -381,10 +557,25 @@ export class AdminService {
     purpose?: string;
     status?: string;
     search?: string;
+    page?: number;
     limit?: number;
     offset?: number;
+    sort?: string;
+    sortBy?: string;
+    sortOrder?: string;
   }) {
-    const { purpose, status, search, limit = 50, offset = 0 } = filters || {};
+    const {
+      purpose,
+      status,
+      search,
+      page,
+      limit = 50,
+      offset = 0,
+      sort,
+      sortBy,
+      sortOrder,
+    } = filters || {};
+    const effectiveOffset = page && page > 0 ? (page - 1) * limit : offset;
 
     let query = db.select().from(qrBatches);
     const conditions = [];
@@ -404,9 +595,9 @@ export class AdminService {
     }
 
     const batches = await query
-      .orderBy(desc(qrBatches.createdAt))
+      .orderBy(this.resolveBatchSort(sort, sortBy, sortOrder))
       .limit(limit)
-      .offset(offset);
+      .offset(effectiveOffset);
 
     const [totalResult] = await db
       .select({ count: sql<number>`count(*)` })
@@ -420,26 +611,27 @@ export class AdminService {
             total: count(qrCodes.id),
             assigned: sql<number>`count(case when ${qrCodes.assignedUserId} is not null then 1 end)`,
             unassigned: sql<number>`count(case when ${qrCodes.assignedUserId} is null then 1 end)`,
+            active: sql<number>`count(case when ${qrCodes.status} = 'active' then 1 end)`,
+            disabled: sql<number>`count(case when ${qrCodes.status} = 'disabled' then 1 end)`,
+            revoked: sql<number>`count(case when ${qrCodes.status} = 'revoked' then 1 end)`,
           })
           .from(qrCodes)
           .where(eq(qrCodes.batchId, batch.id));
 
-        return {
-          ...batch,
-          stats: {
-            total: Number(stats.total || 0),
-            assigned: Number(stats.assigned || 0),
-            unassigned: Number(stats.unassigned || 0),
-          },
-        };
+        return this.enrichBatch(batch, stats);
       })
     );
 
-    return {
-      batches: batchesWithStats,
+    const pagination = this.getPaginationMeta({
       total: Number(totalResult.count),
       limit,
-      offset,
+      page,
+      offset: effectiveOffset,
+    });
+
+    return {
+      batches: batchesWithStats,
+      ...pagination,
     };
   }
 
@@ -455,8 +647,18 @@ export class AdminService {
     }
 
     const batchQRCodes = await db
-      .select()
+      .select({
+        qrCode: qrCodes,
+        batch: qrBatches,
+        assignedUser: {
+          id: users.id,
+          username: users.username,
+          status: users.status,
+        },
+      })
       .from(qrCodes)
+      .leftJoin(qrBatches, eq(qrCodes.batchId, qrBatches.id))
+      .leftJoin(users, eq(qrCodes.assignedUserId, users.id))
       .where(eq(qrCodes.batchId, batchId))
       .orderBy(desc(qrCodes.createdAt));
 
@@ -464,21 +666,18 @@ export class AdminService {
       .select({
         total: count(qrCodes.id),
         assigned: sql<number>`count(case when ${qrCodes.assignedUserId} is not null then 1 end)`,
+        unassigned: sql<number>`count(case when ${qrCodes.assignedUserId} is null then 1 end)`,
         active: sql<number>`count(case when ${qrCodes.status} = 'active' then 1 end)`,
+        disabled: sql<number>`count(case when ${qrCodes.status} = 'disabled' then 1 end)`,
         revoked: sql<number>`count(case when ${qrCodes.status} = 'revoked' then 1 end)`,
       })
       .from(qrCodes)
       .where(eq(qrCodes.batchId, batchId));
 
     return {
-      batch,
-      qrCodes: batchQRCodes,
-      stats: {
-        total: Number(stats.total || 0),
-        assigned: Number(stats.assigned || 0),
-        active: Number(stats.active || 0),
-        revoked: Number(stats.revoked || 0),
-      },
+      batch: this.enrichBatch(batch, stats),
+      qrCodes: batchQRCodes.map(item => this.formatAdminQRCodeRow(item)),
+      stats: this.formatBatchStats(stats),
     };
   }
 
@@ -1726,6 +1925,105 @@ export class AdminService {
       });
     } catch (error) {
       logger.error('Error generating QR zip:', error);
+      archive.abort();
+      fs.unlink(tmpFile, () => {});
+      if (!res.headersSent) {
+        res
+          .status(500)
+          .json({ success: false, message: 'Failed to generate ZIP' });
+      }
+    }
+  }
+
+  async exportQRBatchZip(batchId: string, res: Response) {
+    const { qrCodeService } = await import('./qrCode.service');
+    const [batch] = await db
+      .select()
+      .from(qrBatches)
+      .where(eq(qrBatches.id, batchId))
+      .limit(1);
+
+    if (!batch) {
+      throw new NotFoundError('QR batch not found');
+    }
+
+    if (!this.isBatchDownloadable(batch)) {
+      throw new BadRequestError(
+        'Only printing batches that are not distributed can be downloaded'
+      );
+    }
+
+    const tmpFile = path.join(
+      os.tmpdir(),
+      `${batch.batchNumber}-${Date.now()}.zip`
+    );
+    const output = fs.createWriteStream(tmpFile);
+
+    const archive = archiver('zip', {
+      zlib: { level: 6 },
+    });
+
+    archive.on('error', err => {
+      logger.error('Archiver error:', err);
+      fs.unlink(tmpFile, () => {});
+      if (!res.headersSent) {
+        res
+          .status(500)
+          .json({ success: false, message: 'Failed to generate archive' });
+      }
+    });
+
+    archive.pipe(output);
+
+    const batchSize = 250;
+    let offset = 0;
+    let processed = 0;
+
+    try {
+      while (true) {
+        const qrBatch = await db
+          .select()
+          .from(qrCodes)
+          .where(eq(qrCodes.batchId, batchId))
+          .orderBy(desc(qrCodes.createdAt))
+          .limit(batchSize)
+          .offset(offset);
+
+        if (qrBatch.length === 0) {
+          break;
+        }
+
+        for (const qr of qrBatch) {
+          const buffer = await qrCodeService.generateQRCodeBuffer(qr.token);
+          const safeName = qr.humanToken.replace(/[^a-zA-Z0-9-]/g, '');
+          archive.append(buffer, {
+            name: `${batch.batchNumber}/${safeName}.png`,
+          });
+          processed++;
+        }
+
+        offset += batchSize;
+        await new Promise(resolve => setTimeout(resolve, 10));
+      }
+
+      logger.info(
+        `Zipping completed. Packaged ${processed} QRs for batch ${batch.batchNumber}.`
+      );
+      await archive.finalize();
+
+      await new Promise<void>((resolve, reject) => {
+        output.on('finish', resolve);
+        output.on('error', reject);
+      });
+
+      res.download(tmpFile, `${batch.batchNumber}.zip`, err => {
+        fs.unlink(tmpFile, () => {});
+        if (err && !res.headersSent) {
+          logger.error('Error sending batch ZIP file:', err);
+        }
+      });
+    } catch (error) {
+      logger.error('Error generating batch QR zip:', error);
       archive.abort();
       fs.unlink(tmpFile, () => {});
       if (!res.headersSent) {

@@ -35,6 +35,11 @@ export const getQRBatchesSchema = z.object({
     purpose: z.enum(['printing', 'digital']).optional(),
     status: z.string().optional(),
     search: z.string().optional(),
+    page: z
+      .string()
+      .optional()
+      .transform(val => (val ? parseInt(val, 10) : undefined))
+      .pipe(z.number().int().min(1).max(100000).optional()),
     limit: z
       .string()
       .optional()
@@ -45,6 +50,9 @@ export const getQRBatchesSchema = z.object({
       .optional()
       .transform(val => (val ? parseInt(val, 10) : 0))
       .pipe(z.number().int().min(0).max(10000)),
+    sort: z.enum(['newest', 'oldest']).optional(),
+    sortBy: z.enum(['createdAt', 'updatedAt']).optional(),
+    sortOrder: z.enum(['asc', 'desc']).optional(),
   }),
 });
 
@@ -62,6 +70,12 @@ export const updateQRBatchStatusSchema = z.object({
     status: z.string().min(1).max(30),
     notes: z.string().max(500).optional(),
     printJobRef: z.string().max(100).optional(),
+  }),
+});
+
+export const downloadQRBatchSchema = z.object({
+  params: z.object({
+    batchId: z.string().uuid(),
   }),
 });
 
