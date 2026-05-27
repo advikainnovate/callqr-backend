@@ -8,12 +8,11 @@ module.exports = {
   transform: {
     ...tsJestTransformCfg,
   },
-  transformIgnorePatterns: [
-    'node_modules/(?!(uuid|@types/uuid)/)'
-  ],
+  transformIgnorePatterns: ['node_modules/(?!(uuid|@types/uuid)/)'],
   moduleNameMapper: {
-    '^uuid$': '<rootDir>/tests/mocks/uuid.js'
+    '^uuid$': '<rootDir>/tests/mocks/uuid.js',
   },
   setupFilesAfterEnv: ['<rootDir>/tests/setup.ts'],
+  testPathIgnorePatterns: ['<rootDir>/dist/'],
   reporters: ['default', '<rootDir>/tests/jest-qa-reporter.js'],
 };

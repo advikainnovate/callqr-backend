@@ -1,22 +1,71 @@
-const mockReturning = jest.fn();
-const mockWhere = jest.fn(() => ({ returning: mockReturning }));
-const mockSet = jest.fn(() => ({ where: mockWhere }));
-const mockUpdate = jest.fn(() => ({ set: mockSet }));
-const mockInsertReturning = jest.fn();
-const mockInsertValues = jest.fn(() => ({ returning: mockInsertReturning }));
-const mockInsert = jest.fn(() => ({ values: mockInsertValues }));
-
 jest.mock('../../db', () => ({
   db: {
-    update: mockUpdate,
-    insert: mockInsert,
+    update: jest.fn(),
+    insert: jest.fn(),
+    select: jest.fn(),
   },
 }));
 
 describe('CallSessionService', () => {
-  beforeEach(() => {
+  let mockSelectLimit: jest.Mock;
+  let mockSelectOrderBy: jest.Mock;
+  let mockSelectWhere: jest.Mock;
+  let mockSelectFrom: jest.Mock;
+  let mockSelect: jest.Mock;
+  let mockUpdate: jest.Mock;
+  let mockInsert: jest.Mock;
+  let mockInsertReturning: jest.Mock;
+  let mockUpdateReturning: jest.Mock;
+  let db: any;
+
+  beforeEach(async () => {
     jest.resetModules();
     jest.clearAllMocks();
+
+    // Setup db mock
+    const dbModule = await import('../../db');
+    db = dbModule.db;
+
+    // Setup select chain mocks
+    mockSelectLimit = jest.fn().mockResolvedValue([]);
+    mockSelectOrderBy = jest.fn().mockReturnValue({
+      limit: mockSelectLimit,
+    });
+    mockSelectWhere = jest.fn().mockReturnValue({
+      orderBy: mockSelectOrderBy,
+    });
+    mockSelectFrom = jest.fn().mockReturnValue({
+      where: mockSelectWhere,
+    });
+    mockSelect = jest.fn().mockReturnValue({
+      from: mockSelectFrom,
+    });
+
+    // Setup update chain mocks
+    mockUpdateReturning = jest.fn().mockResolvedValue([]);
+    const mockUpdateWhere = jest.fn().mockReturnValue({
+      returning: mockUpdateReturning,
+    });
+    const mockUpdateSet = jest.fn().mockReturnValue({
+      where: mockUpdateWhere,
+    });
+    mockUpdate = jest.fn().mockReturnValue({
+      set: mockUpdateSet,
+    });
+
+    // Setup insert chain mocks
+    mockInsertReturning = jest.fn().mockResolvedValue([]);
+    const mockInsertValues = jest.fn().mockReturnValue({
+      returning: mockInsertReturning,
+    });
+    mockInsert = jest.fn().mockReturnValue({
+      values: mockInsertValues,
+    });
+
+    // Override db methods with our mocks
+    db.select = mockSelect;
+    db.update = mockUpdate;
+    db.insert = mockInsert;
   });
 
   const makeCall = (overrides: Record<string, unknown> = {}) => ({
@@ -80,7 +129,7 @@ describe('CallSessionService', () => {
       .spyOn(callSessionService, 'getCallSessionById')
       .mockResolvedValue(makeCall({ status: 'ringing' }) as any);
 
-    mockReturning.mockResolvedValueOnce([
+    mockUpdateReturning.mockResolvedValueOnce([
       makeCall({
         status: 'connected',
         startedAt: new Date('2026-04-08T10:01:00.000Z'),
@@ -118,7 +167,7 @@ describe('CallSessionService', () => {
       }) as any
     );
 
-    mockReturning.mockResolvedValueOnce([
+    mockUpdateReturning.mockResolvedValueOnce([
       makeCall({
         callerId: null,
         guestId: 'guest-1',
@@ -151,7 +200,7 @@ describe('CallSessionService', () => {
       }) as any
     );
 
-    mockReturning.mockResolvedValueOnce([
+    mockUpdateReturning.mockResolvedValueOnce([
       makeCall({
         status: 'ended',
         endedReason: 'completed',
@@ -182,6 +231,7 @@ describe('CallSessionService', () => {
       participant2Id: 'receiver-1',
       qrId: 'qr-1',
       status: 'active',
+      startedAt: new Date(),
     } as any);
     jest.spyOn(userService, 'getUserById').mockResolvedValue({
       id: 'receiver-1',
@@ -256,6 +306,7 @@ describe('CallSessionService', () => {
       .spyOn(subscriptionService, 'checkDailyCallLimit')
       .mockResolvedValue(undefined);
 
+    mockSelectLimit.mockResolvedValueOnce([]);
     mockInsertReturning.mockResolvedValueOnce([
       makeCall({
         callerId: 'caller-1',

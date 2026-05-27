@@ -1,20 +1,29 @@
 import dotenv from 'dotenv';
-import app from '../src/app';
 import { IncomingMessage, Server, ServerResponse } from 'http';
-import { client } from '../src/db';
 
 dotenv.config();
 
+// By default we avoid starting the express server and opening a DB
+// connection during unit tests. Set `START_SERVER=true` in the
+// environment when you want the full app/server and DB to start
+// (for integration tests).
 export let server: Server<
   typeof IncomingMessage,
   typeof ServerResponse
 > | null = null;
 
 beforeAll(async () => {
+  if (process.env.START_SERVER !== 'true') return;
+
   try {
-    // Database connection is handled lazily by Drizzle/Postgres.js
-    // We might want to ensure migrations are applied here if using a test DB
-    server = app.listen(0); // random available port
+    // Lazy import to avoid initializing the app/db during unit tests
+    const app = (await import('../src/app')).default;
+    const { client } = await import('../src/db');
+
+    // Start server on random port
+    server = app.listen(0);
+    // Store client on global for teardown
+    (global as any).__TEST_DB_CLIENT = client;
   } catch (error) {
     console.error('Error starting server:', error);
     throw error;
@@ -35,6 +44,10 @@ afterAll(async () => {
     server = null;
   }
 
-  // Close database connection after the server is shut down.
-  await client.end({ timeout: 5 });
+  // Close database connection only if we started it
+  const client = (global as any).__TEST_DB_CLIENT;
+  if (client && typeof client.end === 'function') {
+    await client.end({ timeout: 5 });
+    (global as any).__TEST_DB_CLIENT = null;
+  }
 });
