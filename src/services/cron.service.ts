@@ -1,5 +1,6 @@
 import cron, { ScheduledTask } from 'node-cron';
 import { userService } from './user.service';
+import { chatSessionService } from './chatSession.service';
 import { logger } from '../utils';
 
 export class CronService {
@@ -38,6 +39,26 @@ export class CronService {
 
     this.jobs.push(purgeJob);
     logger.info('✅ Scheduled job: Daily Account Purge (00:00)');
+
+    const chatCleanupJob = cron.schedule('0 * * * *', async () => {
+      logger.info('🧹 Closing expired chat sessions older than 24 hours...');
+      try {
+        const count = await chatSessionService.closeExpiredChatSessions();
+        if (count > 0) {
+          logger.info(`✅ Closed ${count} expired chat sessions.`);
+        } else {
+          logger.info('ℹ️ No expired chat sessions found to close.');
+        }
+      } catch (error) {
+        logger.error(
+          '❌ Error during expired chat session cleanup job:',
+          error
+        );
+      }
+    });
+
+    this.jobs.push(chatCleanupJob);
+    logger.info('✅ Scheduled job: Hourly Expired Chat Cleanup (every hour)');
   }
 
   /**

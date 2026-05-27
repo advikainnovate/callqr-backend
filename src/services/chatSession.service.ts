@@ -1,4 +1,4 @@
-import { eq, and, desc, sql, or } from 'drizzle-orm';
+import { eq, and, desc, sql, or, lt } from 'drizzle-orm';
 import { db } from '../db';
 import {
   chatSessions,
@@ -266,6 +266,33 @@ export class ChatSessionService {
 
     logger.info(`Chat session ended: ${chatSessionId} by user ${userId}`);
     return updatedChat;
+  }
+
+  async closeExpiredChatSessions(): Promise<number> {
+    const expirationCutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+    const updatedChats = await db
+      .update(chatSessions)
+      .set({
+        status: 'ended',
+        endedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(chatSessions.status, 'active'),
+          lt(chatSessions.startedAt, expirationCutoff)
+        )
+      )
+      .returning();
+
+    const expiredCount = Array.isArray(updatedChats) ? updatedChats.length : 0;
+    if (expiredCount > 0) {
+      logger.info(
+        `Closed ${expiredCount} expired chat session(s) older than 24 hours`
+      );
+    }
+
+    return expiredCount;
   }
 
   async blockChatSession(
