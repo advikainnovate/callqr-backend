@@ -20,6 +20,44 @@ import { subscriptionService } from './subscription.service';
 import { ACTIVE_CHAT_LIMITS } from '../constants/subscriptions';
 
 export class ChatSessionService {
+  private readonly chatSessionTtlMs = 24 * 60 * 60 * 1000;
+
+  private getExpirationCutoff(): Date {
+    return new Date(Date.now() - this.chatSessionTtlMs);
+  }
+
+  isExpired(chatSession: Pick<ChatSession, 'status' | 'startedAt'>): boolean {
+    return (
+      chatSession.status === 'active' &&
+      !!chatSession.startedAt &&
+      chatSession.startedAt <= this.getExpirationCutoff()
+    );
+  }
+
+  async expireChatSessionIfNeeded(
+    chatSession: ChatSession
+  ): Promise<ChatSession> {
+    if (!this.isExpired(chatSession)) {
+      return chatSession;
+    }
+
+    const [updatedChat] = await db
+      .update(chatSessions)
+      .set({
+        status: 'ended',
+        endedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(chatSessions.id, chatSession.id),
+          eq(chatSessions.status, 'active')
+        )
+      )
+      .returning();
+
+    return updatedChat || chatSession;
+  }
+
   async initiateChat(
     initiatorId: string,
     qrToken: string
@@ -62,8 +100,11 @@ export class ChatSessionService {
       qrCode.assignedUserId
     );
     if (existingChat && existingChat.status === 'active') {
-      logger.info(`Returning existing chat session: ${existingChat.id}`);
-      return this.getChatSessionById(existingChat.id);
+      const refreshedChat = await this.expireChatSessionIfNeeded(existingChat);
+      if (refreshedChat.status === 'active') {
+        logger.info(`Returning existing chat session: ${existingChat.id}`);
+        return this.getChatSessionById(existingChat.id);
+      }
     }
 
     // Check active chat limit for initiator
@@ -115,10 +156,17 @@ export class ChatSessionService {
       throw new NotFoundError('Chat session not found');
     }
 
-    return {
+    const hydratedChat = {
       ...result.chat,
       participant1Name: result.participant1?.username || null,
       participant2Name: result.participant2?.username || null,
+    };
+
+    const refreshedChat = await this.expireChatSessionIfNeeded(hydratedChat);
+
+    return {
+      ...hydratedChat,
+      ...refreshedChat,
     };
   }
 
@@ -269,7 +317,7 @@ export class ChatSessionService {
   }
 
   async closeExpiredChatSessions(): Promise<number> {
-    const expirationCutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const expirationCutoff = this.getExpirationCutoff();
 
     const updatedChats = await db
       .update(chatSessions)

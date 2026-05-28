@@ -88,6 +88,31 @@ describe('MessageService', () => {
     });
   });
 
+  it('rejects messages in chats older than 24 hours', async () => {
+    const { messageService } = await import('../message.service');
+    const { chatSessionService } = await import('../chatSession.service');
+    const { userService } = await import('../user.service');
+
+    (chatSessionService.verifyParticipant as jest.Mock).mockResolvedValue(true);
+    (chatSessionService.getChatSessionById as jest.Mock).mockResolvedValue({
+      id: 'chat-1',
+      participant1Id: 'user-1',
+      participant2Id: 'user-2',
+      status: 'ended',
+      startedAt: new Date(Date.now() - 25 * 60 * 60 * 1000),
+      endedAt: new Date(),
+    });
+    (userService.isUserBlocked as jest.Mock).mockResolvedValue(false);
+
+    await expect(
+      messageService.sendMessage('chat-1', 'user-1', 'hello')
+    ).rejects.toMatchObject({
+      message: 'Cannot send message to ended chat',
+    });
+
+    expect(userService.isUserBlocked).not.toHaveBeenCalled();
+  });
+
   it('counts unread messages across all chats without relying on paginated chat lists', async () => {
     const { messageService } = await import('../message.service');
     const { chatSessionService } = await import('../chatSession.service');

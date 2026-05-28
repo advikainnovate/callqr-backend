@@ -131,6 +131,7 @@ export class WebRTCService {
         logger.error('Error in stale call cleanup:', err);
       }
     }, 30000);
+    this.staleCallTimer.unref?.();
   }
 
   private setupMiddleware() {

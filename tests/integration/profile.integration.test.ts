@@ -1,31 +1,115 @@
 import request from 'supertest';
 import app from '../../src/app';
-import { userService } from '../../src/services/user.service';
 import { generateAccessToken } from '../../src/utils/jwt';
 
-describe.skip('Profile Endpoint Integration Tests', () => {
+jest.mock('../../src/db', () => ({
+  db: {},
+  client: Object.assign(jest.fn(), {
+    end: jest.fn(),
+  }),
+}));
+
+jest.mock('../../src/services/user.service', () => ({
+  userService: {
+    getUserById: jest.fn(),
+    getUserProfile: jest.fn(),
+  },
+}));
+
+jest.mock('../../src/services/subscription.service', () => ({
+  subscriptionService: {
+    getActiveSubscription: jest.fn(),
+    getCallUsage: jest.fn(),
+    getUserPlan: jest.fn(),
+  },
+}));
+
+jest.mock('../../src/services/qrCode.service', () => ({
+  qrCodeService: {
+    getUserQRCodes: jest.fn(),
+  },
+}));
+
+jest.mock('../../src/services/chatSession.service', () => ({
+  chatSessionService: {
+    getActiveChatCount: jest.fn(),
+  },
+}));
+
+jest.mock('../../src/services/message.service', () => ({
+  messageService: {
+    getDailyMessageCount: jest.fn(),
+  },
+}));
+
+describe('Profile Endpoint Integration Tests', () => {
   let authToken: string;
   let userId: string;
+  const createdAt = new Date('2026-05-28T04:00:00.000Z');
+  const updatedAt = new Date('2026-05-28T05:00:00.000Z');
 
   beforeAll(async () => {
-    // Create a test user
-    const user = await userService.createUser({
-      username: `testuser_${Date.now()}`,
-      password: 'password123',
-      emergencyContact: '+19876543210',
-      phone: '+1234567890',
-      email: 'test@example.com',
-    });
-
-    userId = user.id;
+    userId = '11111111-1111-4111-8111-111111111111';
     authToken = generateAccessToken({
       type: 'user',
-      userId: user.id,
-      username: user.username,
+      userId,
+      username: 'testuser',
     });
   });
 
-  describe('GET /auth/profile', () => {
+  beforeEach(async () => {
+    jest.clearAllMocks();
+
+    const { userService } = await import('../../src/services/user.service');
+    const { subscriptionService } = await import(
+      '../../src/services/subscription.service'
+    );
+    const { qrCodeService } = await import('../../src/services/qrCode.service');
+    const { chatSessionService } = await import(
+      '../../src/services/chatSession.service'
+    );
+    const { messageService } = await import(
+      '../../src/services/message.service'
+    );
+
+    (userService.getUserById as jest.Mock).mockResolvedValue({
+      id: userId,
+      username: 'testuser',
+      status: 'active',
+      isEmailVerified: 'true',
+      isGloballyBlocked: 'false',
+    });
+
+    (userService.getUserProfile as jest.Mock).mockResolvedValue({
+      id: userId,
+      username: 'testuser',
+      phone: '+1234567890',
+      email: 'test@example.com',
+      status: 'active',
+      isEmailVerified: true,
+      isPhoneVerified: true,
+      createdAt,
+      updatedAt,
+    });
+
+    (subscriptionService.getActiveSubscription as jest.Mock).mockResolvedValue({
+      plan: 'free',
+      status: 'active',
+      startedAt: createdAt,
+      expiresAt: null,
+    });
+    (subscriptionService.getCallUsage as jest.Mock).mockResolvedValue({
+      used: 0,
+      limit: 50,
+      remaining: 50,
+    });
+    (subscriptionService.getUserPlan as jest.Mock).mockResolvedValue('free');
+    (qrCodeService.getUserQRCodes as jest.Mock).mockResolvedValue([]);
+    (chatSessionService.getActiveChatCount as jest.Mock).mockResolvedValue(0);
+    (messageService.getDailyMessageCount as jest.Mock).mockResolvedValue(0);
+  });
+
+  describe('GET /api/auth/profile', () => {
     it('should return complete profile with all fields', async () => {
       const response = await request(app)
         .get('/api/auth/profile')
@@ -204,7 +288,7 @@ describe.skip('Profile Endpoint Integration Tests', () => {
 
     it('should have non-negative remaining counts', async () => {
       const response = await request(app)
-        .get('/auth/profile')
+        .get('/api/auth/profile')
         .set('Authorization', `Bearer ${authToken}`)
         .expect(200);
 

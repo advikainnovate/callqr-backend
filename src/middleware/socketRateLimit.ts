@@ -23,13 +23,18 @@ export class SocketRateLimiter {
   constructor() {
     // Cleanup expired entries every minute
     this.cleanupInterval = setInterval(() => this.cleanup(), 60000);
+    this.cleanupInterval.unref?.();
   }
 
   /**
    * Create rate limit middleware for specific events
    */
   createLimiter(eventName: string, config: RateLimitConfig) {
-    return async (socket: Socket & { userId?: string }, _data: unknown, next: (err?: Error) => void) => {
+    return async (
+      socket: Socket & { userId?: string },
+      _data: unknown,
+      next: (err?: Error) => void
+    ) => {
       const userId = socket.userId || socket.id;
       const key = `${userId}:${eventName}`;
 
@@ -55,7 +60,7 @@ export class SocketRateLimiter {
         const retryAfter = Math.ceil((entry.resetTime - now) / 1000);
         logger.warn(
           `Rate limit exceeded for user ${userId} on event ${eventName}. ` +
-          `Count: ${entry.count}/${config.maxRequests}`
+            `Count: ${entry.count}/${config.maxRequests}`
         );
 
         socket.emit('rate-limit-exceeded', {
@@ -97,7 +102,10 @@ export class SocketRateLimiter {
   /**
    * Get current usage for a user/event
    */
-  getUsage(userId: string, eventName: string): { count: number; limit: number; resetTime: number } | null {
+  getUsage(
+    userId: string,
+    eventName: string
+  ): { count: number; limit: number; resetTime: number } | null {
     const eventLimits = this.limits.get(eventName);
     if (!eventLimits) return null;
 
@@ -194,7 +202,8 @@ export const rateLimitProfiles = {
  * Connection rate limiter (per IP)
  */
 export class ConnectionRateLimiter {
-  private connections: Map<string, { count: number; resetTime: number }> = new Map();
+  private connections: Map<string, { count: number; resetTime: number }> =
+    new Map();
   private cleanupInterval: NodeJS.Timeout;
 
   constructor(
@@ -202,6 +211,7 @@ export class ConnectionRateLimiter {
     private windowMs: number = 60000 // 1 minute
   ) {
     this.cleanupInterval = setInterval(() => this.cleanup(), 60000);
+    this.cleanupInterval.unref?.();
   }
 
   /**

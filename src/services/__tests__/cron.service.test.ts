@@ -48,6 +48,33 @@ describe('ChatSessionService', () => {
     });
     expect(mockUpdateWhere).toHaveBeenCalledWith(expect.anything());
   });
+
+  it('expires an active chat when it is older than 24 hours', async () => {
+    const { chatSessionService } = await import('../chatSession.service');
+
+    const expiredChat = {
+      id: 'chat-1',
+      status: 'active',
+      startedAt: new Date(Date.now() - 25 * 60 * 60 * 1000),
+    } as any;
+    mockUpdateReturning.mockResolvedValueOnce([
+      {
+        ...expiredChat,
+        status: 'ended',
+        endedAt: new Date(),
+      },
+    ]);
+
+    const result =
+      await chatSessionService.expireChatSessionIfNeeded(expiredChat);
+
+    expect(result.status).toBe('ended');
+    expect(mockUpdate).toHaveBeenCalled();
+    expect(mockUpdateSet).toHaveBeenCalledWith({
+      status: 'ended',
+      endedAt: expect.any(Date),
+    });
+  });
 });
 
 describe('CronService', () => {
